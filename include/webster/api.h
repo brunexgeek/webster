@@ -132,10 +132,8 @@ WEBSTER_EXPORTED int WebsterWriteData(
     const uint8_t *buffer,
     int size );
 
-WEBSTER_EXPORTED int WebsterWriteString(
-    webster_output_t *output,
-    const char *format,
-    ... );
+WEBSTER_EXPORTED int WebsterFlush(
+	webster_output_t *output );
 
 WEBSTER_EXPORTED int WebsterFree(
     void *ptr );

@@ -49,9 +49,10 @@ static int handlerFunction(
 		if (result == WBERR_COMPLETE)
 		{
 			printf("Completed\n");
-			WebsterSetStatus(response, 200);
-			WebsterWriteHeaderField(response, "Content-Length", "5");
-			WebsterWriteData(response, "Teste", 5);
+			//WebsterSetStatus(response, 200);
+			//WebsterWriteHeaderField(response, "Content-Length", "5");
+			//WebsterWriteData(response, "Teste", 5);
+			WebsterFlush(response);
 			break;
 		}
 		else

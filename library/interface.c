@@ -15,6 +15,13 @@
 #include <errno.h>
 #include <stdarg.h>
 
+
+#define STATE_FIRST   0
+#define STATE_HEADER  1
+#define STATE_BODY    2
+
+
+
 int WebsterCreate(
     webster_server_t *server,
 	int maxClients )
@@ -352,26 +359,52 @@ WEBSTER_EXPORTED int WebsterSetStatus(
 }
 
 
+static int webster_writeOrSend(
+	webster_output_t *output,
+	const uint8_t *buffer,
+    int size )
+{
+	if (size == 0) return WBERR_OK;
+
+	if (output->buffer.current == NULL) output->buffer.current = output->buffer.data;
+
+	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + sizeof(output->buffer.data))
+	{
+		send(output->socket, output->buffer.data, output->buffer.current - output->buffer.data, 0);
+		output->buffer.current = output->buffer.data;
+	}
+
+	if (size > sizeof(output->buffer.data))
+		send(output->socket, buffer, size, 0);
+	else
+	{
+		memcpy(output->buffer.current, buffer, size);
+		output->buffer.current += size;
+	}
+
+	return WBERR_OK;
+}
+
+
 static int webster_writeStatusLine(
 	webster_output_t *output )
 {
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
-	if (output->sent > 0) return WBERR_OK;
+	if (output->state != STATE_FIRST) return WBERR_OK;
+	output->state = STATE_HEADER;
 
-	const char *message = http_statusMessage(output->status);
-	if (message == NULL)
+	const char *message = NULL;
+	if (output->status == 0)
 	{
 		output->status = 200;
 		message = "OK";
 	}
+	else
+		message = http_statusMessage(output->status);
 
-	char buffer[128];
-	snprintf(buffer, sizeof(buffer) - 1, "HTTP/1.1 %d %s\r\n", output->status, message);
-	int result = (int) send(output->socket, buffer, strlen(buffer), 0);
-	if (result < 0) return WBERR_SOCKET;
-
-	output->sent += result;
-	return WBERR_OK;
+	char temp[128];
+	snprintf(temp, sizeof(temp) - 1, "HTTP/1.1 %d %s\r\n", output->status, message);
+	return webster_writeOrSend(output, temp, strlen(temp));
 }
 
 
@@ -381,22 +414,25 @@ WEBSTER_EXPORTED int WebsterWriteHeaderField(
     const char *value )
 {
 	if (output == NULL || name == NULL || name[0] == 0 || value == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output->state == STATE_BODY) return WBERR_BAD_RESPONSE;
 
 	int result = WBERR_OK;
-	if (output->sent == 0)
+	if (output->state == STATE_FIRST)
 	{
 		result = webster_writeStatusLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
+	// TODO: discard trailing whitespaces
 	for (const char *p = name; *p != 0; ++p)
 		if (*p == ' ') return WBERR_BAD_RESPONSE;
 
 	// TODO: evaluate field value
 
-	snprintf(output->temp, sizeof(output->temp) - 1, "%s: %s\r\n", name, value);
-	result = (int) send(output->socket, output->temp, strlen(output->temp), 0);
-	if (result < 0) return WBERR_SOCKET;
+	webster_writeOrSend(output, name, strlen(name));
+	webster_writeOrSend(output, ": ", 2);
+	webster_writeOrSend(output, value, strlen(value));
+	webster_writeOrSend(output, "\r\n", 2);
 
 	return WBERR_OK;
 }
@@ -407,29 +443,40 @@ WEBSTER_EXPORTED int WebsterWriteData(
     const uint8_t *buffer,
     int size )
 {
-	(void) buffer;
-	(void) size;
+	int result = 0;
 
-	int result = (int) send(output->socket, buffer, size, 0);
-	if (result < 0) return WBERR_SOCKET;
+	if (output->state == STATE_FIRST)
+	{
+		result = webster_writeStatusLine(output);
+		if (result != WBERR_OK) return result;
+	}
 
-	return WBERR_OK;
+	if (output->state == STATE_HEADER)
+	{
+		webster_writeOrSend(output, "\r\n", 2);
+	}
+
+	return webster_writeOrSend(output, buffer, size);
 }
 
 
-int WebsterWriteString(
-    webster_output_t *output,
-    const char *format,
-    ... )
+int WebsterFlush(
+	webster_output_t *output )
 {
-	if (output == NULL || format == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_ARGUMENT;
 
-	va_list args;
-	va_start(args, format);
-	size_t length = snprintf(output->temp, sizeof(output->temp) - 1, format, args);
-	va_end(args);
+	if (output->state != STATE_BODY)
+	{
+		WebsterWriteData(output, "", 0);
+	}
+	
+	if (output->buffer.current > output->buffer.data)
+	{
+		send(output->socket, output->buffer.data, output->buffer.current - output->buffer.data, 0);
+		output->buffer.current = output->buffer.data;
+	}
 
-	return WebsterWriteData(output, output->temp, length);
+	return WBERR_OK;
 }
 
 

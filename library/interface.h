@@ -48,11 +48,15 @@ struct webster_input_t_
 
 struct webster_output_t_
 {
-    int sent;
+    uint8_t state;
     uint32_t contentLength;
     int socket;
     int status;
-    char temp[WEBSTER_MAX_HEADER];
+    struct 
+    {
+        uint8_t data[WEBSTER_MAX_HEADER];
+        uint8_t *current;
+    } buffer;
 };
 
 
