@@ -12,6 +12,8 @@
 #define WEBSTER_MAX_CONNECTIONS     1000
 #define WEBSTER_MAX_HEADER          (1024 * 4) // 4KB
 
+#define GET_DATA_POINTER(ptr, type) ( (uint8_t*) (x) + sizeof(type) )
+
 
 typedef struct
 {
@@ -33,18 +35,22 @@ struct webster_server_t_
 
 struct webster_input_t_
 {
-    ssize_t received;
-    uint32_t contentLength;
+    int state;
     int socket;
     struct pollfd pfd;
-    int method;
     struct
     {
-        uint8_t start[WEBSTER_MAX_HEADER];
+        int received;
+        int expected;
+    } body;
+    struct
+    {
+        uint8_t data[WEBSTER_MAX_HEADER];
         uint8_t *current;
         int pending;
     } buffer;
-    http_header_t header;
+    webster_header_t header;
+    char headerData[WEBSTER_MAX_HEADER];
 };
 
 

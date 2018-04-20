@@ -55,11 +55,35 @@ typedef struct webster_input_t_ webster_input_t;
 struct webster_output_t_;
 typedef struct webster_output_t_ webster_output_t;
 
-typedef struct webster_header_t_
+typedef struct
 {
-    const char *name;
-    const char *value;
+    char *name;
+    char *value;
 } webster_field_t;
+
+typedef struct
+{
+    /**
+     * Event type.
+     */
+    int type;
+
+    /**
+     * Size of the payload.
+     */
+    int size;
+} webster_event_t;
+
+typedef struct
+{
+    char *resource;
+    char *message;
+    int status;
+    int method;
+    int contentLength;
+    webster_field_t *fields;
+    int fieldCount;
+} webster_header_t;
 
 typedef int (webster_handler_t)(
     webster_input_t *request,
@@ -109,25 +133,23 @@ WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
     webster_handler_t *handler,
     void *data );
-// TODO: rename to WaitEvent and put 'type' and 'size' in a struct (webster_event_t)
-WEBSTER_EXPORTED int WebsterWait(
+
+WEBSTER_EXPORTED int WebsterWaitEvent(
     webster_input_t *input,
-    int *type,
-    int *size );
-// TODO: rename to ReadHeader and return the complete header info (webster_headet_t)
-WEBSTER_EXPORTED int WebsterGetHeaderFields(
+    webster_event_t *event );
+
+WEBSTER_EXPORTED int WebsterGetHeader(
     webster_input_t *input,
-    const webster_field_t **fields,
-    int *count );
-// TODO: remove and use only the above function
-WEBSTER_EXPORTED int WebsterGetResource(
-    webster_input_t *input,
-    const char **resource );
+    const webster_header_t **header );
 // TODO: rename to ReadData
-WEBSTER_EXPORTED int WebsterGetData(
+WEBSTER_EXPORTED int WebsterReadData(
     webster_input_t *input,
     const uint8_t **buffer,
     int *size );
+
+WEBSTER_EXPORTED int WebsterReadString(
+    webster_input_t *input,
+    const char **buffer );
 
 WEBSTER_EXPORTED int WebsterSetStatus(
     webster_output_t *output,

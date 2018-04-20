@@ -16,9 +16,10 @@
 #include <stdarg.h>
 
 
-#define STATE_FIRST   0
-#define STATE_HEADER  1
-#define STATE_BODY    2
+#define STATE_IDLE          0
+#define STATE_HEADER        1
+#define STATE_BODY          2
+#define STATE_COMPLETE      2
 
 
 
@@ -273,103 +274,129 @@ int WebsterAccept(
 }
 
 
-int WebsterWait(
-    webster_input_t *input,
-    int *type,
-    int *size )
+static int webster_receive(
+	webster_input_t *input,
+	int timeout )
 {
-	if (size == NULL || type == NULL) return WBERR_INVALID_ARGUMENT;
+	// if we have data in the buffer, just return success
+	if (input->buffer.pending > 0) return WBERR_OK;
 
-	*size = 0;
-	*type = 0;
+	// wait for data arrive
+	int result = poll(&input->pfd, 1, timeout);
+	if (result == 0)
+		return WBERR_TIMEOUT;
+	else
+	if (result < 0)
+		return WBERR_SOCKET;
 
-	uint8_t hasHeader = (input->header.status != 0 || input->header.method != 0);
-
-	if (hasHeader && input->contentLength <= input->received) return WBERR_COMPLETE;
-
-	// check if we need to retrieve more data
-	if (hasHeader || input->buffer.pending == 0)
+	// receive new data and adjust pending information
+	ssize_t bytes = recv(input->socket, input->buffer.data, sizeof(input->buffer.data) - sizeof(size_t), 0);
+	if (bytes < 0)
 	{
-		int result = poll(&input->pfd, 1, 10000);
-		if (result == 0)
-			return WBERR_TIMEOUT;
-		else
-		if (result < 0)
-			return WBERR_SOCKET;
-
-		ssize_t bytes = recv(input->socket, input->buffer.start, sizeof(input->buffer.start), 0);
-		if (bytes < 0)
-		{
-			if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
-			printf("Socket error: %s", strerror( (int)bytes));
-			return WBERR_SOCKET;
-		}
-		if (bytes < 0) return WBERR_SOCKET;
-
-		input->received += bytes;
-		input->buffer.pending = (int) bytes;
-		input->buffer.current = input->buffer.start;
+		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
+		return WBERR_SOCKET;
 	}
+	input->buffer.pending = (int) bytes;
+	input->buffer.current = input->buffer.data;
 
-	// check whether we're receiving headers
-	if (hasHeader == 0)
+	return WBERR_OK;
+}
+
+
+static int webster_receiveHeader(
+	webster_input_t *input )
+{
+	int result = webster_receive(input, 10000);
+	if (result != WBERR_OK) return result;
+
+	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
+	char *ptr = strstr((char*)input->buffer.data, "\r\n\r\n");
+	if (ptr == NULL) return WBERR_TOO_LONG;
+	*(ptr)     = ' ';
+	*(ptr + 1) = ' ';
+	*(ptr + 2) = ' ';
+	*(ptr + 3) = 0;
+	strcpy(input->headerData, (char*) input->buffer.data);
+	// remember the last position
+	input->buffer.current = (uint8_t*) ptr + 4;
+	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
+
+	// parse HTTP header fields and retrieve the content length
+	result = http_parseHeader(input->headerData, &input->header, &input->body.expected);
+	input->header.contentLength = input->body.expected;
+	return result;
+}
+
+
+int WebsterWaitEvent(
+    webster_input_t *input,
+    webster_event_t *event )
+{
+	if (event == NULL) return WBERR_INVALID_ARGUMENT;
+
+	event->size = 0;
+	event->type = 0;
+	int result = 0;
+
+	if (input->state == STATE_IDLE)
 	{
-		input->contentLength = 0;
-		input->received = 0;
+		result = webster_receiveHeader(input);
+		if (result == WBERR_OK)
+		{
+			event->type = WB_TYPE_HEADER;
+			event->size = (int) strlen(input->headerData) + 1;
+			input->state = STATE_HEADER;
+		}
 
-		char *ptr = strstr((char*)input->buffer.start, "\r\n\r\n");
-		if (ptr == NULL) return WBERR_TOO_LONG;
-		*(ptr)     = ' ';
-		*(ptr + 1) = ' ';
-		*(ptr + 2) = ' ';
-		*(ptr + 3) = 0;
-		*type = WB_TYPE_HEADER;
-		strcpy(input->header.data, (char*) input->buffer.start);
-		// remember the last position
-		input->buffer.current = (uint8_t*) ptr + 4;
-		input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.start );
-
-		// parse HTTP header fields and retrieve the content length
-		return http_parseHeader(&input->header, &input->contentLength);
+		return result;
 	}
 	else
+	if (input->state == STATE_HEADER || input->state == STATE_BODY)
 	{
-		*type = WB_TYPE_BODY;
-		*size = input->buffer.pending;
-		return WBERR_OK;
+		if (input->body.expected == 0) return WBERR_COMPLETE;
+
+		result = webster_receive(input, 10000);
+		if (result == WBERR_OK)
+		{
+			// truncate any extra byte beyond content length
+			if (input->body.received + input->buffer.pending > input->body.expected)
+			{
+				input->buffer.pending = input->body.expected - input->body.received;
+				// we still have some data to return?
+				if (input->buffer.pending <= 0)
+				{
+					input->state = STATE_COMPLETE;
+					input->buffer.pending = 0;
+					return WBERR_NO_DATA;
+				}
+			}
+
+			event->type = WB_TYPE_BODY;
+			event->size = input->buffer.pending;
+			input->state = STATE_BODY;
+			input->body.received += input->buffer.pending;
+		}
+
+		return result;
 	}
 
 	return WBERR_COMPLETE;
 }
 
 
-int WebsterGetHeaderFields(
+int WebsterGetHeader(
     webster_input_t *input,
-    const webster_field_t **fields,
-    int *count )
+    const webster_header_t **header )
 {
-	if (input == NULL || (fields == NULL && count == NULL)) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL || header == NULL) return WBERR_INVALID_ARGUMENT;
 
-	if (fields != NULL) *fields = (webster_field_t*) input->header.fields;
-	if (count != NULL) *count = input->header.count;
+	*header = &input->header;
 
 	return WBERR_OK;
 }
 
 
-int WebsterGetResource(
-    webster_input_t *input,
-    const char **resource )
-{
-    if (input == NULL || resource == NULL) return WBERR_INVALID_ARGUMENT;
-
-    *resource = input->header.resource;
-
-    return WBERR_OK;
-}
-
-
-int WebsterGetData(
+int WebsterReadData(
     webster_input_t *input,
     const uint8_t **buffer,
 	int *size )
@@ -388,7 +415,7 @@ int WebsterGetData(
 }
 
 
-WEBSTER_EXPORTED int WebsterSetStatus(
+int WebsterSetStatus(
     webster_output_t *output,
     int status )
 {
@@ -431,7 +458,7 @@ static int webster_writeStatusLine(
 	webster_output_t *output )
 {
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
-	if (output->state != STATE_FIRST) return WBERR_OK;
+	if (output->state != STATE_IDLE) return WBERR_OK;
 	output->state = STATE_HEADER;
 
 	const char *message = NULL;
@@ -458,7 +485,7 @@ WEBSTER_EXPORTED int WebsterWriteHeaderField(
 	if (output->state == STATE_BODY) return WBERR_BAD_RESPONSE;
 
 	int result = WBERR_OK;
-	if (output->state == STATE_FIRST)
+	if (output->state == STATE_IDLE)
 	{
 		result = webster_writeStatusLine(output);
 		if (result != WBERR_OK) return result;
@@ -486,7 +513,7 @@ WEBSTER_EXPORTED int WebsterWriteData(
 {
 	int result = 0;
 
-	if (output->state == STATE_FIRST)
+	if (output->state == STATE_IDLE)
 	{
 		result = webster_writeStatusLine(output);
 		if (result != WBERR_OK) return result;

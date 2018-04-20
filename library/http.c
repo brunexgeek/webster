@@ -123,8 +123,9 @@ static char *http_removeTrailing(
 
 
 int http_parseHeader(
-    http_header_t *header,
-    uint32_t *contentLength )
+    char *data,
+    webster_header_t *header,
+    int *contentLength )
 {
     char *ptr = NULL;
     char *tokens[128];
@@ -132,7 +133,7 @@ int http_parseHeader(
     // reset content length
     *contentLength = 0;
 
-    int count = tokenize((char*) header->data, " \n", '\n', tokens, 8);
+    int count = tokenize((char*) data, " \n", '\n', tokens, 8);
     if (count != 3) return WBERR_BAD_REQUEST;
 
     if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_BAD_REQUEST;
@@ -172,7 +173,7 @@ int http_parseHeader(
     count = tokenize(ptr, "\n", 0, tokens, 128);
     if (count == 0) return WBERR_BAD_REQUEST;
     // allocate memory for the field array
-    header->fields = (http_field_t*) calloc( (size_t) count, sizeof(http_field_t) );
+    header->fields = (webster_field_t*) calloc( (size_t) count, sizeof(webster_field_t) );
     if (header->fields == NULL) return WBERR_MEMORY_EXHAUSTED;
 
     for (int i = 0; i < count; ++i)
@@ -198,10 +199,10 @@ int http_parseHeader(
 
         // if is 'content-length' field, get the value
         if (strcmp(header->fields[i].name, "content-length") == 0)
-            *contentLength = (uint32_t) atoi(header->fields[i].value);
+            *contentLength = atoi(header->fields[i].value);
     }
 
-    header->count = count;
+    header->fieldCount = count;
 
     return WBERR_OK;
 }
