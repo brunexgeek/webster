@@ -30,6 +30,7 @@ struct webster_server_t_
     int maxClients;
     struct pollfd pfd;
     webster_remote_t *remotes;
+    pthread_mutex_t mutex;
 };
 
 

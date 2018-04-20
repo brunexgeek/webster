@@ -43,6 +43,13 @@ int WebsterCreate(
 	(*server)->host = NULL;
 	(*server)->pfd.events = POLLIN;
 
+	if (pthread_mutex_init(&(*server)->mutex, NULL) != 0)
+	{
+		printf("%s", strerror(errno));
+		free(*server);
+		return WBERR_MEMORY_EXHAUSTED;
+	}
+
 	for (int i = 0; i < maxClients; ++i)
 		(*server)->remotes[i].socket = -1;
 
@@ -57,6 +64,7 @@ int WebsterDestroy(
 
 	WebsterStop(server);
 
+	pthread_mutex_destroy(&(*server)->mutex);
 	if ((*server)->host != NULL) free((*server)->host);
 	free(*server);
 	server = NULL;
@@ -146,33 +154,25 @@ int WebsterStop(
 	{
 		webster_remote_t *remote = (*server)->remotes + i;
 
-		if (remote->thread == 0 || remote->socket < 0) continue;
+		pthread_mutex_lock(&(*server)->mutex);
+		int ignore = remote->thread == 0 || remote->socket < 0;
+		pthread_mutex_unlock(&(*server)->mutex);
 
+		if (ignore) continue;
+
+		// TODO: set variable to escape the thread loop
 		pthread_join( remote->thread, NULL );
 		shutdown( remote->socket, SHUT_RDWR );
 		close( remote->socket );
 
+		pthread_mutex_lock(&(*server)->mutex);
 		remote->thread = 0;
 		remote->socket = -1;
+		pthread_mutex_unlock(&(*server)->mutex);
 	}
 
 	return WBERR_OK;
 }
-
-
-/*int WebsterSetHandler(
-    webster_server_t *server,
-    const char* mime,
-    webster_handler_t *handler )
-{
-	(void) mime;
-
-	if (server == NULL || *server == NULL || handler == NULL) return WBERR_INVALID_ARGUMENT;
-
-	(*server)->handler = handler;
-
-	return WBERR_OK;
-}*/
 
 
 static void *webster_thread(
@@ -189,15 +189,16 @@ static void *webster_thread(
 	shutdown(temp->remote->socket, SHUT_RDWR);
 	close(temp->remote->socket);
 
-    pthread_t thread = temp->remote->thread;
-    temp->remote->thread = 0;
-
-    pthread_detach(thread);
-
 	if (temp->request.header.fields != NULL) free(temp->request.header.fields);
+
+	pthread_mutex_lock(&(temp->server)->mutex);
+	pthread_t thread = temp->remote->thread;
+    temp->remote->thread = 0;
 	temp->remote->socket = -1;
-	temp->remote->thread = 0;
+	pthread_mutex_unlock(&(temp->server)->mutex);
+
 	free(temp);
+	pthread_detach(thread);
 
 	printf("[Thread %p] Finished\n", data);
 
@@ -289,8 +290,11 @@ static int webster_receive(
 	if (result < 0)
 		return WBERR_SOCKET;
 
+	// Note: when reading input data we leave room in the buffer for a null-terminator
+	//       so we can use the function 'WebsterReadString'.
+
 	// receive new data and adjust pending information
-	ssize_t bytes = recv(input->socket, input->buffer.data, sizeof(input->buffer.data) - sizeof(size_t), 0);
+	ssize_t bytes = recv(input->socket, input->buffer.data, sizeof(input->buffer.data) - 1, 0);
 	if (bytes < 0)
 	{
 		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
@@ -298,6 +302,8 @@ static int webster_receive(
 	}
 	input->buffer.pending = (int) bytes;
 	input->buffer.current = input->buffer.data;
+	// ensure we have a null-terminator at the end
+	*(input->buffer.current + input->buffer.pending) = 0;
 
 	return WBERR_OK;
 }
@@ -332,7 +338,7 @@ int WebsterWaitEvent(
     webster_input_t *input,
     webster_event_t *event )
 {
-	if (event == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL || event == NULL) return WBERR_INVALID_ARGUMENT;
 
 	event->size = 0;
 	event->type = 0;
@@ -347,7 +353,6 @@ int WebsterWaitEvent(
 			event->size = (int) strlen(input->headerData) + 1;
 			input->state = STATE_HEADER;
 		}
-
 		return result;
 	}
 	else
@@ -370,7 +375,6 @@ int WebsterWaitEvent(
 					return WBERR_NO_DATA;
 				}
 			}
-
 			event->type = WB_TYPE_BODY;
 			event->size = input->buffer.pending;
 			input->state = STATE_BODY;
@@ -401,12 +405,32 @@ int WebsterReadData(
     const uint8_t **buffer,
 	int *size )
 {
-	if (input == NULL || buffer == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL || buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (input->buffer.pending <= 0 || input->buffer.current == NULL) return WBERR_NO_DATA;
 
 	*buffer = input->buffer.current;
 	*size = input->buffer.pending;
+
+	input->buffer.current = NULL;
+	input->buffer.pending = 0;
+
+	return WBERR_OK;
+}
+
+
+int WebsterReadString(
+    webster_input_t *input,
+    const char **buffer )
+{
+	if (input == NULL || buffer == NULL) return WBERR_INVALID_ARGUMENT;
+
+	if (input->buffer.pending <= 0 || input->buffer.current == NULL) return WBERR_NO_DATA;
+
+	// the 'webster_receive' function is supposed to put a null-terminator
+	// at the end of the data, but we want to be sure (better safe than sorry)
+	*(input->buffer.current + input->buffer.pending) = 0;
+	*buffer = (char*) input->buffer.current;
 
 	input->buffer.current = NULL;
 	input->buffer.pending = 0;
@@ -552,15 +576,6 @@ int WebsterFlush(
 		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), 0);
 		output->buffer.current = output->buffer.data;
 	}
-
-	return WBERR_OK;
-}
-
-
-int WebsterFree(
-    void *ptr )
-{
-	(void) ptr;
 
 	return WBERR_OK;
 }

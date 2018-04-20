@@ -6,12 +6,6 @@
 #include <stdio.h>
 
 
-struct http_status_t {
-    int status;
-    const char *message;
-};
-
-
 const char *http_statusMessage(
     int status )
 {

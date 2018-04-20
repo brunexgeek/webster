@@ -141,7 +141,7 @@ WEBSTER_EXPORTED int WebsterWaitEvent(
 WEBSTER_EXPORTED int WebsterGetHeader(
     webster_input_t *input,
     const webster_header_t **header );
-// TODO: rename to ReadData
+
 WEBSTER_EXPORTED int WebsterReadData(
     webster_input_t *input,
     const uint8_t **buffer,
@@ -171,9 +171,7 @@ WEBSTER_EXPORTED int WebsterWriteString(
 
 WEBSTER_EXPORTED int WebsterFlush(
 	webster_output_t *output );
-// TODO: remove
-WEBSTER_EXPORTED int WebsterFree(
-    void *ptr );
+
 
 #ifdef __cplusplus
 }
