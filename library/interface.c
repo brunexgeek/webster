@@ -40,7 +40,7 @@ int WebsterCreate(
 	(*server)->maxClients = maxClients;
 	(*server)->remotes = (webster_remote_t*) ((char*) *server + sizeof(struct webster_server_t_));
 	(*server)->host = NULL;
-	(*server)->handler = NULL;
+	(*server)->pfd.events = POLLIN;
 
 	for (int i = 0; i < maxClients; ++i)
 		(*server)->remotes[i].socket = -1;
@@ -126,6 +126,8 @@ int WebsterStart(
 		return WBERR_SOCKET;
 	}
 
+	(*server)->pfd.fd = (*server)->socket;
+
 	return WBERR_OK;
 }
 
@@ -157,7 +159,7 @@ int WebsterStop(
 }
 
 
-int WebsterSetHandler(
+/*int WebsterSetHandler(
     webster_server_t *server,
     const char* mime,
     webster_handler_t *handler )
@@ -169,7 +171,7 @@ int WebsterSetHandler(
 	(*server)->handler = handler;
 
 	return WBERR_OK;
-}
+}*/
 
 
 static void *webster_thread(
@@ -179,10 +181,17 @@ static void *webster_thread(
 
 	printf("[Thread %p] Started\n", data);
 
-	temp->server->handler(&temp->request, &temp->response, temp->data);
+	temp->handler(&temp->request, &temp->response, temp->data);
+
+	WebsterFlush(&temp->response);
 
 	shutdown(temp->remote->socket, SHUT_RDWR);
 	close(temp->remote->socket);
+
+    pthread_t thread = temp->remote->thread;
+    temp->remote->thread = 0;
+
+    pthread_detach(thread);
 
 	if (temp->request.header.fields != NULL) free(temp->request.header.fields);
 	temp->remote->socket = -1;
@@ -197,9 +206,17 @@ static void *webster_thread(
 
 int WebsterAccept(
     webster_server_t *server,
+	webster_handler_t *handler,
 	void *data )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL || handler == NULL) return WBERR_INVALID_ARGUMENT;
+
+	int result = poll(&(*server)->pfd, 1, 1000);
+	if (result == 0)
+		return WBERR_TIMEOUT;
+	else
+	if (result < 0)
+		return WBERR_SOCKET;
 
 	struct sockaddr_in address;
 	socklen_t addressLength = sizeof(address);
@@ -227,11 +244,16 @@ int WebsterAccept(
 				temp->server = *server;
 				temp->remote = (*server)->remotes + i;
 				temp->request.socket = temp->remote->socket;
+				temp->request.pfd.events = POLLIN;
+				temp->request.pfd.fd = temp->remote->socket;
 				temp->response.socket = temp->remote->socket;
+				temp->handler = handler;
 				temp->data = data;
 
 				int result = pthread_create(&(*server)->remotes[i].thread, NULL, webster_thread, temp);
-
+                //if (result == 0)
+                //    pthread_detach((*server)->remotes[i].thread);
+                //else
 				if (result != 0)
 				{
 					free(temp);
@@ -268,6 +290,13 @@ int WebsterWait(
 	// check if we need to retrieve more data
 	if (hasHeader || input->buffer.pending == 0)
 	{
+		int result = poll(&input->pfd, 1, 10000);
+		if (result == 0)
+			return WBERR_TIMEOUT;
+		else
+		if (result < 0)
+			return WBERR_SOCKET;
+
 		ssize_t bytes = recv(input->socket, input->buffer.start, sizeof(input->buffer.start), 0);
 		if (bytes < 0)
 		{
@@ -306,7 +335,7 @@ int WebsterWait(
 	else
 	{
 		*type = WB_TYPE_BODY;
-		*size = (int) input->buffer.pending;
+		*size = input->buffer.pending;
 		return WBERR_OK;
 	}
 
@@ -325,6 +354,18 @@ int WebsterGetHeaderFields(
 	if (count != NULL) *count = input->header.count;
 
 	return WBERR_OK;
+}
+
+
+int WebsterGetResource(
+    webster_input_t *input,
+    const char **resource )
+{
+    if (input == NULL || resource == NULL) return WBERR_INVALID_ARGUMENT;
+
+    *resource = input->header.resource;
+
+    return WBERR_OK;
 }
 
 
@@ -370,15 +411,15 @@ static int webster_writeOrSend(
 
 	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + sizeof(output->buffer.data))
 	{
-		send(output->socket, output->buffer.data, output->buffer.current - output->buffer.data, 0);
+		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), 0);
 		output->buffer.current = output->buffer.data;
 	}
 
-	if (size > sizeof(output->buffer.data))
-		send(output->socket, buffer, size, 0);
+	if (size > (int) sizeof(output->buffer.data))
+		send(output->socket, buffer, (size_t) size, 0);
 	else
 	{
-		memcpy(output->buffer.current, buffer, size);
+		memcpy(output->buffer.current, buffer, (size_t) size);
 		output->buffer.current += size;
 	}
 
@@ -404,7 +445,7 @@ static int webster_writeStatusLine(
 
 	char temp[128];
 	snprintf(temp, sizeof(temp) - 1, "HTTP/1.1 %d %s\r\n", output->status, message);
-	return webster_writeOrSend(output, temp, strlen(temp));
+	return webster_writeOrSend(output, (uint8_t*) temp, (int) strlen(temp));
 }
 
 
@@ -429,10 +470,10 @@ WEBSTER_EXPORTED int WebsterWriteHeaderField(
 
 	// TODO: evaluate field value
 
-	webster_writeOrSend(output, name, strlen(name));
-	webster_writeOrSend(output, ": ", 2);
-	webster_writeOrSend(output, value, strlen(value));
-	webster_writeOrSend(output, "\r\n", 2);
+	webster_writeOrSend(output, (const uint8_t*) name, (int) strlen(name));
+	webster_writeOrSend(output, (const uint8_t*) ": ", 2);
+	webster_writeOrSend(output, (const uint8_t*) value, (int) strlen(value));
+	webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
 
 	return WBERR_OK;
 }
@@ -453,10 +494,19 @@ WEBSTER_EXPORTED int WebsterWriteData(
 
 	if (output->state == STATE_HEADER)
 	{
-		webster_writeOrSend(output, "\r\n", 2);
+		webster_writeOrSend(output, (const uint8_t*)"\r\n", 2);
+        output->state = STATE_BODY;
 	}
 
 	return webster_writeOrSend(output, buffer, size);
+}
+
+
+WEBSTER_EXPORTED int WebsterWriteString(
+    webster_output_t *output,
+    const char *text )
+{
+	return WebsterWriteData(output, (uint8_t*) text, (int) strlen(text));
 }
 
 
@@ -467,12 +517,12 @@ int WebsterFlush(
 
 	if (output->state != STATE_BODY)
 	{
-		WebsterWriteData(output, "", 0);
+		WebsterWriteData(output, (uint8_t*) "", 0);
 	}
-	
+
 	if (output->buffer.current > output->buffer.data)
 	{
-		send(output->socket, output->buffer.data, output->buffer.current - output->buffer.data, 0);
+		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), 0);
 		output->buffer.current = output->buffer.data;
 	}
 

@@ -27,6 +27,7 @@
 #define WBERR_BAD_REQUEST                8
 #define WBERR_NO_DATA                    9
 #define WBERR_BAD_RESPONSE               10
+#define WBERR_TIMEOUT                    11
 
 #define WB_TYPE_HEADER                   1
 #define WB_TYPE_BODY                     2
@@ -65,6 +66,11 @@ typedef int (webster_handler_t)(
     webster_output_t *response,
     void *data );
 
+typedef int (webster_callback_t)(
+    webster_output_t *request,
+    webster_input_t *response,
+    void *data );
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,6 +89,11 @@ WEBSTER_EXPORTED int WebsterConnect(
     const char *host,
     int port );
 
+WEBSTER_EXPORTED int WebsterCommunicate(
+    webster_client_t *client,
+    webster_callback_t *callback,
+    void *data );
+
 WEBSTER_EXPORTED int WebsterDisconnect(
     webster_client_t *client );
 
@@ -94,13 +105,9 @@ WEBSTER_EXPORTED int WebsterStart(
 WEBSTER_EXPORTED int WebsterStop(
     webster_server_t *server );
 
-WEBSTER_EXPORTED int WebsterSetHandler(
-    webster_server_t *server,
-    const char* mime,
-    webster_handler_t *handler );
-
 WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
+    webster_handler_t *handler,
     void *data );
 
 WEBSTER_EXPORTED int WebsterWait(
@@ -112,6 +119,10 @@ WEBSTER_EXPORTED int WebsterGetHeaderFields(
     webster_input_t *input,
     const webster_field_t **fields,
     int *count );
+
+WEBSTER_EXPORTED int WebsterGetResource(
+    webster_input_t *input,
+    const char **resource );
 
 WEBSTER_EXPORTED int WebsterGetData(
     webster_input_t *input,
@@ -131,6 +142,10 @@ WEBSTER_EXPORTED int WebsterWriteData(
     webster_output_t *output,
     const uint8_t *buffer,
     int size );
+
+WEBSTER_EXPORTED int WebsterWriteString(
+    webster_output_t *output,
+    const char *text );
 
 WEBSTER_EXPORTED int WebsterFlush(
 	webster_output_t *output );
