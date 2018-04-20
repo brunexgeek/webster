@@ -109,21 +109,21 @@ WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
     webster_handler_t *handler,
     void *data );
-
+// TODO: rename to WaitEvent and put 'type' and 'size' in a struct (webster_event_t)
 WEBSTER_EXPORTED int WebsterWait(
     webster_input_t *input,
     int *type,
     int *size );
-
+// TODO: rename to ReadHeader and return the complete header info (webster_headet_t)
 WEBSTER_EXPORTED int WebsterGetHeaderFields(
     webster_input_t *input,
     const webster_field_t **fields,
     int *count );
-
+// TODO: remove and use only the above function
 WEBSTER_EXPORTED int WebsterGetResource(
     webster_input_t *input,
     const char **resource );
-
+// TODO: rename to ReadData
 WEBSTER_EXPORTED int WebsterGetData(
     webster_input_t *input,
     const uint8_t **buffer,
@@ -137,19 +137,19 @@ WEBSTER_EXPORTED int WebsterWriteHeaderField(
     webster_output_t *output,
     const char *name,
     const char *value );
-
+// TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteData(
     webster_output_t *output,
     const uint8_t *buffer,
     int size );
-
+// TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteString(
     webster_output_t *output,
     const char *text );
 
 WEBSTER_EXPORTED int WebsterFlush(
 	webster_output_t *output );
-
+// TODO: remove
 WEBSTER_EXPORTED int WebsterFree(
     void *ptr );
 
