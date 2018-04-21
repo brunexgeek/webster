@@ -13,6 +13,19 @@
 const char *http_statusMessage(
     int status );
 
+int http_getFieldID(
+    const char *name );
+
+const webster_field_t *http_getFieldById(
+    const webster_header_t *header,
+    int id );
+
+const webster_field_t *http_getFieldByName(
+    const webster_header_t *header,
+    const char *name );
+
+char *http_removeTrailing(
+    char *text );
 
 int http_parseHeader(
     char *data,

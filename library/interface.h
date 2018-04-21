@@ -63,7 +63,7 @@ struct webster_input_t_
 struct webster_output_t_
 {
     uint8_t state;
-    uint32_t contentLength;
+    int contentLength;
     int socket;
     int status;
     struct

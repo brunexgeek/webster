@@ -1,5 +1,4 @@
 #include "interface.h"
-
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -14,13 +13,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdarg.h>
-
-
-#define STATE_IDLE          0
-#define STATE_HEADER        1
-#define STATE_BODY          2
-#define STATE_COMPLETE      2
-
 
 
 int WebsterCreate(
@@ -241,7 +233,7 @@ int WebsterAccept(
 		if (i < (*server)->maxClients)
 		{
 			webster_thread_data_t *temp = (webster_thread_data_t*) calloc(1,
-				sizeof(webster_thread_data_t) + (*server)->options.bufferSize * 2 );
+				sizeof(webster_thread_data_t) + (size_t) (*server)->options.bufferSize * 2 );
 			if (temp != NULL)
 			{
 				(*server)->remotes[i].socket = current;
@@ -255,12 +247,11 @@ int WebsterAccept(
 				temp->request.pfd.events = POLLIN;
 				temp->request.pfd.fd = temp->remote->socket;
 				temp->request.buffer.data = (uint8_t*) temp + sizeof(webster_thread_data_t);
-				temp->request.buffer.size = (*server)->options.bufferSize;
+				temp->request.buffer.size = (size_t) (*server)->options.bufferSize;
 
 				temp->response.buffer.data = temp->request.buffer.data + temp->request.buffer.size;
-				temp->response.buffer.size = (*server)->options.bufferSize;
+				temp->response.buffer.size = (size_t) (*server)->options.bufferSize;
 				temp->response.socket = temp->remote->socket;
-
 
 				int result = pthread_create(&(*server)->remotes[i].thread, NULL, webster_thread, temp);
 				if (result != 0)
@@ -351,19 +342,19 @@ int WebsterWaitEvent(
 	event->type = 0;
 	int result = 0;
 
-	if (input->state == STATE_IDLE)
+	if (input->state == WBS_IDLE)
 	{
 		result = webster_receiveHeader(input);
 		if (result == WBERR_OK)
 		{
 			event->type = WBT_HEADER;
 			event->size = (int) strlen(input->headerData) + 1;
-			input->state = STATE_HEADER;
+			input->state = WBS_HEADER;
 		}
 		return result;
 	}
 	else
-	if (input->state == STATE_HEADER || input->state == STATE_BODY)
+	if (input->state == WBS_HEADER || input->state == WBS_BODY)
 	{
 		if (input->body.expected == 0) return WBERR_COMPLETE;
 
@@ -377,14 +368,14 @@ int WebsterWaitEvent(
 				// we still have some data to return?
 				if (input->buffer.pending <= 0)
 				{
-					input->state = STATE_COMPLETE;
+					input->state = WBS_COMPLETE;
 					input->buffer.pending = 0;
 					return WBERR_NO_DATA;
 				}
 			}
 			event->type = WBT_BODY;
 			event->size = input->buffer.pending;
-			input->state = STATE_BODY;
+			input->state = WBS_BODY;
 			input->body.received += input->buffer.pending;
 		}
 
@@ -403,6 +394,43 @@ int WebsterGetHeader(
 
 	*header = &input->header;
 
+	return WBERR_OK;
+}
+
+
+int WebsterGetStrField(
+    webster_input_t *input,
+    const char *name,
+    int fieldId,
+    const char **value )
+{
+	if (input == NULL || value == 0) return WBERR_INVALID_ARGUMENT;
+	if (name == NULL && (fieldId <= 0 || fieldId > WBFI_WWW_AUTHENTICATE)) return WBERR_INVALID_ARGUMENT;
+
+	if (name != NULL) fieldId = http_getFieldID(name);
+
+	const webster_field_t *field = NULL;
+	if (fieldId == 0)
+		field = http_getFieldByName(&input->header, name);
+	else
+		field = http_getFieldById(&input->header, fieldId);
+
+	if (field == NULL) return WBERR_NO_DATA;
+	*value = field->value;
+	return WBERR_OK;
+}
+
+int WebsterGetIntField(
+    webster_input_t *input,
+    const char *name,
+    int fieldId,
+    int *value )
+{
+	const char *temp = NULL;
+	int result = WebsterGetStrField(input, name, fieldId, &temp);
+	if (result != WBERR_OK) return result;
+
+	*value = atoi(temp);
 	return WBERR_OK;
 }
 
@@ -489,8 +517,8 @@ static int webster_writeStatusLine(
 	webster_output_t *output )
 {
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
-	if (output->state != STATE_IDLE) return WBERR_OK;
-	output->state = STATE_HEADER;
+	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
+	output->state = WBS_HEADER;
 
 	const char *message = NULL;
 	if (output->status == 0)
@@ -507,26 +535,35 @@ static int webster_writeStatusLine(
 }
 
 
-WEBSTER_EXPORTED int WebsterWriteStrField(
+int WebsterWriteStrField(
     webster_output_t *output,
     const char *name,
     const char *value )
 {
 	if (output == NULL || name == NULL || name[0] == 0 || value == NULL) return WBERR_INVALID_ARGUMENT;
-	if (output->state == STATE_BODY) return WBERR_BAD_RESPONSE;
+	if (output->state >= WBS_BODY) return WBERR_INVALID_STATE;
 
 	int result = WBERR_OK;
-	if (output->state == STATE_IDLE)
+	if (output->state == WBS_IDLE)
 	{
 		result = webster_writeStatusLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
-	// TODO: discard trailing whitespaces
+	char temp[128] = { 0 };
+	strncpy(temp, name, sizeof(temp) - 1);
+	// change the field name to lowercase
+    for (char *p = temp; *p; ++p) *p = (char) tolower(*p);
+	// remove trailing whitespaces
+	name = http_removeTrailing(temp);
+	// check if we have any whitespace
 	for (const char *p = name; *p != 0; ++p)
 		if (*p == ' ') return WBERR_BAD_RESPONSE;
 
 	// TODO: evaluate field value
+
+	if (http_getFieldID(name) == WBFI_CONTENT_LENGTH)
+		output->contentLength = atoi(value);
 
 	webster_writeOrSend(output, (const uint8_t*) name, (int) strlen(name));
 	webster_writeOrSend(output, (const uint8_t*) ": ", 2);
@@ -548,23 +585,26 @@ int WebsterWriteIntField(
 }
 
 
-WEBSTER_EXPORTED int WebsterWriteData(
+int WebsterWriteData(
     webster_output_t *output,
     const uint8_t *buffer,
     int size )
 {
+	if (output == NULL || buffer == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output->state == WBS_COMPLETE) return WBERR_INVALID_STATE;
+
 	int result = 0;
 
-	if (output->state == STATE_IDLE)
+	if (output->state == WBS_IDLE)
 	{
 		result = webster_writeStatusLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
-	if (output->state == STATE_HEADER)
+	if (output->state == WBS_HEADER)
 	{
 		webster_writeOrSend(output, (const uint8_t*)"\r\n", 2);
-        output->state = STATE_BODY;
+        output->state = WBS_BODY;
 	}
 
 	return webster_writeOrSend(output, buffer, size);
@@ -584,7 +624,7 @@ int WebsterFlush(
 {
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
 
-	if (output->state != STATE_BODY)
+	if (output->state != WBS_BODY)
 	{
 		WebsterWriteData(output, (uint8_t*) "", 0);
 	}
@@ -630,6 +670,30 @@ int WebsterGetOption(
 		*value = (*server)->options.bufferSize;
 	else
 		return WBERR_INVALID_ARGUMENT;
+
+	return WBERR_OK;
+}
+
+
+WEBSTER_EXPORTED int WebsterGetInputState(
+	webster_input_t *input,
+    int *state )
+{
+	if (input == NULL || state == NULL) return WBERR_INVALID_ARGUMENT;
+
+	*state = input->state;
+
+	return WBERR_OK;
+}
+
+
+WEBSTER_EXPORTED int WebsterGetOutputState(
+	webster_output_t *output,
+    int *state )
+{
+	if (output == NULL || state == NULL) return WBERR_INVALID_ARGUMENT;
+
+	*state = output->state;
 
 	return WBERR_OK;
 }

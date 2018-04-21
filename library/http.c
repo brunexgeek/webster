@@ -63,6 +63,146 @@ const char *http_statusMessage(
 }
 
 
+int http_getFieldID(
+    const char *name )
+{
+    printf("Looking for %s\n", name);
+    if (name == NULL || name[0] == 0) return 0;
+
+    if (name[0] < 'a' || name[0] > 'z') return 0;
+    switch (name[0])
+    {
+        case 'a':
+            if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
+            if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
+            if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
+            if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
+            if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
+            if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
+            if (strcmp(name, "access-control-allow-credentials") == 0)  return WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS;
+            if (strcmp(name, "access-control-allow-headers") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_HEADERS;
+            if (strcmp(name, "access-control-allow-methods") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_METHODS;
+            if (strcmp(name, "access-control-allow-origin") == 0)       return WBFI_ACCESS_CONTROL_ALLOW_ORIGIN;
+            if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
+            if (strcmp(name, "access-control-max-age") == 0)            return WBFI_ACCESS_CONTROL_MAX_AGE;
+            if (strcmp(name, "access-control-request-headers") == 0)    return WBFI_ACCESS_CONTROL_REQUEST_HEADERS;
+            if (strcmp(name, "access-control-request-method") == 0)     return WBFI_ACCESS_CONTROL_REQUEST_METHOD;
+            if (strcmp(name, "age") == 0)                               return WBFI_AGE;
+            if (strcmp(name, "allow") == 0)                             return WBFI_ALLOW;
+            if (strcmp(name, "alt-svc") == 0)                           return WBFI_ALT_SVC;
+            if (strcmp(name, "authorization") == 0)                     return WBFI_AUTHORIZATION;
+            break;
+        case 'c':
+            if (strcmp(name, "cache-control") == 0)                     return WBFI_CACHE_CONTROL;
+            if (strcmp(name, "connect") == 0)                           return WBFI_CONNECT;
+            if (strcmp(name, "connection") == 0)                        return WBFI_CONNECTION;
+            if (strcmp(name, "content-disposition") == 0)               return WBFI_CONTENT_DISPOSITION;
+            if (strcmp(name, "content-encoding") == 0)                  return WBFI_CONTENT_ENCODING;
+            if (strcmp(name, "content-language") == 0)                  return WBFI_CONTENT_LANGUAGE;
+            if (strcmp(name, "content-length") == 0)                    return WBFI_CONTENT_LENGTH;
+            if (strcmp(name, "content-location") == 0)                  return WBFI_CONTENT_LOCATION;
+            if (strcmp(name, "content-range") == 0)                     return WBFI_CONTENT_RANGE;
+            if (strcmp(name, "content-type") == 0)                      return WBFI_CONTENT_TYPE;
+            if (strcmp(name, "cookie") == 0)                            return WBFI_COOKIE;
+            break;
+        case 'd':
+            if (strcmp(name, "date") == 0)                              return WBFI_DATE;
+            if (strcmp(name, "dnt") == 0)                               return WBFI_DNT;
+            break;
+        case 'e':
+            if (strcmp(name, "etag") == 0)                              return WBFI_ETAG;
+            if (strcmp(name, "expect") == 0)                            return WBFI_EXPECT;
+            if (strcmp(name, "expires") == 0)                           return WBFI_EXPIRES;
+            break;
+        case 'f':
+            if (strcmp(name, "forwarded") == 0)                         return WBFI_FORWARDED;
+            if (strcmp(name, "from") == 0)                              return WBFI_FROM;
+            break;
+        case 'h':
+            if (strcmp(name, "host") == 0)                              return WBFI_HOST;
+            break;
+        case 'i':
+            if (strcmp(name, "if-match") == 0)                          return WBFI_IF_MATCH;
+            if (strcmp(name, "if-modified-since") == 0)                 return WBFI_IF_MODIFIED_SINCE;
+            if (strcmp(name, "if-none-match") == 0)                     return WBFI_IF_NONE_MATCH;
+            if (strcmp(name, "if-range") == 0)                          return WBFI_IF_RANGE;
+            if (strcmp(name, "if-unmodified-since") == 0)               return WBFI_IF_UNMODIFIED_SINCE;
+            break;
+        case 'l':
+            if (strcmp(name, "last-modified") == 0)                     return WBFI_LAST_MODIFIED;
+            if (strcmp(name, "link") == 0)                              return WBFI_LINK;
+            if (strcmp(name, "location") == 0)                          return WBFI_LOCATION;
+            break;
+        case 'm':
+            if (strcmp(name, "max-forwards") == 0)                      return WBFI_MAX_FORWARDS;
+            break;
+        case 'o':
+            if (strcmp(name, "options") == 0)                           return WBFI_OPTIONS;
+            if (strcmp(name, "origin") == 0)                            return WBFI_ORIGIN;
+            break;
+        case 'p':
+            if (strcmp(name, "pragma") == 0)                            return WBFI_PRAGMA;
+            if (strcmp(name, "proxy-authenticate") == 0)                return WBFI_PROXY_AUTHENTICATE;
+            if (strcmp(name, "proxy-authorization") == 0)               return WBFI_PROXY_AUTHORIZATION;
+            if (strcmp(name, "public-key-pins") == 0)                   return WBFI_PUBLIC_KEY_PINS;
+            break;
+        case 'r':
+            if (strcmp(name, "range") == 0)                             return WBFI_RANGE;
+            if (strcmp(name, "referer") == 0)                           return WBFI_REFERER;
+            if (strcmp(name, "retry-after") == 0)                       return WBFI_RETRY_AFTER;
+            break;
+        case 's':
+            if (strcmp(name, "set-cookie") == 0)                        return WBFI_SET_COOKIE;
+            if (strcmp(name, "strict-transport-security") == 0)         return WBFI_STRICT_TRANSPORT_SECURITY;
+            break;
+        case 't':
+            if (strcmp(name, "te") == 0)                                return WBFI_TE;
+            if (strcmp(name, "tk") == 0)                                return WBFI_TK;
+            if (strcmp(name, "trailer") == 0)                           return WBFI_TRAILER;
+            if (strcmp(name, "transfer-encoding") == 0)                 return WBFI_TRANSFER_ENCODING;
+            break;
+        case 'u':
+            if (strcmp(name, "upgrade") == 0)                           return WBFI_UPGRADE;
+            if (strcmp(name, "upgrade-insecure-requests") == 0)         return WBFI_UPGRADE_INSECURE_REQUESTS;
+            if (strcmp(name, "user-agent") == 0)                        return WBFI_USER_AGENT;
+            break;
+        case 'v':
+            if (strcmp(name, "vary") == 0)                              return WBFI_VARY;
+            if (strcmp(name, "via") == 0)                               return WBFI_VIA;
+            break;
+        case 'w':
+            if (strcmp(name, "warning") == 0)                           return WBFI_WARNING;
+            if (strcmp(name, "www-authenticate") == 0)                  return WBFI_WWW_AUTHENTICATE;
+    }
+
+    return 0;
+}
+
+
+const webster_field_t *http_getFieldByName(
+    const webster_header_t *header,
+    const char *name )
+{
+    for (int i = 0; i < header->fieldCount; ++i)
+        if (strcmp(header->fields[i].name, name) == 0)
+            return header->fields + i;
+
+    return NULL;
+}
+
+
+const webster_field_t *http_getFieldById(
+    const webster_header_t *header,
+    int id )
+{
+    for (int i = 0; i < header->fieldCount; ++i)
+        if (header->fields[i].id == id)
+            return header->fields + i;
+
+    return NULL;
+}
+
+
 static int tokenize(
     char *buffer,
     const char *delimiter,
@@ -103,7 +243,7 @@ static int tokenize(
 }
 
 
-static char *http_removeTrailing(
+char *http_removeTrailing(
     char *text )
 {
     // remove whitespaces from the start
@@ -190,9 +330,11 @@ int http_parseHeader(
         header->fields[i].value = http_removeTrailing(header->fields[i].value);
         // change the field name to lowercase
         for (char *p = tokens[i]; *p; ++p) *p = (char) tolower(*p);
+        // get the field ID, if any
+        header->fields[i].id = http_getFieldID(header->fields[i].name);
 
         // if is 'content-length' field, get the value
-        if (strcmp(header->fields[i].name, "content-length") == 0)
+        if (header->fields[i].id == WBFI_CONTENT_LENGTH)
             *contentLength = atoi(header->fields[i].value);
     }
 

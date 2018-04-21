@@ -1,4 +1,5 @@
 #include <webster/api.h>
+#include <limits.h>
 #include <stdio.h>
 #include <signal.h>
 #include <setjmp.h>
@@ -72,7 +73,7 @@ static void main_listDirectory(
 	struct dirent *de = NULL;
 	if (dr != NULL)
 	{
-		int length = strlen(rootDirectory);
+		int length = (int) strlen(rootDirectory);
 		while ((de = readdir(dr)) != NULL)
 		{
 			while (*ptr != 0) ++ptr;
