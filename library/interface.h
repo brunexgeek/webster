@@ -31,6 +31,10 @@ struct webster_server_t_
     struct pollfd pfd;
     webster_remote_t *remotes;
     pthread_mutex_t mutex;
+    struct
+    {
+        int bufferSize;
+    } options;
 };
 
 
@@ -46,7 +50,8 @@ struct webster_input_t_
     } body;
     struct
     {
-        uint8_t data[WEBSTER_MAX_HEADER];
+        uint8_t *data;
+        size_t size;
         uint8_t *current;
         int pending;
     } buffer;
@@ -63,7 +68,8 @@ struct webster_output_t_
     int status;
     struct
     {
-        uint8_t data[WEBSTER_MAX_HEADER];
+        uint8_t *data;
+        size_t size;
         uint8_t *current;
     } buffer;
 };

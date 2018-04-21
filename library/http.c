@@ -135,28 +135,28 @@ int http_parseHeader(
     for (char *p = tokens[0]; *p; ++p) *p = (char) tolower(*p);
 
     if (strcmp(tokens[0], "get") == 0)
-        header->method = WB_METHOD_GET;
+        header->method = WBM_GET;
     else
     if (strcmp(tokens[0], "post") == 0)
-        header->method = WB_METHOD_POST;
+        header->method = WBM_POST;
     else
     if (strcmp(tokens[0], "head") == 0)
-        header->method = WB_METHOD_HEAD;
+        header->method = WBM_HEAD;
     else
     if (strcmp(tokens[0], "put") == 0)
-        header->method = WB_METHOD_PUT;
+        header->method = WBM_PUT;
     else
     if (strcmp(tokens[0], "delete") == 0)
-        header->method = WB_METHOD_DELETE;
+        header->method = WBM_DELETE;
     else
     if (strcmp(tokens[0], "connect") == 0)
-        header->method = WB_METHOD_CONNECT;
+        header->method = WBM_CONNECT;
     else
     if (strcmp(tokens[0], "options") == 0)
-        header->method = WB_METHOD_OPTIONS;
+        header->method = WBM_OPTIONS;
     else
     if (strcmp(tokens[0], "trace") == 0)
-        header->method = WB_METHOD_TRACE;
+        header->method = WBM_TRACE;
 
     header->resource = tokens[1];
 

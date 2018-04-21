@@ -7,10 +7,13 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <linux/limits.h>
+#include <dirent.h>
 
 
 #define SERVER_RUNNING    1
 #define SERVER_STOPPING   2
+
+#define PROGRAM_TITLE     "Webster HTTP Server"
 
 
 static int serverState = SERVER_RUNNING;
@@ -23,6 +26,68 @@ static void main_signalHandler(
 {
 	(void) handle;
 	serverState = SERVER_STOPPING;
+}
+
+
+static void main_downloadFile(
+	webster_output_t *response,
+	const char *fileName,
+	int contentLength )
+{
+	if (fileName == NULL || strstr(fileName, rootDirectory) != fileName) return;
+
+	char buffer[1024];
+
+	WebsterSetStatus(response, 200);
+	WebsterWriteIntField(response, "Content-Length", contentLength);
+
+	FILE *fp = fopen(fileName, "rb");
+	if (fp != NULL)
+	{
+		size_t read = 0;
+		do {
+			read = fread(buffer, 1, sizeof(buffer), fp);
+			if (read > 0) WebsterWriteData(response, (uint8_t*) buffer, (int) read);
+		} while (read > 0);
+		fclose(fp);
+	}
+
+	printf("Returned %d bytes from %s\n", contentLength, fileName);
+}
+
+
+static void main_listDirectory(
+	webster_output_t *response,
+	const char *fileName )
+{
+	static size_t TEMP_SIZE = 16 * 1024;
+	char *temp = (char*) calloc(1, TEMP_SIZE);
+	if (temp == NULL) return;
+	char *ptr = temp;
+
+	snprintf(temp, TEMP_SIZE, "<html><head><title>" PROGRAM_TITLE
+		"</title></head><body><ul><h1>%s</h1>", fileName);
+
+	DIR *dr = opendir(fileName);
+	struct dirent *de = NULL;
+	if (dr != NULL)
+	{
+		int length = strlen(rootDirectory);
+		while ((de = readdir(dr)) != NULL)
+		{
+			while (*ptr != 0) ++ptr;
+			snprintf(ptr, TEMP_SIZE - strlen(temp) - 16, "<li><a href='%s/%s'>%s</a></li>",
+				fileName + length, de->d_name, de->d_name);
+		}
+	}
+	closedir(dr);
+
+	strcat(temp, "</ul></body>");
+
+	WebsterWriteIntField(response, "Content-Length", (int) strlen(temp));
+	WebsterWriteString(response, temp);
+
+	free(temp);
 }
 
 
@@ -49,7 +114,7 @@ static int main_handlerFunction(
 		if (result == WBERR_OK)
 		{
 			// check if received the HTTP header
-			if (event.type ==  WB_TYPE_HEADER)
+			if (event.type ==  WBT_HEADER)
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
@@ -61,7 +126,7 @@ static int main_handlerFunction(
 			}
 			else
 			// check if we received the HTTP body (or part of it)
-			if (event.type == WB_TYPE_BODY)
+			if (event.type == WBT_BODY)
 			{
 				const uint8_t *ptr = NULL;
 				int size = 0;
@@ -90,40 +155,22 @@ static int main_handlerFunction(
 
 	struct stat info;
 	if (stat(fileName, &info) != 0) return WBERR_OK;
-	if ((info.st_mode & S_IFREG) == 0)
+	if (info.st_mode & S_IFREG)
 	{
-		snprintf(temp, sizeof(temp) - 1, "%d", 12);
-		WebsterWriteHeaderField(response, "Content-Length", temp);
-		WebsterWriteString(response, "Invalid file");
-		return WBERR_OK;
+		main_downloadFile(response, fileName, (int) info.st_size);
+	}
+	else
+	if (info.st_mode & S_IFDIR)
+	{
+		main_listDirectory(response, fileName);
+	}
+	else
+	{
+		WebsterWriteIntField(response, "Content-Length", 14);
+		WebsterWriteString(response, "Invalid entity");
 	}
 
-	printf("Request completed! Returning data from %s\n", fileName);
-
-	if (fileName != NULL && strstr(fileName, rootDirectory) == fileName)
-	{
-		char buffer[1024];
-
-		WebsterSetStatus(response, 200);
-
-		snprintf(temp, sizeof(temp) - 1, "%d", (int) info.st_size);
-		WebsterWriteHeaderField(response, "Content-Length", temp);
-		printf("Content length is %s\n", temp);
-
-		FILE *fp = fopen(fileName, "rb");
-		if (fp != NULL)
-		{
-			size_t read = 0;
-			do {
-				read = fread(buffer, 1, sizeof(buffer), fp);
-				if (read > 0) WebsterWriteData(response, (uint8_t*) buffer, (int) read);
-			} while (read > 0);
-			fclose(fp);
-		}
-
-		free(fileName);
-	}
-
+	free(fileName);
 	return 0;
 }
 
@@ -145,7 +192,7 @@ int main(int argc, char* argv[])
 
 	webster_server_t server;
 
-	printf("Webster HTTP Server\n");
+	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
 	if (WebsterCreate(&server, 100) == WBERR_OK)

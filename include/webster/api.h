@@ -29,19 +29,20 @@
 #define WBERR_BAD_RESPONSE               10
 #define WBERR_TIMEOUT                    11
 
-#define WB_TYPE_HEADER                   1
-#define WB_TYPE_BODY                     2
-#define WB_TYPE_EMPTY                    3
+#define WBT_HEADER                   1
+#define WBT_BODY                     2
+#define WBT_EMPTY                    3
 
-#define WB_METHOD_GET                    1
-#define WB_METHOD_HEAD                   2
-#define WB_METHOD_POST                   3
-#define WB_METHOD_PUT                    4
-#define WB_METHOD_DELETE                 5
-#define WB_METHOD_CONNECT                6
-#define WB_METHOD_OPTIONS                7
-#define WB_METHOD_TRACE                  8
+#define WBM_GET                          1
+#define WBM_HEAD                         2
+#define WBM_POST                         3
+#define WBM_PUT                          4
+#define WBM_DELETE                       5
+#define WBM_CONNECT                      6
+#define WBM_OPTIONS                      7
+#define WBM_TRACE                        8
 
+#define WBO_BUFFER_SIZE                  1
 
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;
@@ -155,10 +156,16 @@ WEBSTER_EXPORTED int WebsterSetStatus(
     webster_output_t *output,
     int status );
 
-WEBSTER_EXPORTED int WebsterWriteHeaderField(
+WEBSTER_EXPORTED int WebsterWriteField(
     webster_output_t *output,
     const char *name,
     const char *value );
+
+WEBSTER_EXPORTED int WebsterWriteIntField(
+    webster_output_t *output,
+    const char *name,
+    int value );
+
 // TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteData(
     webster_output_t *output,
@@ -172,6 +179,15 @@ WEBSTER_EXPORTED int WebsterWriteString(
 WEBSTER_EXPORTED int WebsterFlush(
 	webster_output_t *output );
 
+WEBSTER_EXPORTED int WebsterSetOption(
+	webster_server_t *server,
+    int option,
+    int value );
+
+WEBSTER_EXPORTED int WebsterGetOption(
+	webster_server_t *server,
+    int option,
+    int *value );
 
 #ifdef __cplusplus
 }
