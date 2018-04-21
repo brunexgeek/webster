@@ -61,13 +61,14 @@ static void main_listDirectory(
 	webster_output_t *response,
 	const char *fileName )
 {
-	static size_t TEMP_SIZE = 16 * 1024;
-	char *temp = (char*) calloc(1, TEMP_SIZE);
-	if (temp == NULL) return;
-	char *ptr = temp;
+	static const char *DIR_FORMAT = "<li><strong><a href='%s/%s'>[%s]</a></strong></li>";
+	static const char *FIL_FORMAT = "<li><a href='%s/%s'>%s</a></li>";
 
-	snprintf(temp, TEMP_SIZE, "<html><head><title>" PROGRAM_TITLE
-		"</title></head><body><ul><h1>%s</h1>", fileName);
+	char temp[2048];
+
+	snprintf(temp, sizeof(temp) - 1, "<html><head><title>" PROGRAM_TITLE
+		"</title></head><body style='font-family: monospace; font-size: 16px;'><ul><h1>%s</h1>", fileName);
+	WebsterWriteString(response, temp);
 
 	DIR *dr = opendir(fileName);
 	struct dirent *de = NULL;
@@ -76,19 +77,24 @@ static void main_listDirectory(
 		int length = (int) strlen(rootDirectory);
 		while ((de = readdir(dr)) != NULL)
 		{
-			while (*ptr != 0) ++ptr;
-			snprintf(ptr, TEMP_SIZE - strlen(temp) - 16, "<li><a href='%s/%s'>%s</a></li>",
-				fileName + length, de->d_name, de->d_name);
+			const char *format;
+			if (de->d_type == DT_DIR)
+				format = DIR_FORMAT;
+			else
+			if (de->d_type == DT_REG)
+				format = FIL_FORMAT;
+			else
+				continue;
+
+			snprintf(temp, sizeof(temp) - 1, format, fileName + length, de->d_name, de->d_name);
+			temp[2047] = 0;
+			WebsterWriteString(response, temp);
+			printf("%s\n", de->d_name);
 		}
 	}
 	closedir(dr);
 
-	strcat(temp, "</ul></body>");
-
-	WebsterWriteIntField(response, "Content-Length", (int) strlen(temp));
-	WebsterWriteString(response, temp);
-
-	free(temp);
+	WebsterWriteString(response, "</ul></body>");
 }
 
 
@@ -158,11 +164,13 @@ static int main_handlerFunction(
 	if (stat(fileName, &info) != 0) return WBERR_OK;
 	if (info.st_mode & S_IFREG)
 	{
+		WebsterSetStatus(response, 200);
 		main_downloadFile(response, fileName, (int) info.st_size);
 	}
 	else
 	if (info.st_mode & S_IFDIR)
 	{
+		WebsterSetStatus(response, 200);
 		main_listDirectory(response, fileName);
 	}
 	else

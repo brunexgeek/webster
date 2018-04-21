@@ -17,18 +17,18 @@
 
 
 #define WBERR_OK                         0
-#define WBERR_INVALID_ARGUMENT           1
-#define WBERR_MEMORY_EXHAUSTED           2
-#define WBERR_INVALID_ADDRESS            3
-#define WBERR_SOCKET                     4
-#define WBERR_NO_CLIENT                  5
-#define WBERR_COMPLETE                   6
-#define WBERR_TOO_LONG                   7
-#define WBERR_BAD_REQUEST                8
-#define WBERR_NO_DATA                    9
-#define WBERR_BAD_RESPONSE               10
-#define WBERR_TIMEOUT                    11
-#define WBERR_INVALID_STATE              12
+#define WBERR_INVALID_ARGUMENT           -1
+#define WBERR_MEMORY_EXHAUSTED           -2
+#define WBERR_INVALID_ADDRESS            -3
+#define WBERR_SOCKET                     -4
+#define WBERR_NO_CLIENT                  -5
+#define WBERR_COMPLETE                   -6
+#define WBERR_TOO_LONG                   -7
+#define WBERR_BAD_REQUEST                -8
+#define WBERR_NO_DATA                    -9
+#define WBERR_BAD_RESPONSE               -10
+#define WBERR_TIMEOUT                    -11
+#define WBERR_INVALID_STATE              -12
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -50,6 +50,7 @@
 
 #define WBO_BUFFER_SIZE                  1
 
+#define WBFI_NON_STANDARD                             0
 #define WBFI_ACCEPT                                   1
 #define WBFI_ACCEPT_CHARSET                           2
 #define WBFI_ACCEPT_ENCODING                          3
@@ -235,16 +236,16 @@ WEBSTER_EXPORTED int WebsterGetHeader(
     webster_input_t *input,
     const webster_header_t **header );
 
-WEBSTER_EXPORTED int WebsterGetStrField(
+WEBSTER_EXPORTED int WebsterGetStringField(
     webster_input_t *input,
+    int id,
     const char *name,
-    int fieldId,
     const char **value );
 
 WEBSTER_EXPORTED int WebsterGetIntField(
     webster_input_t *input,
+    int id,
     const char *name,
-    int fieldId,
     int *value );
 
 WEBSTER_EXPORTED int WebsterReadData(
@@ -259,12 +260,12 @@ WEBSTER_EXPORTED int WebsterReadString(
 WEBSTER_EXPORTED int WebsterSetStatus(
     webster_output_t *output,
     int status );
-
+// TODO: change to SetStringField
 WEBSTER_EXPORTED int WebsterWriteField(
     webster_output_t *output,
     const char *name,
     const char *value );
-
+// TODO: change to SetIntField
 WEBSTER_EXPORTED int WebsterWriteIntField(
     webster_output_t *output,
     const char *name,

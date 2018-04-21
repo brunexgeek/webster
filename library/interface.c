@@ -179,6 +179,8 @@ static void *webster_thread(
 	temp->handler(&temp->request, &temp->response, temp->data);
 
 	WebsterFlush(&temp->response);
+	if (temp->response.body.expected <= 0)
+		send(temp->response.socket, "0\r\n\r\n", 5, MSG_NOSIGNAL);
 
 	shutdown(temp->remote->socket, SHUT_RDWR);
 	close(temp->remote->socket);
@@ -398,36 +400,39 @@ int WebsterGetHeader(
 }
 
 
-int WebsterGetStrField(
+int WebsterGetStringField(
     webster_input_t *input,
-    const char *name,
-    int fieldId,
+	int id,
+	const char *name,
     const char **value )
 {
-	if (input == NULL || value == 0) return WBERR_INVALID_ARGUMENT;
-	if (name == NULL && (fieldId <= 0 || fieldId > WBFI_WWW_AUTHENTICATE)) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL || value == 0 || (name == NULL && id != WBFI_NON_STANDARD))
+		return WBERR_INVALID_ARGUMENT;
+	if (id < 0 || id > WBFI_WWW_AUTHENTICATE)
+		return WBERR_INVALID_ARGUMENT;
 
-	if (name != NULL) fieldId = http_getFieldID(name);
+	if (name != NULL) id = http_getFieldID(name);
 
 	const webster_field_t *field = NULL;
-	if (fieldId == 0)
+	if (id == WBFI_NON_STANDARD)
 		field = http_getFieldByName(&input->header, name);
 	else
-		field = http_getFieldById(&input->header, fieldId);
+		field = http_getFieldById(&input->header, id);
 
 	if (field == NULL) return WBERR_NO_DATA;
 	*value = field->value;
 	return WBERR_OK;
 }
 
+
 int WebsterGetIntField(
     webster_input_t *input,
+    int id,
     const char *name,
-    int fieldId,
     int *value )
 {
 	const char *temp = NULL;
-	int result = WebsterGetStrField(input, name, fieldId, &temp);
+	int result = WebsterGetStringField(input, id, name, &temp);
 	if (result != WBERR_OK) return result;
 
 	*value = atoi(temp);
@@ -491,18 +496,25 @@ static int webster_writeOrSend(
 	const uint8_t *buffer,
     int size )
 {
-	if (size == 0) return WBERR_OK;
+	if (size == 0 || buffer == NULL) return WBERR_OK;
 
-	if (output->buffer.current == NULL) output->buffer.current = output->buffer.data;
+	// TODO: change algorithm to always fill the internal buffer before send (keep consistent 'packet' sizes)
 
+	// ensures the current pointer is valid
+	if (output->buffer.current == NULL)
+		output->buffer.current = output->buffer.data;
+	else
+	// send any pending data if the given one does not fit the internal buffer
 	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
 	{
-		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), 0);
+		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), MSG_NOSIGNAL);
 		output->buffer.current = output->buffer.data;
 	}
 
+	// if the data does not fit the internal buffer at all, send immediately;
+	// otherwise, copy the data to the intenal buffer
 	if (size > (int) output->buffer.size)
-		send(output->socket, buffer, (size_t) size, 0);
+		send(output->socket, buffer, (size_t) size, MSG_NOSIGNAL);
 	else
 	{
 		memcpy(output->buffer.current, buffer, (size_t) size);
@@ -563,7 +575,7 @@ int WebsterWriteStrField(
 	// TODO: evaluate field value
 
 	if (http_getFieldID(name) == WBFI_CONTENT_LENGTH)
-		output->contentLength = atoi(value);
+		output->body.expected = atoi(value);
 
 	webster_writeOrSend(output, (const uint8_t*) name, (int) strlen(name));
 	webster_writeOrSend(output, (const uint8_t*) ": ", 2);
@@ -603,11 +615,25 @@ int WebsterWriteData(
 
 	if (output->state == WBS_HEADER)
 	{
+		// if 'content-length' is not specified, we set 'tranfer-encoding' to chunked
+		if (output->body.expected <= 0)
+			WebsterWriteStrField(output, "transfer-encoding", "chunked");
 		webster_writeOrSend(output, (const uint8_t*)"\r\n", 2);
         output->state = WBS_BODY;
 	}
 
-	return webster_writeOrSend(output, buffer, size);
+	if (output->body.expected <= 0)
+	{
+		char temp[16];
+		snprintf(temp, sizeof(temp) - 1, "%X\r\n", size);
+		temp[15] = 0;
+		webster_writeOrSend(output, (const uint8_t*) temp, (int) strlen(temp));
+	}
+	webster_writeOrSend(output, buffer, size);
+	if (output->body.expected <= 0)
+		webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
+
+	return WBERR_OK;
 }
 
 
@@ -631,7 +657,7 @@ int WebsterFlush(
 
 	if (output->buffer.current > output->buffer.data)
 	{
-		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), 0);
+		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), MSG_NOSIGNAL);
 		output->buffer.current = output->buffer.data;
 	}
 
