@@ -77,7 +77,9 @@ add_definitions(-DBUILDING_WEBSTER=1)
 include_directories("${CMAKE_CURRENT_LIST_DIR}/include")
 add_library(libwebster SHARED
     "${CMAKE_CURRENT_LIST_DIR}/library/http.c"
-    "${CMAKE_CURRENT_LIST_DIR}/library/interface.c")
+    "${CMAKE_CURRENT_LIST_DIR}/library/message.c"
+    "${CMAKE_CURRENT_LIST_DIR}/library/network.c"
+    "${CMAKE_CURRENT_LIST_DIR}/library/server.c")
 target_link_libraries(libwebster ${CMAKE_THREAD_LIBS_INIT})
 set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"

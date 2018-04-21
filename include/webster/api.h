@@ -183,7 +183,6 @@ extern "C" {
  * HTTP client API
  */
 
-
 WEBSTER_EXPORTED int WebsterConnect(
     webster_client_t *client,
     const char *host,
@@ -201,7 +200,6 @@ WEBSTER_EXPORTED int WebsterDisconnect(
 /*
  * HTTP server API
  */
-
 
 WEBSTER_EXPORTED int WebsterCreate(
     webster_server_t *server,
@@ -222,6 +220,16 @@ WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
     webster_handler_t *handler,
     void *data );
+
+WEBSTER_EXPORTED int WebsterSetOption(
+	webster_server_t *server,
+    int option,
+    int value );
+
+WEBSTER_EXPORTED int WebsterGetOption(
+	webster_server_t *server,
+    int option,
+    int *value );
 
 
 /*
@@ -261,7 +269,7 @@ WEBSTER_EXPORTED int WebsterSetStatus(
     webster_output_t *output,
     int status );
 // TODO: change to SetStringField
-WEBSTER_EXPORTED int WebsterWriteField(
+WEBSTER_EXPORTED int WebsterWriteStringField(
     webster_output_t *output,
     const char *name,
     const char *value );
@@ -283,16 +291,6 @@ WEBSTER_EXPORTED int WebsterWriteString(
 
 WEBSTER_EXPORTED int WebsterFlush(
 	webster_output_t *output );
-
-WEBSTER_EXPORTED int WebsterSetOption(
-	webster_server_t *server,
-    int option,
-    int value );
-
-WEBSTER_EXPORTED int WebsterGetOption(
-	webster_server_t *server,
-    int option,
-    int *value );
 
 WEBSTER_EXPORTED int WebsterGetInputState(
 	webster_input_t *input,

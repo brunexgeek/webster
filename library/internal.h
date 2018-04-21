@@ -1,5 +1,5 @@
-#ifndef WEBSTER_INTERFACE_HH
-#define WEBSTER_INTERFACE_HH
+#ifndef WEBSTER_INTERNAL_HH
+#define WEBSTER_INTERNAL_HH
 
 
 #include "http.h"
@@ -76,6 +76,8 @@ struct webster_output_t_
         size_t size;
         uint8_t *current;
     } buffer;
+    webster_header_t header;
+    char headerData[WEBSTER_MAX_HEADER];
 };
 
 
@@ -95,4 +97,4 @@ typedef struct
 
 
 
-#endif // WEBSTER_INTERFACE_HH
+#endif // WEBSTER_INTERNAL_HH

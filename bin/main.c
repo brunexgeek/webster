@@ -41,6 +41,7 @@ static void main_downloadFile(
 
 	WebsterSetStatus(response, 200);
 	WebsterWriteIntField(response, "Content-Length", contentLength);
+	WebsterWriteStringField(response, "Server", PROGRAM_TITLE);
 
 	FILE *fp = fopen(fileName, "rb");
 	if (fp != NULL)
@@ -65,6 +66,8 @@ static void main_listDirectory(
 	static const char *FIL_FORMAT = "<li><a href='%s/%s'>%s</a></li>";
 
 	char temp[2048];
+
+	WebsterWriteStringField(response, "Server", PROGRAM_TITLE);
 
 	snprintf(temp, sizeof(temp) - 1, "<html><head><title>" PROGRAM_TITLE
 		"</title></head><body style='font-family: monospace; font-size: 16px;'><ul><h1>%s</h1>", fileName);
