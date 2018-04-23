@@ -9,6 +9,10 @@
 #include <stdio.h>
 
 
+int webster_releaseMessage(
+	webster_message_t *message );
+
+
 int WebsterCreate(
     webster_server_t *server,
 	int maxClients )
@@ -122,20 +126,32 @@ static void *webster_thread(
 
 	network_close(temp->remote->channel);
 
-	if (temp->request.header.fields != NULL) free(temp->request.header.fields);
-
 	pthread_mutex_lock(&(temp->server)->mutex);
 	pthread_t thread = temp->remote->thread;
     temp->remote->thread = 0;
 	temp->remote->channel = NULL;
 	pthread_mutex_unlock(&(temp->server)->mutex);
 
+	webster_releaseMessage(&temp->request);
+	webster_releaseMessage(&temp->response);
 	free(temp);
 	pthread_detach(thread);
 
 	printf("[Thread %p] Finished\n", data);
 
 	return NULL;
+}
+
+
+static int webster_nextSlot(
+	webster_server_t *server )
+{
+	int i = 0;
+	for (; i < (*server)->maxClients; ++i)
+		if ( (*server)->remotes[i].channel == NULL ) break;
+	if (i >= (*server)->maxClients) return WBERR_MAX_CLIENTS;
+
+	return i;
 }
 
 
@@ -146,11 +162,8 @@ int WebsterAccept(
 {
 	if (server == NULL || *server == NULL || handler == NULL) return WBERR_INVALID_ARGUMENT;
 
-	// search for a free slot
-	int i = 0;
-	for (; i < (*server)->maxClients; ++i)
-		if ( (*server)->remotes[i].channel == NULL ) break;
-	if (i >= (*server)->maxClients) return WBERR_MAX_CLIENTS;
+	int i = webster_nextSlot(server);
+	if (i < 0) return i;
 
 	void *client = NULL;
 	int result = network_accept((*server)->channel, &client);

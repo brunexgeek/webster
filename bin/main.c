@@ -21,6 +21,7 @@ static int serverState = SERVER_RUNNING;
 
 static char rootDirectory[PATH_MAX];
 
+static	int requests = 0;
 
 static void main_signalHandler(
 	int handle )
@@ -31,7 +32,7 @@ static void main_signalHandler(
 
 
 static void main_downloadFile(
-	webster_output_t *response,
+	webster_message_t *response,
 	const char *fileName,
 	int contentLength )
 {
@@ -40,8 +41,8 @@ static void main_downloadFile(
 	char buffer[1024];
 
 	WebsterSetStatus(response, 200);
-	WebsterWriteIntField(response, "Content-Length", contentLength);
-	WebsterWriteStringField(response, "Server", PROGRAM_TITLE);
+	WebsterSetIntegerField(response, "Content-Length", contentLength);
+	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
 
 	FILE *fp = fopen(fileName, "rb");
 	if (fp != NULL)
@@ -59,7 +60,7 @@ static void main_downloadFile(
 
 
 static void main_listDirectory(
-	webster_output_t *response,
+	webster_message_t *response,
 	const char *fileName )
 {
 	static const char *DIR_FORMAT = "<li><strong><a href='%s/%s'>[%s]</a></strong></li>";
@@ -67,7 +68,7 @@ static void main_listDirectory(
 
 	char temp[1024];
 
-	WebsterWriteStringField(response, "Server", PROGRAM_TITLE);
+	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
 
 	snprintf(temp, sizeof(temp) - 1, "<html><head><title>" PROGRAM_TITLE
 		"</title></head><body style='font-family: monospace; font-size: 16px; line-height: 22px;'><ul><h1>%s</h1>", fileName);
@@ -101,11 +102,16 @@ static void main_listDirectory(
 
 
 static int main_handlerFunction(
-    webster_input_t *request,
-    webster_output_t *response,
+    webster_message_t *request,
+    webster_message_t *response,
     void *data )
 {
 	(void) data;
+
+	#if 0
+	if (requests > 1) return 0;
+	++requests;
+	#endif
 
 	webster_event_t event;
 	const webster_header_t *header;
@@ -129,8 +135,12 @@ static int main_handlerFunction(
 				{
 					printf("Requested resource: %s\n", header->resource);
 					// print all HTTP header fields
-					for (int i = 0; i < header->fieldCount; ++i)
-						printf("  %s: '%s'\n", header->fields[i].name, header->fields[i].value);
+					webster_field_t *field = header->fields;
+					while (field != NULL)
+					{
+						printf("  %s: '%s'\n", field->name, field->value);
+						field = field->next;
+					}
 				}
 			}
 			else
@@ -177,7 +187,7 @@ static int main_handlerFunction(
 	}
 	else
 	{
-		WebsterWriteIntField(response, "Content-Length", 14);
+		WebsterSetIntegerField(response, "Content-Length", 14);
 		WebsterWriteString(response, "Invalid entity");
 	}
 

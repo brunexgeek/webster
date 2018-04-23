@@ -130,17 +130,15 @@ typedef struct webster_server_t_ *webster_server_t;
 struct webster_client_t_;
 typedef struct webster_client_t_ *webster_client_t;
 
-struct webster_input_t_;
-typedef struct webster_input_t_ webster_input_t;
+struct webster_message_t_;
+typedef struct webster_message_t_ webster_message_t;
 
-struct webster_output_t_;
-typedef struct webster_output_t_ webster_output_t;
-
-typedef struct
+typedef struct webster_field_t_
 {
     int id;
     char *name;
     char *value;
+    struct webster_field_t_ *next;
 } webster_field_t;
 
 typedef struct
@@ -168,13 +166,13 @@ typedef struct
 } webster_header_t;
 
 typedef int (webster_handler_t)(
-    webster_input_t *request,
-    webster_output_t *response,
+    webster_message_t *request,
+    webster_message_t *response,
     void *data );
 
 typedef int (webster_callback_t)(
-    webster_output_t *request,
-    webster_input_t *response,
+    webster_message_t *request,
+    webster_message_t *response,
     void *data );
 
 
@@ -240,67 +238,67 @@ WEBSTER_EXPORTED int WebsterGetOption(
  */
 
 WEBSTER_EXPORTED int WebsterWaitEvent(
-    webster_input_t *input,
+    webster_message_t *input,
     webster_event_t *event );
 
 WEBSTER_EXPORTED int WebsterGetHeader(
-    webster_input_t *input,
+    webster_message_t *input,
     const webster_header_t **header );
 
 WEBSTER_EXPORTED int WebsterGetStringField(
-    webster_input_t *input,
+    webster_message_t *input,
     int id,
     const char *name,
     const char **value );
 
-WEBSTER_EXPORTED int WebsterGetIntField(
-    webster_input_t *input,
+WEBSTER_EXPORTED int WebsterGetIntegerField(
+    webster_message_t *input,
     int id,
     const char *name,
     int *value );
 
 WEBSTER_EXPORTED int WebsterReadData(
-    webster_input_t *input,
+    webster_message_t *input,
     const uint8_t **buffer,
     int *size );
 
 WEBSTER_EXPORTED int WebsterReadString(
-    webster_input_t *input,
+    webster_message_t *input,
     const char **buffer );
 
+WEBSTER_EXPORTED int WebsterGetInputState(
+	webster_message_t *input,
+    int *state );
+
 WEBSTER_EXPORTED int WebsterSetStatus(
-    webster_output_t *output,
+    webster_message_t *output,
     int status );
-// TODO: change to SetStringField
-WEBSTER_EXPORTED int WebsterWriteStringField(
-    webster_output_t *output,
+
+WEBSTER_EXPORTED int WebsterSetStringField(
+    webster_message_t *output,
     const char *name,
     const char *value );
-// TODO: change to SetIntField
-WEBSTER_EXPORTED int WebsterWriteIntField(
-    webster_output_t *output,
+
+WEBSTER_EXPORTED int WebsterSetIntegerField(
+    webster_message_t *output,
     const char *name,
     int value );
 
 // TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteData(
-    webster_output_t *output,
+    webster_message_t *output,
     const uint8_t *buffer,
     int size );
 // TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteString(
-    webster_output_t *output,
+    webster_message_t *output,
     const char *text );
 
 WEBSTER_EXPORTED int WebsterFlush(
-	webster_output_t *output );
-
-WEBSTER_EXPORTED int WebsterGetInputState(
-	webster_input_t *input,
-    int *state );
+	webster_message_t *output );
 
 WEBSTER_EXPORTED int WebsterGetOutputState(
-	webster_output_t *output,
+	webster_message_t *output,
     int *state );
 
 #ifdef __cplusplus

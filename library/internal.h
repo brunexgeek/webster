@@ -7,6 +7,7 @@
 #include <webster/api.h>
 #include <pthread.h>
 #include <poll.h>
+#include <stdbool.h>
 
 
 #define WEBSTER_MAX_CONNECTIONS     1000
@@ -39,13 +40,14 @@ struct webster_server_t_
 };
 
 
-struct webster_input_t_
+struct webster_message_t_
 {
+    bool isInput;
     int state;
     void *channel;
     struct
     {
-        int received;
+        int size;
         int expected;
     } body;
     struct
@@ -56,28 +58,6 @@ struct webster_input_t_
         int pending;
     } buffer;
     webster_header_t header;
-    char headerData[WEBSTER_MAX_HEADER];
-};
-
-
-struct webster_output_t_
-{
-    uint8_t state;
-    void *channel;
-    int status;
-    struct
-    {
-        int sent;
-        int expected;
-    } body;
-    struct
-    {
-        uint8_t *data;
-        size_t size;
-        uint8_t *current;
-    } buffer;
-    //webster_header_t header;
-    //char headerData[WEBSTER_MAX_HEADER];
 };
 
 
@@ -85,8 +65,8 @@ typedef struct
 {
     struct webster_server_t_ *server;
     webster_remote_t *remote;
-    struct webster_input_t_ request;
-    struct webster_output_t_ response;
+    struct webster_message_t_ request;
+    struct webster_message_t_ response;
     webster_handler_t *handler;
     void *data;
 } webster_thread_data_t;

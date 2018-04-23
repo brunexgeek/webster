@@ -156,15 +156,15 @@ int http_getFieldID(
             if (strcmp(name, "strict-transport-security") == 0)         return WBFI_STRICT_TRANSPORT_SECURITY;
             break;
         case 't':
+            if (strcmp(name, "transfer-encoding") == 0)                 return WBFI_TRANSFER_ENCODING;
             if (strcmp(name, "te") == 0)                                return WBFI_TE;
             if (strcmp(name, "tk") == 0)                                return WBFI_TK;
             if (strcmp(name, "trailer") == 0)                           return WBFI_TRAILER;
-            if (strcmp(name, "transfer-encoding") == 0)                 return WBFI_TRANSFER_ENCODING;
             break;
         case 'u':
+            if (strcmp(name, "user-agent") == 0)                        return WBFI_USER_AGENT;
             if (strcmp(name, "upgrade") == 0)                           return WBFI_UPGRADE;
             if (strcmp(name, "upgrade-insecure-requests") == 0)         return WBFI_UPGRADE_INSECURE_REQUESTS;
-            if (strcmp(name, "user-agent") == 0)                        return WBFI_USER_AGENT;
             break;
         case 'v':
             if (strcmp(name, "vary") == 0)                              return WBFI_VARY;
@@ -202,6 +202,52 @@ const webster_field_t *http_getFieldById(
     return NULL;
 }
 
+
+int http_addField(
+    webster_header_t *header,
+    int id,
+	const char *name,
+    const char *value )
+{
+	size_t size = sizeof(webster_field_t) + strlen(value) + 1 + strlen(name) + 1;
+	webster_field_t *field = (webster_field_t*) malloc(size);
+	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
+    field->name = (char*) field + sizeof(webster_field_t);
+    field->value = field->name + strlen(name) + 1;
+
+	field->id = id;
+	strcpy(field->name, name);
+	strcpy(field->value, value);
+	field->next = NULL;
+
+	if (header->fields == NULL)
+		header->fields = field;
+	else
+	{
+		webster_field_t *tail = header->fields;
+		while (tail->next != NULL) tail = tail->next;
+		tail->next = field;
+	}
+	++header->fieldCount;
+
+	return WBERR_OK;
+}
+
+
+void http_releaseFields(
+    webster_header_t *header )
+{
+    webster_field_t *ptr = NULL;
+    webster_field_t *field = header->fields;
+	while (field != NULL)
+    {
+        ptr = field;
+        field = field->next;
+        free(ptr);
+    }
+    header->fields = NULL;
+    header->fieldCount = 0;
+}
 
 static int tokenize(
     char *buffer,
@@ -261,6 +307,8 @@ int http_parseHeader(
     webster_header_t *header,
     int *contentLength )
 {
+    webster_field_t *field = NULL;
+    webster_field_t *next = NULL;
     char *ptr = NULL;
     char *tokens[128];
 
@@ -303,39 +351,34 @@ int http_parseHeader(
     header->resource = tokens[1];
 
     // point to the first field
-    ptr = tokens[2] + 9;
-    if (*ptr == 0) ++ptr;
+    ptr = tokens[2] + 8;
+    while (*ptr == 0) ++ptr;
     // parse up to 128 fields
     count = tokenize(ptr, "\n", 0, tokens, 128);
     if (count == 0) return WBERR_INVALID_HTTP_MESSAGE;
-    // allocate memory for the field array
-    header->fields = (webster_field_t*) calloc( (size_t) count, sizeof(webster_field_t) );
-    if (header->fields == NULL) return WBERR_MEMORY_EXHAUSTED;
 
     // parse HTTP fields (case-insensitive according to RFC-7230:3.2)
     for (int i = 0; i < count; ++i)
     {
-        char *half = strchr(tokens[i], ':');
         char *p = NULL;
 
-        if (half == NULL || *tokens[i] == ' ' || half <= tokens[i] || *(half-1) == ' ')
-            goto ESCAPE;
-
         // split the line in half
-        *half = 0;
-        header->fields[i].name = tokens[i];
-        header->fields[i].value = half + 1;
-        // ignore trailing whitespces
-        header->fields[i].name = http_removeTrailing(header->fields[i].name);
-        header->fields[i].value = http_removeTrailing(header->fields[i].value);
+        char *value = strchr(tokens[i], ':');
+        if (value == NULL || *tokens[i] == ' ' || value <= tokens[i] || *(value-1) == ' ') goto ESCAPE;
+        *value = 0;
+        ++value;
         // change the field name to lowercase
         for (p = tokens[i]; *p && *p != ' '; ++p) *p = (char) tolower(*p);
         if (*p == ' ') goto ESCAPE;
+        // ignore trailing whitespces in the value
+        value = http_removeTrailing(value);
         // get the field ID, if any
-        header->fields[i].id = http_getFieldID(header->fields[i].name);
+        int id = http_getFieldID(tokens[i]);
+
+        if (http_addField(header, id, tokens[i], value) != WBERR_OK) goto ESCAPE;
 
         // if is 'content-length' field, get the value
-        if (header->fields[i].id == WBFI_CONTENT_LENGTH)
+        if (id == WBFI_CONTENT_LENGTH)
             *contentLength = atoi(header->fields[i].value);
     }
 
@@ -343,7 +386,13 @@ int http_parseHeader(
 
     return WBERR_OK;
 ESCAPE:
-    free(header->fields);
+    field = header->fields;
+    while (field != NULL)
+    {
+        next = field->next;
+        free(field);
+        field = next;
+    }
     header->fields = NULL;
     return WBERR_INVALID_HEADER_FIELD;
 }

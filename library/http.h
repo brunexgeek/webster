@@ -24,13 +24,22 @@ const webster_field_t *http_getFieldByName(
     const webster_header_t *header,
     const char *name );
 
+int http_addField(
+    webster_header_t *header,
+    int id,
+	const char *name,
+    const char *value );
+
+void http_releaseFields(
+    webster_header_t *header );
+
 char *http_removeTrailing(
     char *text );
 
 int http_parseHeader(
     char *data,
 	webster_header_t *header,
-    int *contentLength );
+    int *contentLength);
 
 
 #endif // #ifndef WEBSTER_HTTP_H
