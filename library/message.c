@@ -16,10 +16,67 @@
 #include "network.h"
 
 
+static int webster_receive(
+	webster_input_t *input,
+	int timeout )
+{
+	// if we have data in the buffer, just return success
+	if (input->buffer.pending > 0) return WBERR_OK;
+
+	// Note: when reading input data we leave room in the buffer for a null-terminator
+	//       so we can use the function 'WebsterReadString'.
+
+	// receive new data and adjust pending information
+	size_t bytes = input->buffer.size - 1;
+	int result = network_receive(input->channel, input->buffer.data, &bytes, timeout);
+	if (result < 0) return result;
+	input->buffer.pending = (int) bytes;
+	input->buffer.current = input->buffer.data;
+	// ensure we have a null-terminator at the end
+	*(input->buffer.current + input->buffer.pending) = 0;
+
+	return WBERR_OK;
+}
+
+
+static int webster_writeOrSend(
+	webster_output_t *output,
+	const uint8_t *buffer,
+    int size )
+{
+	if (size == 0 || buffer == NULL) return WBERR_OK;
+
+	// TODO: change algorithm to always fill the internal buffer before send (keep consistent 'packet' sizes)
+
+	// ensures the current pointer is valid
+	if (output->buffer.current == NULL)
+		output->buffer.current = output->buffer.data;
+	else
+	// send any pending data if the given one does not fit the internal buffer
+	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
+	{
+		network_send(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
+		output->buffer.current = output->buffer.data;
+	}
+
+	// if the data does not fit the internal buffer at all, send immediately;
+	// otherwise, copy the data to the intenal buffer
+	if (size > (int) output->buffer.size)
+		network_send(output->channel, buffer, (size_t) size);
+	else
+	{
+		memcpy(output->buffer.current, buffer, (size_t) size);
+		output->buffer.current += size;
+	}
+
+	return WBERR_OK;
+}
+
+
 static int webster_receiveHeader(
 	webster_input_t *input )
 {
-	int result = webster_receive(input, 10000);
+	int result = webster_receive(input, WEBSTER_READ_TIMEOUT);
 	if (result != WBERR_OK) return result;
 
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
@@ -67,7 +124,7 @@ int WebsterWaitEvent(
 	{
 		if (input->body.expected == 0) return WBERR_COMPLETE;
 
-		result = webster_receive(input, 10000);
+		result = webster_receive(input, WEBSTER_READ_TIMEOUT);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra byte beyond content length
@@ -193,40 +250,6 @@ int WebsterSetStatus(
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
 
 	output->status = status;
-
-	return WBERR_OK;
-}
-
-
-static int webster_writeOrSend(
-	webster_output_t *output,
-	const uint8_t *buffer,
-    int size )
-{
-	if (size == 0 || buffer == NULL) return WBERR_OK;
-
-	// TODO: change algorithm to always fill the internal buffer before send (keep consistent 'packet' sizes)
-
-	// ensures the current pointer is valid
-	if (output->buffer.current == NULL)
-		output->buffer.current = output->buffer.data;
-	else
-	// send any pending data if the given one does not fit the internal buffer
-	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
-	{
-		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), MSG_NOSIGNAL);
-		output->buffer.current = output->buffer.data;
-	}
-
-	// if the data does not fit the internal buffer at all, send immediately;
-	// otherwise, copy the data to the intenal buffer
-	if (size > (int) output->buffer.size)
-		send(output->socket, buffer, (size_t) size, MSG_NOSIGNAL);
-	else
-	{
-		memcpy(output->buffer.current, buffer, (size_t) size);
-		output->buffer.current += size;
-	}
 
 	return WBERR_OK;
 }
@@ -364,7 +387,7 @@ int WebsterFlush(
 
 	if (output->buffer.current > output->buffer.data)
 	{
-		send(output->socket, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data), MSG_NOSIGNAL);
+		network_send(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 

@@ -65,12 +65,12 @@ static void main_listDirectory(
 	static const char *DIR_FORMAT = "<li><strong><a href='%s/%s'>[%s]</a></strong></li>";
 	static const char *FIL_FORMAT = "<li><a href='%s/%s'>%s</a></li>";
 
-	char temp[2048];
+	char temp[1024];
 
 	WebsterWriteStringField(response, "Server", PROGRAM_TITLE);
 
 	snprintf(temp, sizeof(temp) - 1, "<html><head><title>" PROGRAM_TITLE
-		"</title></head><body style='font-family: monospace; font-size: 16px;'><ul><h1>%s</h1>", fileName);
+		"</title></head><body style='font-family: monospace; font-size: 16px; line-height: 22px;'><ul><h1>%s</h1>", fileName);
 	WebsterWriteString(response, temp);
 
 	DIR *dr = opendir(fileName);
@@ -90,9 +90,8 @@ static void main_listDirectory(
 				continue;
 
 			snprintf(temp, sizeof(temp) - 1, format, fileName + length, de->d_name, de->d_name);
-			temp[2047] = 0;
+			temp[sizeof(temp) - 1] = 0;
 			WebsterWriteString(response, temp);
-			printf("%s\n", de->d_name);
 		}
 	}
 	closedir(dr);

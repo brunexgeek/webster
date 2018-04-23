@@ -11,20 +11,21 @@
 
 #define WEBSTER_MAX_CONNECTIONS     1000
 #define WEBSTER_MAX_HEADER          (1024 * 4) // 4KB
+#define WEBSTER_READ_TIMEOUT        10000
 
 #define GET_DATA_POINTER(ptr, type) ( (uint8_t*) (x) + sizeof(type) )
 
 
 typedef struct
 {
-    int socket;
+    void *channel;
     pthread_t thread;
 } webster_remote_t ;
 
 
 struct webster_server_t_
 {
-    int socket;
+    void *channel;
     char *host;
     int port;
     int maxClients;
@@ -41,8 +42,7 @@ struct webster_server_t_
 struct webster_input_t_
 {
     int state;
-    int socket;
-    struct pollfd pfd;
+    void *channel;
     struct
     {
         int received;
@@ -63,7 +63,7 @@ struct webster_input_t_
 struct webster_output_t_
 {
     uint8_t state;
-    int socket;
+    void *channel;
     int status;
     struct
     {
@@ -76,8 +76,8 @@ struct webster_output_t_
         size_t size;
         uint8_t *current;
     } buffer;
-    webster_header_t header;
-    char headerData[WEBSTER_MAX_HEADER];
+    //webster_header_t header;
+    //char headerData[WEBSTER_MAX_HEADER];
 };
 
 

@@ -24,11 +24,15 @@
 #define WBERR_NO_CLIENT                  -5
 #define WBERR_COMPLETE                   -6
 #define WBERR_TOO_LONG                   -7
-#define WBERR_BAD_REQUEST                -8
 #define WBERR_NO_DATA                    -9
 #define WBERR_BAD_RESPONSE               -10
 #define WBERR_TIMEOUT                    -11
 #define WBERR_INVALID_STATE              -12
+#define WBERR_MAX_CLIENTS                -13
+#define WBERR_INVALID_HTTP_METHOD        -14
+#define WBERR_INVALID_HEADER_FIELD       -15
+#define WBERR_INVALID_HTTP_VERSION       -16
+#define WBERR_INVALID_HTTP_MESSAGE       -17
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -70,7 +74,6 @@
 #define WBFI_ALT_SVC                                  17
 #define WBFI_AUTHORIZATION                            18
 #define WBFI_CACHE_CONTROL                            19
-#define WBFI_CONNECT                                  20
 #define WBFI_CONNECTION                               21
 #define WBFI_CONTENT_DISPOSITION                      23
 #define WBFI_CONTENT_ENCODING                         24

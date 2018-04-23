@@ -22,7 +22,7 @@ int WebsterCreate(
 		sizeof(webster_remote_t) * (size_t) maxClients);
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
 
-	(*server)->socket = -1;
+	(*server)->channel = NULL;
 	(*server)->port = -1;
 	(*server)->maxClients = maxClients;
 	(*server)->remotes = (webster_remote_t*) ((char*) *server + sizeof(struct webster_server_t_));
@@ -38,7 +38,7 @@ int WebsterCreate(
 	}
 
 	for (int i = 0; i < maxClients; ++i)
-		(*server)->remotes[i].socket = -1;
+		(*server)->remotes[i].channel = NULL;
 
 	return WBERR_OK;
 }
@@ -68,35 +68,10 @@ int WebsterStart(
 {
 	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
 
-	struct sockaddr_in address;
-	webster_lookupIPv4(host, &address);
-	(*server)->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if ((*server)->socket == -1) return WBERR_SOCKET;
+	int result = network_open(&(*server)->channel);
+	if (result != WBERR_OK) return result;
 
-	// allow socket descriptor to be reuseable
-	int on = 1;
-	setsockopt((*server)->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
-
-	address.sin_port = htons( (uint16_t) port );
-	if (bind((*server)->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
-	{
-		close((*server)->socket);
-		(*server)->socket = -1;
-		return WBERR_SOCKET;
-	}
-
-	// listen for incoming connections
-	if ( listen((*server)->socket, (*server)->maxClients) != 0 )
-	{
-		shutdown((*server)->socket, SHUT_RDWR);
-		close((*server)->socket);
-		(*server)->socket = -1;
-		return WBERR_SOCKET;
-	}
-
-	(*server)->pfd.fd = (*server)->socket;
-
-	return WBERR_OK;
+	return network_listen((*server)->channel, host, port, (*server)->maxClients);
 }
 
 
@@ -105,8 +80,7 @@ int WebsterStop(
 {
 	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
 
-	shutdown((*server)->socket, SHUT_RDWR);
-	close((*server)->socket);
+	network_close((*server)->channel);
 
 	// wait for each worker thread to finish
 	for (size_t i = 0; i < (size_t) (*server)->maxClients; ++i)
@@ -114,19 +88,18 @@ int WebsterStop(
 		webster_remote_t *remote = (*server)->remotes + i;
 
 		pthread_mutex_lock(&(*server)->mutex);
-		int ignore = remote->thread == 0 || remote->socket < 0;
+		int ignore = remote->thread == 0 || remote->channel == NULL;
 		pthread_mutex_unlock(&(*server)->mutex);
 
 		if (ignore) continue;
 
 		// TODO: set variable to escape the thread loop
 		pthread_join( remote->thread, NULL );
-		shutdown( remote->socket, SHUT_RDWR );
-		close( remote->socket );
+		network_close(remote->channel);
 
 		pthread_mutex_lock(&(*server)->mutex);
 		remote->thread = 0;
-		remote->socket = -1;
+		remote->channel = NULL;
 		pthread_mutex_unlock(&(*server)->mutex);
 	}
 
@@ -145,17 +118,16 @@ static void *webster_thread(
 
 	WebsterFlush(&temp->response);
 	if (temp->response.body.expected <= 0)
-		send(temp->response.socket, "0\r\n\r\n", 5, MSG_NOSIGNAL);
+		network_send(temp->response.channel, (const uint8_t*) "0\r\n\r\n", 5);
 
-	shutdown(temp->remote->socket, SHUT_RDWR);
-	close(temp->remote->socket);
+	network_close(temp->remote->channel);
 
 	if (temp->request.header.fields != NULL) free(temp->request.header.fields);
 
 	pthread_mutex_lock(&(temp->server)->mutex);
 	pthread_t thread = temp->remote->thread;
     temp->remote->thread = 0;
-	temp->remote->socket = -1;
+	temp->remote->channel = NULL;
 	pthread_mutex_unlock(&(temp->server)->mutex);
 
 	free(temp);
@@ -174,65 +146,41 @@ int WebsterAccept(
 {
 	if (server == NULL || *server == NULL || handler == NULL) return WBERR_INVALID_ARGUMENT;
 
-	int result = poll(&(*server)->pfd, 1, 1000);
-	if (result == 0)
-		return WBERR_TIMEOUT;
-	else
-	if (result < 0)
-		return WBERR_SOCKET;
+	// search for a free slot
+	int i = 0;
+	for (; i < (*server)->maxClients; ++i)
+		if ( (*server)->remotes[i].channel == NULL ) break;
+	if (i >= (*server)->maxClients) return WBERR_MAX_CLIENTS;
 
-	struct sockaddr_in address;
-	socklen_t addressLength = sizeof(address);
-	int current = accept((*server)->socket, (struct sockaddr *) &address, &addressLength);
+	void *client = NULL;
+	int result = network_accept((*server)->channel, &client);
+	if (result != WBERR_OK) return result;
 
-	if (current == EAGAIN || current == EWOULDBLOCK)
-		return WBERR_NO_CLIENT;
-	else
-	if (current < 0)
-		return WBERR_SOCKET;
-	else
+	webster_thread_data_t *temp = (webster_thread_data_t*) calloc(1,
+		sizeof(webster_thread_data_t) + (size_t) (*server)->options.bufferSize * 2 );
+	if (temp != NULL)
 	{
-		// search for a free slot
-		int i = 0;
-		for (; i < (*server)->maxClients; ++i)
-			if ( (*server)->remotes[i].socket == -1 ) break;
+		(*server)->remotes[i].channel = client;
 
-		if (i < (*server)->maxClients)
+		temp->server = *server;
+		temp->remote = (*server)->remotes + i;
+		temp->handler = handler;
+		temp->data = data;
+
+		temp->request.channel = temp->remote->channel;
+		temp->request.buffer.data = (uint8_t*) temp + sizeof(webster_thread_data_t);
+		temp->request.buffer.size = (size_t) (*server)->options.bufferSize;
+
+		temp->response.buffer.data = temp->request.buffer.data + temp->request.buffer.size;
+		temp->response.buffer.size = (size_t) (*server)->options.bufferSize;
+		temp->response.channel = temp->remote->channel;
+
+		int result = pthread_create(&(*server)->remotes[i].thread, NULL, webster_thread, temp);
+		if (result != 0)
 		{
-			webster_thread_data_t *temp = (webster_thread_data_t*) calloc(1,
-				sizeof(webster_thread_data_t) + (size_t) (*server)->options.bufferSize * 2 );
-			if (temp != NULL)
-			{
-				(*server)->remotes[i].socket = current;
-
-				temp->server = *server;
-				temp->remote = (*server)->remotes + i;
-				temp->handler = handler;
-				temp->data = data;
-
-				temp->request.socket = temp->remote->socket;
-				temp->request.pfd.events = POLLIN;
-				temp->request.pfd.fd = temp->remote->socket;
-				temp->request.buffer.data = (uint8_t*) temp + sizeof(webster_thread_data_t);
-				temp->request.buffer.size = (size_t) (*server)->options.bufferSize;
-
-				temp->response.buffer.data = temp->request.buffer.data + temp->request.buffer.size;
-				temp->response.buffer.size = (size_t) (*server)->options.bufferSize;
-				temp->response.socket = temp->remote->socket;
-
-				int result = pthread_create(&(*server)->remotes[i].thread, NULL, webster_thread, temp);
-				if (result != 0)
-				{
-					free(temp);
-					(*server)->remotes[i].socket = -1;
-				}
-			}
-		}
-
-		if (i >= (*server)->maxClients || (*server)->remotes[i].socket == 0)
-		{
-			shutdown(current, SHUT_RDWR);
-			close(current);
+			free(temp);
+			(*server)->remotes[i].channel = NULL;
+			network_close(client);
 		}
 	}
 

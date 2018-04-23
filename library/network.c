@@ -4,9 +4,18 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 
-int webster_lookupIPv4(
+typedef struct
+{
+	int socket;
+	struct pollfd poll;
+} webster_channel_t;
+
+
+static int network_lookupIPv4(
 	const char *host,
 	struct sockaddr_in *address )
 {
@@ -35,35 +44,158 @@ int webster_lookupIPv4(
 }
 
 
-int webster_receive(
-	webster_input_t *input,
+int network_open(
+	void **channel )
+{
+	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
+
+	*channel = calloc(1, sizeof(webster_channel_t));
+	if (*channel == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	webster_channel_t *chann = (webster_channel_t*) *channel;
+
+	chann->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (chann->socket == -1) return WBERR_SOCKET;
+	chann->poll.fd = chann->socket;
+	chann->poll.events = POLLIN;
+
+	// allow socket descriptor to be reuseable
+	int on = 1;
+	setsockopt(chann->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
+
+	return WBERR_OK;
+}
+
+
+int network_close(
+	void *channel )
+{
+	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
+
+	shutdown(chann->socket, SHUT_RDWR);
+	close(chann->socket);
+	chann->socket = chann->poll.fd = 0;
+	free(channel);
+
+	return WBERR_OK;
+}
+
+
+int network_receive(
+	void *channel,
+	uint8_t *buffer,
+    size_t *size,
 	int timeout )
 {
-	// if we have data in the buffer, just return success
-	if (input->buffer.pending > 0) return WBERR_OK;
+	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
 
 	// wait for data arrive
-	int result = poll(&input->pfd, 1, timeout);
+	int result = poll(&chann->poll, 1, timeout);
 	if (result == 0)
 		return WBERR_TIMEOUT;
 	else
 	if (result < 0)
 		return WBERR_SOCKET;
 
-	// Note: when reading input data we leave room in the buffer for a null-terminator
-	//       so we can use the function 'WebsterReadString'.
-
-	// receive new data and adjust pending information
-	ssize_t bytes = recv(input->socket, input->buffer.data, input->buffer.size - 1, 0);
+	ssize_t bytes = recv(chann->socket, buffer, *size, 0);
 	if (bytes < 0)
 	{
 		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
-	input->buffer.pending = (int) bytes;
-	input->buffer.current = input->buffer.data;
-	// ensure we have a null-terminator at the end
-	*(input->buffer.current + input->buffer.pending) = 0;
+	*size = (size_t) bytes;
+
+	return WBERR_OK;
+}
+
+
+int network_send(
+	void *channel,
+	const uint8_t *buffer,
+    size_t size )
+{
+	if (buffer == NULL || size == 0) return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
+
+	if (send(chann->socket, buffer, size, MSG_NOSIGNAL) != 0)
+		return WBERR_SOCKET;
+
+	return WBERR_OK;
+}
+
+
+int network_accept(
+	void *channel,
+	void **client )
+{
+	if (channel == NULL || client == NULL) return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
+
+	int result = poll(&chann->poll, 1, 1000);
+	if (result == 0)
+		return WBERR_TIMEOUT;
+	else
+	if (result < 0)
+		return WBERR_SOCKET;
+
+	*client = calloc(1, sizeof(webster_channel_t));
+	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	struct sockaddr_in address;
+	socklen_t addressLength = sizeof(address);
+	int socket = accept(chann->socket, (struct sockaddr *) &address, &addressLength);
+
+	if (socket < 0)
+	{
+		free(*client);
+		*client = NULL;
+		if (socket == EAGAIN || socket == EWOULDBLOCK)
+			return WBERR_NO_CLIENT;
+		else
+			return WBERR_SOCKET;
+	}
+
+	((webster_channel_t*)*client)->socket = socket;
+	((webster_channel_t*)*client)->poll.fd = socket;
+	((webster_channel_t*)*client)->poll.events = POLLIN;
+
+	return WBERR_OK;
+}
+
+
+int network_listen(
+	void *channel,
+	const char *host,
+    int port,
+	int maxClients )
+{
+	if (channel == NULL || host == NULL || (port < 0 && port > 0xFFFF))
+		return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
+
+	struct sockaddr_in address;
+	network_lookupIPv4(host, &address);
+
+	address.sin_port = htons( (uint16_t) port );
+	if (bind(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
+	{
+		network_close(&channel);
+		return WBERR_SOCKET;
+	}
+
+	// listen for incoming connections
+	if ( listen(chann->socket, maxClients) != 0 )
+	{
+		network_close(channel);
+		return WBERR_SOCKET;
+	}
 
 	return WBERR_OK;
 }

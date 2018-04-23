@@ -6,13 +6,31 @@
 #include <netdb.h>
 
 
-int webster_lookupIPv4(
-	const char *host,
-	struct sockaddr_in *address );
+int network_open(
+	void **channel );
 
-int webster_receive(
-	webster_input_t *input,
+int network_close(
+	void *channel );
+
+int network_receive(
+	void *channel,
+	uint8_t *buffer,
+    size_t *size,
 	int timeout );
 
+int network_send(
+	void *channel,
+	const uint8_t *buffer,
+    size_t size );
+
+int network_accept(
+	void *channel,
+	void **client );
+
+int network_listen(
+	void *channel,
+	const char *host,
+    int port,
+	int maxClients );
 
 #endif // WEBSTER_NETWORK_HH

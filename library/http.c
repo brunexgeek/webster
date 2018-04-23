@@ -66,44 +66,45 @@ const char *http_statusMessage(
 int http_getFieldID(
     const char *name )
 {
-    printf("Looking for %s\n", name);
     if (name == NULL || name[0] == 0) return 0;
 
     if (name[0] < 'a' || name[0] > 'z') return 0;
     switch (name[0])
     {
         case 'a':
-            if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
-            if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
-            if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
-            if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
-            if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
-            if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
-            if (strcmp(name, "access-control-allow-credentials") == 0)  return WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS;
-            if (strcmp(name, "access-control-allow-headers") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_HEADERS;
-            if (strcmp(name, "access-control-allow-methods") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_METHODS;
-            if (strcmp(name, "access-control-allow-origin") == 0)       return WBFI_ACCESS_CONTROL_ALLOW_ORIGIN;
-            if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
-            if (strcmp(name, "access-control-max-age") == 0)            return WBFI_ACCESS_CONTROL_MAX_AGE;
-            if (strcmp(name, "access-control-request-headers") == 0)    return WBFI_ACCESS_CONTROL_REQUEST_HEADERS;
-            if (strcmp(name, "access-control-request-method") == 0)     return WBFI_ACCESS_CONTROL_REQUEST_METHOD;
+            if (name[1] == 'c')
+            {
+                if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
+                if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
+                if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
+                if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
+                if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
+                if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
+                if (strcmp(name, "access-control-allow-credentials") == 0)  return WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS;
+                if (strcmp(name, "access-control-allow-headers") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_HEADERS;
+                if (strcmp(name, "access-control-allow-methods") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_METHODS;
+                if (strcmp(name, "access-control-allow-origin") == 0)       return WBFI_ACCESS_CONTROL_ALLOW_ORIGIN;
+                if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
+                if (strcmp(name, "access-control-max-age") == 0)            return WBFI_ACCESS_CONTROL_MAX_AGE;
+                if (strcmp(name, "access-control-request-headers") == 0)    return WBFI_ACCESS_CONTROL_REQUEST_HEADERS;
+                if (strcmp(name, "access-control-request-method") == 0)     return WBFI_ACCESS_CONTROL_REQUEST_METHOD;
+            }
+            if (strcmp(name, "authorization") == 0)                     return WBFI_AUTHORIZATION;
             if (strcmp(name, "age") == 0)                               return WBFI_AGE;
             if (strcmp(name, "allow") == 0)                             return WBFI_ALLOW;
             if (strcmp(name, "alt-svc") == 0)                           return WBFI_ALT_SVC;
-            if (strcmp(name, "authorization") == 0)                     return WBFI_AUTHORIZATION;
             break;
         case 'c':
+            if (strcmp(name, "content-length") == 0)                    return WBFI_CONTENT_LENGTH;
+            if (strcmp(name, "content-type") == 0)                      return WBFI_CONTENT_TYPE;
+            if (strcmp(name, "cookie") == 0)                            return WBFI_COOKIE;
             if (strcmp(name, "cache-control") == 0)                     return WBFI_CACHE_CONTROL;
-            if (strcmp(name, "connect") == 0)                           return WBFI_CONNECT;
             if (strcmp(name, "connection") == 0)                        return WBFI_CONNECTION;
             if (strcmp(name, "content-disposition") == 0)               return WBFI_CONTENT_DISPOSITION;
             if (strcmp(name, "content-encoding") == 0)                  return WBFI_CONTENT_ENCODING;
             if (strcmp(name, "content-language") == 0)                  return WBFI_CONTENT_LANGUAGE;
-            if (strcmp(name, "content-length") == 0)                    return WBFI_CONTENT_LENGTH;
             if (strcmp(name, "content-location") == 0)                  return WBFI_CONTENT_LOCATION;
             if (strcmp(name, "content-range") == 0)                     return WBFI_CONTENT_RANGE;
-            if (strcmp(name, "content-type") == 0)                      return WBFI_CONTENT_TYPE;
-            if (strcmp(name, "cookie") == 0)                            return WBFI_COOKIE;
             break;
         case 'd':
             if (strcmp(name, "date") == 0)                              return WBFI_DATE;
@@ -111,8 +112,8 @@ int http_getFieldID(
             break;
         case 'e':
             if (strcmp(name, "etag") == 0)                              return WBFI_ETAG;
-            if (strcmp(name, "expect") == 0)                            return WBFI_EXPECT;
             if (strcmp(name, "expires") == 0)                           return WBFI_EXPIRES;
+            if (strcmp(name, "expect") == 0)                            return WBFI_EXPECT;
             break;
         case 'f':
             if (strcmp(name, "forwarded") == 0)                         return WBFI_FORWARDED;
@@ -137,7 +138,6 @@ int http_getFieldID(
             if (strcmp(name, "max-forwards") == 0)                      return WBFI_MAX_FORWARDS;
             break;
         case 'o':
-            if (strcmp(name, "options") == 0)                           return WBFI_OPTIONS;
             if (strcmp(name, "origin") == 0)                            return WBFI_ORIGIN;
             break;
         case 'p':
@@ -147,8 +147,8 @@ int http_getFieldID(
             if (strcmp(name, "public-key-pins") == 0)                   return WBFI_PUBLIC_KEY_PINS;
             break;
         case 'r':
-            if (strcmp(name, "range") == 0)                             return WBFI_RANGE;
             if (strcmp(name, "referer") == 0)                           return WBFI_REFERER;
+            if (strcmp(name, "range") == 0)                             return WBFI_RANGE;
             if (strcmp(name, "retry-after") == 0)                       return WBFI_RETRY_AFTER;
             break;
         case 's':
@@ -171,8 +171,8 @@ int http_getFieldID(
             if (strcmp(name, "via") == 0)                               return WBFI_VIA;
             break;
         case 'w':
-            if (strcmp(name, "warning") == 0)                           return WBFI_WARNING;
             if (strcmp(name, "www-authenticate") == 0)                  return WBFI_WWW_AUTHENTICATE;
+            if (strcmp(name, "warning") == 0)                           return WBFI_WARNING;
     }
 
     return 0;
@@ -268,35 +268,37 @@ int http_parseHeader(
     *contentLength = 0;
 
     int count = tokenize((char*) data, " \n", '\n', tokens, 8);
-    if (count != 3) return WBERR_BAD_REQUEST;
+    if (count != 3) return WBERR_INVALID_HTTP_MESSAGE;
 
-    if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_BAD_REQUEST;
+    // we only accept HTTP 1.1 messages
+    if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
 
-    for (char *p = tokens[0]; *p; ++p) *p = (char) tolower(*p);
-
-    if (strcmp(tokens[0], "get") == 0)
+    // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
+    if (strcmp(tokens[0], "GET") == 0)
         header->method = WBM_GET;
     else
-    if (strcmp(tokens[0], "post") == 0)
+    if (strcmp(tokens[0], "POST") == 0)
         header->method = WBM_POST;
     else
-    if (strcmp(tokens[0], "head") == 0)
+    if (strcmp(tokens[0], "HEAD") == 0)
         header->method = WBM_HEAD;
     else
-    if (strcmp(tokens[0], "put") == 0)
+    if (strcmp(tokens[0], "PUT") == 0)
         header->method = WBM_PUT;
     else
-    if (strcmp(tokens[0], "delete") == 0)
+    if (strcmp(tokens[0], "DELETE") == 0)
         header->method = WBM_DELETE;
     else
-    if (strcmp(tokens[0], "connect") == 0)
+    if (strcmp(tokens[0], "CONNECT") == 0)
         header->method = WBM_CONNECT;
     else
-    if (strcmp(tokens[0], "options") == 0)
+    if (strcmp(tokens[0], "OPTIONS") == 0)
         header->method = WBM_OPTIONS;
     else
-    if (strcmp(tokens[0], "trace") == 0)
+    if (strcmp(tokens[0], "TRACE") == 0)
         header->method = WBM_TRACE;
+    else
+        return WBERR_INVALID_HTTP_METHOD;
 
     header->resource = tokens[1];
 
@@ -305,21 +307,19 @@ int http_parseHeader(
     if (*ptr == 0) ++ptr;
     // parse up to 128 fields
     count = tokenize(ptr, "\n", 0, tokens, 128);
-    if (count == 0) return WBERR_BAD_REQUEST;
+    if (count == 0) return WBERR_INVALID_HTTP_MESSAGE;
     // allocate memory for the field array
     header->fields = (webster_field_t*) calloc( (size_t) count, sizeof(webster_field_t) );
     if (header->fields == NULL) return WBERR_MEMORY_EXHAUSTED;
 
+    // parse HTTP fields (case-insensitive according to RFC-7230:3.2)
     for (int i = 0; i < count; ++i)
     {
         char *half = strchr(tokens[i], ':');
+        char *p = NULL;
 
         if (half == NULL || *tokens[i] == ' ' || half <= tokens[i] || *(half-1) == ' ')
-        {
-            free(header->fields);
-            header->fields = NULL;
-            return WBERR_BAD_REQUEST;
-        }
+            goto ESCAPE;
 
         // split the line in half
         *half = 0;
@@ -329,7 +329,8 @@ int http_parseHeader(
         header->fields[i].name = http_removeTrailing(header->fields[i].name);
         header->fields[i].value = http_removeTrailing(header->fields[i].value);
         // change the field name to lowercase
-        for (char *p = tokens[i]; *p; ++p) *p = (char) tolower(*p);
+        for (p = tokens[i]; *p && *p != ' '; ++p) *p = (char) tolower(*p);
+        if (*p == ' ') goto ESCAPE;
         // get the field ID, if any
         header->fields[i].id = http_getFieldID(header->fields[i].name);
 
@@ -341,4 +342,8 @@ int http_parseHeader(
     header->fieldCount = count;
 
     return WBERR_OK;
+ESCAPE:
+    free(header->fields);
+    header->fields = NULL;
+    return WBERR_INVALID_HEADER_FIELD;
 }
