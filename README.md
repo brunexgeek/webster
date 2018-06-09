@@ -17,6 +17,6 @@ However, Webster do not:
 
 ## Roadmap
 
-* Request URI decoding
 * Client API implementation
+* Request URI decoding
 * HTTP Basic authentication

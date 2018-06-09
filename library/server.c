@@ -41,8 +41,8 @@ int WebsterCreate(
 		return WBERR_MEMORY_EXHAUSTED;
 	}
 
-	for (int i = 0; i < maxClients; ++i)
-		(*server)->remotes[i].channel = NULL;
+	/*for (int i = 0; i < maxClients; ++i)
+		(*server)->remotes[i].channel = NULL;*/
 
 	return WBERR_OK;
 }
@@ -58,7 +58,7 @@ int WebsterDestroy(
 	pthread_mutex_destroy(&(*server)->mutex);
 	if ((*server)->host != NULL) free((*server)->host);
 	free(*server);
-	server = NULL;
+	*server = NULL;
 
 	return WBERR_OK;
 }
@@ -90,6 +90,8 @@ int WebsterStop(
 	for (size_t i = 0; i < (size_t) (*server)->maxClients; ++i)
 	{
 		webster_remote_t *remote = (*server)->remotes + i;
+
+		// TODO: stop after closing all known connections (check internal counter?)
 
 		pthread_mutex_lock(&(*server)->mutex);
 		int ignore = remote->thread == 0 || remote->channel == NULL;

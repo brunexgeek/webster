@@ -42,7 +42,6 @@ struct webster_server_t_
 
 struct webster_message_t_
 {
-    bool isInput;
     int state;
     void *channel;
     struct

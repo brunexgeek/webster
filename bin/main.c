@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
 
 	if (WebsterCreate(&server, 100) == WBERR_OK)
 	{
-		if (WebsterStart(&server, "127.0.0.1", 7000) == WBERR_OK)
+		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
 		{
 			while (serverState == SERVER_RUNNING)
 				WebsterAccept(&server, main_handlerFunction, NULL);

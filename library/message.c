@@ -151,6 +151,7 @@ int WebsterWaitEvent(
 			event->size = input->buffer.pending;
 			input->state = WBS_BODY;
 			input->body.size += input->buffer.pending;
+			input->body.expected -= input->buffer.pending;
 		}
 
 		return result;

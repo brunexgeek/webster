@@ -379,7 +379,7 @@ int http_parseHeader(
 
         // if is 'content-length' field, get the value
         if (id == WBFI_CONTENT_LENGTH)
-            *contentLength = atoi(header->fields[i].value);
+            *contentLength = atoi(value);
     }
 
     header->fieldCount = count;
