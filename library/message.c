@@ -377,6 +377,10 @@ int WebsterWriteData(
 		webster_commitHeaderFields(output);
 	}
 
+	// ignores empty writes
+	if (size <= 0) return WBERR_OK;
+
+	// check whether we're using chuncked transfer encoding
 	if (output->body.expected <= 0)
 	{
 		char temp[16];
@@ -384,7 +388,9 @@ int WebsterWriteData(
 		temp[15] = 0;
 		webster_writeOrSend(output, (const uint8_t*) temp, (int) strlen(temp));
 	}
+	// write data
 	webster_writeOrSend(output, buffer, size);
+	// append the block terminator, if using chuncked transfer encoding
 	if (output->body.expected <= 0)
 		webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
 

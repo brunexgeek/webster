@@ -23,6 +23,20 @@ static char rootDirectory[PATH_MAX];
 
 static	int requests = 0;
 
+static const char *HTTP_METHODS[] =
+{
+    "",
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "CONNECT",
+    "OPTIONS",
+    "TRACE"
+};
+
+
 static void main_signalHandler(
 	int handle )
 {
@@ -122,8 +136,7 @@ static int main_handlerFunction(
 		// wait for some request data
 		result = WebsterWaitEvent(request, &event);
 		if (result == WBERR_COMPLETE) break;
-
-		// check if we have data
+        if (result == WBERR_TIMEOUT) return 0;
 		if (result == WBERR_NO_DATA) continue;
 
 		if (result == WBERR_OK)
@@ -133,7 +146,7 @@ static int main_handlerFunction(
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
-					printf("Requested resource: %s\n", header->resource);
+					printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
 					// print all HTTP header fields
 					webster_field_t *field = header->fields;
 					while (field != NULL)
