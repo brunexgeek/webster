@@ -349,6 +349,13 @@ int http_parseHeader(
         return WBERR_INVALID_HTTP_METHOD;
 
     header->resource = tokens[1];
+    header->query = NULL;
+    ptr = strchr(header->resource, '?');
+    if (ptr != NULL)
+    {
+        header->query = ptr + 1;
+        *ptr = 0;
+    }
 
     // point to the first field
     ptr = tokens[2] + 8;

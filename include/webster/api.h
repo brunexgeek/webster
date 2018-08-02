@@ -157,6 +157,7 @@ typedef struct
 typedef struct
 {
     char *resource;
+    char *query;
     char *message;
     int status;
     int method;
