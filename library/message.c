@@ -100,7 +100,7 @@ static int webster_receiveHeader(
 	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
 
 	// parse HTTP header fields and retrieve the content length
-	result = http_parseHeader((char*)input->buffer.data, &input->header, &input->body.expected);
+	result = http_parseHeader((char*)input->buffer.data, input);
 	input->header.contentLength = input->body.expected;
 	return result;
 }
@@ -286,6 +286,19 @@ static int webster_writeStatusLine(
 }
 
 
+static int webster_writeResourceLine(
+	webster_message_t *output )
+{
+	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
+	output->state = WBS_HEADER;
+
+	char temp[128];
+	snprintf(temp, sizeof(temp) - 1, "GET %s HTTP/1.1\r\n", output->header.resource);
+	return webster_writeOrSend(output, (uint8_t*) temp, (int) strlen(temp));
+}
+
+
 int WebsterSetStringField(
     webster_message_t *output,
     const char *name,
@@ -297,7 +310,10 @@ int WebsterSetStringField(
 	int result = WBERR_OK;
 	if (output->state == WBS_IDLE)
 	{
-		result = webster_writeStatusLine(output);
+		if (output->type == WBMT_RESPONSE)
+			result = webster_writeStatusLine(output);
+		else
+			result = webster_writeResourceLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
@@ -365,14 +381,17 @@ int WebsterWriteData(
 
 	if (output->state == WBS_IDLE)
 	{
-		result = webster_writeStatusLine(output);
+		if (output->type == WBMT_RESPONSE)
+			result = webster_writeStatusLine(output);
+		else
+			result = webster_writeResourceLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
 	if (output->state == WBS_HEADER)
 	{
 		// if 'content-length' is not specified, we set 'tranfer-encoding' to chunked
-		if (output->body.expected <= 0)
+		if (output->body.expected < 0)
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
 		webster_commitHeaderFields(output);
 	}
@@ -381,7 +400,7 @@ int WebsterWriteData(
 	if (size <= 0) return WBERR_OK;
 
 	// check whether we're using chuncked transfer encoding
-	if (output->body.expected <= 0)
+	if (output->body.expected < 0)
 	{
 		char temp[16];
 		snprintf(temp, sizeof(temp) - 1, "%X\r\n", size);
@@ -391,7 +410,7 @@ int WebsterWriteData(
 	// write data
 	webster_writeOrSend(output, buffer, size);
 	// append the block terminator, if using chuncked transfer encoding
-	if (output->body.expected <= 0)
+	if (output->body.expected < 0)
 		webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
 
 	return WBERR_OK;

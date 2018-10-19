@@ -1,3 +1,6 @@
+#define _POSIX_C_SOURCE 200112L
+
+#include <sys/types.h>
 #include "network.h"
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -83,6 +86,30 @@ int network_close(
 }
 
 
+int network_connect(
+	void *channel,
+	const char *host,
+    int port )
+{
+	if (channel == NULL || host == NULL || (port < 0 && port > 0xFFFF))
+		return WBERR_INVALID_ARGUMENT;
+
+	webster_channel_t *chann = (webster_channel_t*) channel;
+
+	struct sockaddr_in address;
+	network_lookupIPv4(host, &address);
+
+	address.sin_port = htons( (uint16_t) port );
+	if (connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
+	{
+		network_close(&channel);
+		return WBERR_SOCKET;
+	}
+
+	return WBERR_OK;
+}
+
+
 int network_receive(
 	void *channel,
 	uint8_t *buffer,
@@ -112,6 +139,7 @@ int network_receive(
 	return WBERR_OK;
 }
 
+#include <stdio.h>
 
 int network_send(
 	void *channel,

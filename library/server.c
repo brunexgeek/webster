@@ -64,7 +64,6 @@ int WebsterDestroy(
 }
 
 
-
 int WebsterStart(
 	webster_server_t *server,
     const char *host,
@@ -123,7 +122,8 @@ static void *webster_thread(
 	temp->handler(&temp->request, &temp->response, temp->data);
 
 	WebsterFlush(&temp->response);
-	if (temp->response.body.expected <= 0)
+	// send the last marker if using chenked transfer encoding
+	if (temp->response.body.expected < 0)
 		network_send(temp->response.channel, (const uint8_t*) "0\r\n\r\n", 5);
 
 	network_close(temp->remote->channel);
@@ -185,10 +185,12 @@ int WebsterAccept(
 		temp->request.channel = temp->remote->channel;
 		temp->request.buffer.data = (uint8_t*) temp + sizeof(webster_thread_data_t);
 		temp->request.buffer.size = (size_t) (*server)->options.bufferSize;
+		temp->request.type = WBMT_REQUEST;
 
+		temp->response.channel = temp->remote->channel;
 		temp->response.buffer.data = temp->request.buffer.data + temp->request.buffer.size;
 		temp->response.buffer.size = (size_t) (*server)->options.bufferSize;
-		temp->response.channel = temp->remote->channel;
+		temp->response.type = WBMT_RESPONSE;
 
 		int result = pthread_create(&(*server)->remotes[i].thread, NULL, webster_thread, temp);
 		if (result != 0)

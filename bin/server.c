@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include <webster/api.h>
 #include <limits.h>
 #include <stdio.h>
@@ -115,7 +117,7 @@ static void main_listDirectory(
 }
 
 
-static int main_handlerFunction(
+static int main_serverHandler(
     webster_message_t *request,
     webster_message_t *response,
     void *data )
@@ -135,6 +137,7 @@ static int main_handlerFunction(
 	{
 		// wait for some request data
 		result = WebsterWaitEvent(request, &event);
+		printf("WebsterWaitEvent = %d\n", result);
 		if (result == WBERR_COMPLETE) break;
         if (result == WBERR_TIMEOUT) return 0;
 		if (result == WBERR_NO_DATA) continue;
@@ -155,6 +158,7 @@ static int main_handlerFunction(
 						field = field->next;
 					}
 				}
+				printf("Waiting for body\n");
 			}
 			else
 			// check if we received the HTTP body (or part of it)
@@ -234,7 +238,7 @@ int main(int argc, char* argv[])
 		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
 		{
 			while (serverState == SERVER_RUNNING)
-				WebsterAccept(&server, main_handlerFunction, NULL);
+				WebsterAccept(&server, main_serverHandler, NULL);
 		}
 		WebsterDestroy(&server);
 	}

@@ -171,11 +171,6 @@ typedef int (webster_handler_t)(
     webster_message_t *response,
     void *data );
 
-typedef int (webster_callback_t)(
-    webster_message_t *request,
-    webster_message_t *response,
-    void *data );
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -188,11 +183,12 @@ extern "C" {
 WEBSTER_EXPORTED int WebsterConnect(
     webster_client_t *client,
     const char *host,
-    int port );
+    int port,
+    const char *resource );
 
 WEBSTER_EXPORTED int WebsterCommunicate(
     webster_client_t *client,
-    webster_callback_t *callback,
+    webster_handler_t *callback,
     void *data );
 
 WEBSTER_EXPORTED int WebsterDisconnect(

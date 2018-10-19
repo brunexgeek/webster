@@ -56,7 +56,7 @@ if(MSVC)
 endif()
 
 if (UNIX)
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -std=gnu99 -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration")
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -std=c99 -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -std=c++11 -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration")
 
     set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} -s -O3")
@@ -81,13 +81,11 @@ endif()
 
 find_package(Threads REQUIRED)
 
+file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/library/*.c")
+
 add_definitions(-DBUILDING_WEBSTER=1)
 include_directories("${CMAKE_CURRENT_LIST_DIR}/include")
-add_library(libwebster ${LIBRARY_TYPE}
-    "${CMAKE_CURRENT_LIST_DIR}/library/http.c"
-    "${CMAKE_CURRENT_LIST_DIR}/library/message.c"
-    "${CMAKE_CURRENT_LIST_DIR}/library/network.c"
-    "${CMAKE_CURRENT_LIST_DIR}/library/server.c")
+add_library(libwebster ${LIBRARY_TYPE} ${SOURCES})
 target_link_libraries(libwebster ${CMAKE_THREAD_LIBS_INIT})
 set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"
@@ -99,10 +97,21 @@ set_target_properties(libwebster PROPERTIES
     PREFIX "lib" )
 
 
-add_executable(webster "${CMAKE_CURRENT_LIST_DIR}/bin/main.c")
-target_link_libraries(webster libwebster)
-set_target_properties(webster PROPERTIES
-    OUTPUT_NAME "webster"
+add_executable(server_test "${CMAKE_CURRENT_LIST_DIR}/bin/server.c")
+target_link_libraries(server_test libwebster)
+target_compile_definitions(server_test PRIVATE _DEFAULT_SOURCE)
+set_target_properties(server_test PROPERTIES
+    OUTPUT_NAME "server_test"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
+
+
+add_executable(client_test "${CMAKE_CURRENT_LIST_DIR}/bin/client.c")
+target_link_libraries(client_test libwebster)
+target_compile_definitions(client_test PRIVATE _DEFAULT_SOURCE)
+set_target_properties(client_test PROPERTIES
+    OUTPUT_NAME "client_test"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )

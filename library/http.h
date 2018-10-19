@@ -5,6 +5,7 @@
 #include <webster/api.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "internal.h"
 
 
 #define HTTP_MAX_HEADER       (4 * 1024)
@@ -38,8 +39,7 @@ char *http_removeTrailing(
 
 int http_parseHeader(
     char *data,
-	webster_header_t *header,
-    int *contentLength);
+    struct webster_message_t_ *message );
 
 
 #endif // #ifndef WEBSTER_HTTP_H

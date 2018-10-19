@@ -1,4 +1,5 @@
 #include "http.h"
+#include "internal.h"
 #include <string.h>
 #include <webster/api.h>
 #include <ctype.h>
@@ -304,65 +305,79 @@ char *http_removeTrailing(
 
 int http_parseHeader(
     char *data,
-    webster_header_t *header,
-    int *contentLength )
+    struct webster_message_t_ *message )
 {
     webster_field_t *field = NULL;
     webster_field_t *next = NULL;
     char *ptr = NULL;
     char *tokens[128];
 
-    // reset content length
-    *contentLength = 0;
+    webster_header_t *header = &message->header;
+
+    // find the first header field
+    ptr = strstr(data, "\r\n");
+    if (ptr == NULL) return WBERR_INVALID_HTTP_MESSAGE;
+    ptr += 2;
+
+    // reset content length to zero
+    message->body.expected = 0;
 
     int count = tokenize((char*) data, " \n", '\n', tokens, 8);
-    if (count != 3) return WBERR_INVALID_HTTP_MESSAGE;
 
-    // we only accept HTTP 1.1 messages
-    if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
-
-    // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
-    if (strcmp(tokens[0], "GET") == 0)
-        header->method = WBM_GET;
-    else
-    if (strcmp(tokens[0], "POST") == 0)
-        header->method = WBM_POST;
-    else
-    if (strcmp(tokens[0], "HEAD") == 0)
-        header->method = WBM_HEAD;
-    else
-    if (strcmp(tokens[0], "PUT") == 0)
-        header->method = WBM_PUT;
-    else
-    if (strcmp(tokens[0], "DELETE") == 0)
-        header->method = WBM_DELETE;
-    else
-    if (strcmp(tokens[0], "CONNECT") == 0)
-        header->method = WBM_CONNECT;
-    else
-    if (strcmp(tokens[0], "OPTIONS") == 0)
-        header->method = WBM_OPTIONS;
-    else
-    if (strcmp(tokens[0], "TRACE") == 0)
-        header->method = WBM_TRACE;
-    else
-        return WBERR_INVALID_HTTP_METHOD;
-
-    header->resource = tokens[1];
-    header->query = NULL;
-    ptr = strchr(header->resource, '?');
-    if (ptr != NULL)
+    if (message->type == WBMT_REQUEST)
     {
-        header->query = ptr + 1;
-        *ptr = 0;
+        if (count != 3) return WBERR_INVALID_HTTP_MESSAGE;
+
+        // we only accept HTTP 1.1 messages
+        if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
+
+        // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
+        if (strcmp(tokens[0], "GET") == 0)
+            header->method = WBM_GET;
+        else
+        if (strcmp(tokens[0], "POST") == 0)
+            header->method = WBM_POST;
+        else
+        if (strcmp(tokens[0], "HEAD") == 0)
+            header->method = WBM_HEAD;
+        else
+        if (strcmp(tokens[0], "PUT") == 0)
+            header->method = WBM_PUT;
+        else
+        if (strcmp(tokens[0], "DELETE") == 0)
+            header->method = WBM_DELETE;
+        else
+        if (strcmp(tokens[0], "CONNECT") == 0)
+            header->method = WBM_CONNECT;
+        else
+        if (strcmp(tokens[0], "OPTIONS") == 0)
+            header->method = WBM_OPTIONS;
+        else
+        if (strcmp(tokens[0], "TRACE") == 0)
+            header->method = WBM_TRACE;
+        else
+            return WBERR_INVALID_HTTP_METHOD;
+
+        header->resource = tokens[1];
+        header->query = NULL;
+        char *tmp = strchr(header->resource, '?');
+        if (tmp != NULL)
+        {
+            header->query = tmp + 1;
+            *tmp = 0;
+        }
+    }
+    else
+    {
+        // we only accept HTTP 1.1 messages
+        if (strcmp(tokens[0], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
+        header->status = atoi(tokens[1]);
     }
 
-    // point to the first field
-    ptr = tokens[2] + 8;
-    while (*ptr == 0) ++ptr;
     // parse up to 128 fields
     count = tokenize(ptr, "\n", 0, tokens, 128);
     if (count == 0) return WBERR_INVALID_HTTP_MESSAGE;
+    int isChunked = 0;
 
     // parse HTTP fields (case-insensitive according to RFC-7230:3.2)
     for (int i = 0; i < count; ++i)
@@ -386,10 +401,16 @@ int http_parseHeader(
 
         // if is 'content-length' field, get the value
         if (id == WBFI_CONTENT_LENGTH)
-            *contentLength = atoi(value);
+            message->body.expected = atoi(value);
+        else
+        if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
+            isChunked = 1;
     }
-
     header->fieldCount = count;
+
+    // check whether chunked transfer encoding is enabled
+    if (isChunked && message->body.expected == 0)
+        message->body.expected = -1;
 
     return WBERR_OK;
 ESCAPE:

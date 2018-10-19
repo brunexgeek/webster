@@ -12,6 +12,11 @@ int network_open(
 int network_close(
 	void *channel );
 
+int network_connect(
+	void *channel,
+	const char *host,
+    int port );
+
 int network_receive(
 	void *channel,
 	uint8_t *buffer,
