@@ -121,11 +121,7 @@ static void *webster_thread(
 
 	temp->handler(&temp->request, &temp->response, temp->data);
 
-	WebsterFlush(&temp->response);
-	// send the last marker if using chenked transfer encoding
-	if (temp->response.body.expected < 0)
-		network_send(temp->response.channel, (const uint8_t*) "0\r\n\r\n", 5);
-
+	WebsterFinish(&temp->response);
 	network_close(temp->remote->channel);
 
 	pthread_mutex_lock(&(temp->server)->mutex);

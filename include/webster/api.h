@@ -52,6 +52,10 @@
 #define WBS_BODY                         2
 #define WBS_COMPLETE                     3
 
+/*#define WBO_UNKNOWN                      0
+#define WBO_REQUEST_RESPONSE             1
+#define WBO_RESPONSE_REQUEST             2*/
+
 #define WBO_BUFFER_SIZE                  1
 
 #define WBFI_NON_STANDARD                             0
@@ -292,6 +296,9 @@ WEBSTER_EXPORTED int WebsterWriteString(
     const char *text );
 
 WEBSTER_EXPORTED int WebsterFlush(
+	webster_message_t *output );
+
+WEBSTER_EXPORTED int WebsterFinish(
 	webster_message_t *output );
 
 WEBSTER_EXPORTED int WebsterGetOutputState(

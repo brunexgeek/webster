@@ -430,16 +430,32 @@ int WebsterFlush(
 {
 	if (output == NULL) return WBERR_INVALID_ARGUMENT;
 
+	// ensure we are done with the HTTP header
 	if (output->state != WBS_BODY)
-	{
 		WebsterWriteData(output, (uint8_t*) "", 0);
-	}
-
+	// send all remaining body data
 	if (output->buffer.current > output->buffer.data)
 	{
 		network_send(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
+
+	return WBERR_OK;
+}
+
+
+int WebsterFinish(
+	webster_message_t *output )
+{
+	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+
+	WebsterFlush(output);
+
+	// send the last marker if using chunked transfer encoding
+	if (output->body.expected < 0)
+		network_send(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
+	// we are done sending data now
+	output->state = WBS_COMPLETE;
 
 	return WBERR_OK;
 }

@@ -139,7 +139,6 @@ int network_receive(
 	return WBERR_OK;
 }
 
-#include <stdio.h>
 
 int network_send(
 	void *channel,

@@ -21,10 +21,12 @@ static int clientHandler(
     webster_message_t *response,
     void *data )
 {
+	(void) data;
+
     // send a HTTP request
     WebsterSetStringField(request, "host", "google.com");
     WebsterSetIntegerField(request, "content-length", 0);
-    WebsterFlush(request);
+    WebsterFinish(request);
 
     printf("Request sent!\n");
 
@@ -78,6 +80,9 @@ static int clientHandler(
 
 int main( int argc, char **argv )
 {
+	(void) argc;
+	(void) argv;
+
     webster_client_t client;
     if (WebsterConnect(&client, "google.com", 80, "/") == WBERR_OK)
     {

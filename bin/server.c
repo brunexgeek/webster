@@ -23,8 +23,6 @@ static int serverState = SERVER_RUNNING;
 
 static char rootDirectory[PATH_MAX];
 
-static	int requests = 0;
-
 static const char *HTTP_METHODS[] =
 {
     "",
