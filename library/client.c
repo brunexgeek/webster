@@ -1,23 +1,7 @@
-//#include <webster/api.h>
 #include "internal.h"
 #include "network.h"
 #include <stdlib.h>
 #include <string.h>
-
-/*
-static char *duplicate(
-	const char *text )
-{
-	if (text == NULL || text[0] == 0) return NULL;
-	size_t size = strlen(text) + 1;
-	char *s = (char*) malloc(size);
-	if (s != NULL)
-	{
-		strcpy(s, text);
-		s[size - 1] = 0; // to be sure
-	}
-	return s;
-}*/
 
 
 int WebsterConnect(

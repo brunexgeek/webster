@@ -64,6 +64,7 @@ const char *http_statusMessage(
 }
 
 
+// TODO: put this data in an array and use binary search
 int http_getFieldID(
     const char *name )
 {
@@ -204,6 +205,7 @@ const webster_field_t *http_getFieldById(
 }
 
 
+// TODO: ensure the field does not exists
 int http_addField(
     webster_header_t *header,
     int id,

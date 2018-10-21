@@ -1,5 +1,3 @@
-#define _POSIX_C_SOURCE 200112L
-
 #include <webster/api.h>
 #include <limits.h>
 #include <stdio.h>
