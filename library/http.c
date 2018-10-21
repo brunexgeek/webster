@@ -64,30 +64,31 @@ const char *http_statusMessage(
 }
 
 
-// TODO: put this data in an array and use binary search
 int http_getFieldID(
     const char *name )
 {
-    if (name == NULL || name[0] == 0) return 0;
+    if (name == NULL || name[0] == 0 || name[0] < 'a' || name[0] > 'z') return 0;
 
-    if (name[0] < 'a' || name[0] > 'z') return 0;
     switch (name[0])
     {
         case 'a':
             if (name[1] == 'c')
             {
-                if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
-                if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
-                if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
-                if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
-                if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
-                if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
+                if (name[2] == 'c' && name[3] == 'e')
+                {
+                    if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
+                    if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
+                    if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
+                    if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
+                    if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
+                    if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
+                }
                 if (strcmp(name, "access-control-allow-credentials") == 0)  return WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS;
                 if (strcmp(name, "access-control-allow-headers") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_HEADERS;
                 if (strcmp(name, "access-control-allow-methods") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_METHODS;
                 if (strcmp(name, "access-control-allow-origin") == 0)       return WBFI_ACCESS_CONTROL_ALLOW_ORIGIN;
-                if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
                 if (strcmp(name, "access-control-max-age") == 0)            return WBFI_ACCESS_CONTROL_MAX_AGE;
+                if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
                 if (strcmp(name, "access-control-request-headers") == 0)    return WBFI_ACCESS_CONTROL_REQUEST_HEADERS;
                 if (strcmp(name, "access-control-request-method") == 0)     return WBFI_ACCESS_CONTROL_REQUEST_METHOD;
             }
@@ -154,6 +155,7 @@ int http_getFieldID(
             if (strcmp(name, "retry-after") == 0)                       return WBFI_RETRY_AFTER;
             break;
         case 's':
+            if (strcmp(name, "server") == 0)                            return WBFI_SERVER;
             if (strcmp(name, "set-cookie") == 0)                        return WBFI_SET_COOKIE;
             if (strcmp(name, "strict-transport-security") == 0)         return WBFI_STRICT_TRANSPORT_SECURITY;
             break;

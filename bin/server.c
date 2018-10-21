@@ -35,12 +35,26 @@ static const char *HTTP_METHODS[] =
 };
 
 
+#if defined(_WIN32) || defined(WIN32)
+
+static BOOL WINAPI main_signalHandler(
+  _In_ DWORD dwCtrlType )
+{
+	(void) dwCtrlType;
+	serverState = SERVER_STOPPING;
+	return TRUE;
+}
+
+#else
+
 static void main_signalHandler(
 	int handle )
 {
 	(void) handle;
 	serverState = SERVER_STOPPING;
 }
+
+#endif
 
 
 static void main_downloadFile(
@@ -213,6 +227,12 @@ static int main_serverHandler(
 
 int main(int argc, char* argv[])
 {
+	#if defined(_WIN32) || defined(WIN32)
+
+	SetConsoleCtrlHandler(main_signalHandler, TRUE);
+
+	#else
+
 	// install the signal handler to stop the server with CTRL + C
 	struct sigaction act;
 	sigemptyset(&act.sa_mask);
@@ -220,6 +240,8 @@ int main(int argc, char* argv[])
 	act.sa_flags = 0;
     act.sa_handler = main_signalHandler;
     sigaction(SIGINT, &act, NULL);
+
+	#endif
 
 	if (argc == 2)
 		realpath(argv[1], rootDirectory);
