@@ -46,6 +46,8 @@ const char *http_statusMessage(
         case 416: return "Range Not Satisfiable";
         case 417: return "Expectation Failed";
         case 418: return "I'm a teapot";
+        case 422: return "Unprocessable Entity";
+        case 425: return "Too Early";
         case 426: return "Upgrade Required";
         case 428: return "Precondition Required";
         case 429: return "Too Many Requests";
