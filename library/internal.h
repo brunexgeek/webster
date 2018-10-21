@@ -5,7 +5,6 @@
 #include "http.h"
 #include <sys/socket.h>
 #include <webster/api.h>
-#include <pthread.h>
 #include <poll.h>
 #include <stdbool.h>
 
@@ -19,12 +18,6 @@
 #define WBMT_UNKNOWN    0x00
 #define WBMT_REQUEST    0x01
 #define WBMT_RESPONSE   0x02
-
-typedef struct
-{
-    void *channel;
-    pthread_t thread;
-} webster_remote_t ;
 
 
 struct webster_client_t_
@@ -44,12 +37,7 @@ struct webster_server_t_
     int port;
     int maxClients;
     struct pollfd pfd;
-    webster_remote_t *remotes;
-    pthread_mutex_t mutex;
-    struct
-    {
-        int bufferSize;
-    } options;
+    int bufferSize;
 };
 
 
@@ -85,22 +73,6 @@ struct webster_message_t_
     } buffer;
     webster_header_t header;
 };
-
-
-typedef struct
-{
-    struct webster_server_t_ *server;
-    webster_remote_t *remote;
-    struct webster_message_t_ request;
-    struct webster_message_t_ response;
-    webster_handler_t *handler;
-    void *data;
-} webster_thread_data_t;
-
-
-
-
-
 
 
 #endif // WEBSTER_INTERNAL_HH

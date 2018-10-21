@@ -2,9 +2,7 @@
 
 Lightweight HTTP server and client API. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API. You can change the communication channel reimplementing some internal functions.
 
-Webster enables you to:
-* Read and write header data
-* Read and write body data as stream (bytes or strings)
+Webster enables you to communicate with HTTP servers and implement your own HTTP server. It automatically parses request headers and also simplify creating response headers. The input/output body data is handled as a stream (with chunked transfer encoding or not): to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amount of data using less memory.
 
 However, Webster do not:
 * Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231)
@@ -16,8 +14,8 @@ To send a message to a HTTP server, just create a client entity and start the co
 
 ``` c
 webster_client_t client;
-// connect to 'http://google.com/'
-if (WebsterConnect(&client, "google.com", 80, "/") == WBERR_OK)
+// connect to 'http://duckduckgo.com/'
+if (WebsterConnect(&client, "duckduckgo.com", 80, "/") == WBERR_OK)
 {
     // start the communication
     WebsterCommunicate(&client, clientHandler, NULL);
@@ -34,9 +32,9 @@ int clientHandler(
     void *data )
 {
     // send a HTTP request
-    WebsterSetStringField(request, "host", "google.com");
+    WebsterSetStringField(request, "host", "duckduckgo.com");
     WebsterSetIntegerField(request, "content-length", 0);
-    WebsterFlush(request);
+    WebsterFinish(request);
 
     webster_event_t event;
     const webster_header_t *header;
@@ -80,7 +78,7 @@ The source file ``bin/client_sample.c`` contains a complete example of a client 
 
 ## Server example
 
-The server keeps listening for connections and handle each one of them in separated threads. To start the server, do something like:
+The server keeps listening for connections and handle each one of them. To start the server, do something like:
 
 ``` c
 webster_server_t server;
@@ -89,13 +87,20 @@ if (WebsterCreate(&server, 100) == WBERR_OK)
     if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
     {
         while (serverState == SERVER_RUNNING)
-            WebsterAccept(&server, serverHandler, NULL);
+        {
+            webster_client_t remote;
+            // accept a pending connection
+            if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
+            // process the remote connection
+            WebsterCommunicate(&remote, serverHandler, NULL);
+            WebsterDisconnect(&remote);
+        }
     }
     WebsterDestroy(&server);
 }
 ```
 
-In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``bin/server_sample.c``.
+Note that the server also uses ``WebsterCommunicate`` because remote connections are client entities. In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``bin/server_sample.c``.
 
 ## Limitations
 
@@ -103,5 +108,6 @@ In the example above, the ``serverHandler`` is the function which receive the re
 
 ## Roadmap
 
+* Documentation
 * Request URI decoding
 * HTTP Basic authentication

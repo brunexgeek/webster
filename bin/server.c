@@ -135,10 +135,10 @@ static int main_serverHandler(
 	{
 		// wait for some request data
 		result = WebsterWaitEvent(request, &event);
-		printf("WebsterWaitEvent = %d\n", result);
+		//printf("WebsterWaitEvent = %d\n", result);
 		if (result == WBERR_COMPLETE) break;
-        if (result == WBERR_TIMEOUT) return 0;
 		if (result == WBERR_NO_DATA) continue;
+		if (result != WBERR_OK) return 0;
 
 		if (result == WBERR_OK)
 		{
@@ -156,7 +156,6 @@ static int main_serverHandler(
 						field = field->next;
 					}
 				}
-				printf("Waiting for body\n");
 			}
 			else
 			// check if we received the HTTP body (or part of it)
@@ -174,9 +173,6 @@ static int main_serverHandler(
 		}
 	} while (1);
 
-	// assume HTTP 404
-	WebsterSetStatus(response, 404);
-
 	// doing it again, but not necessary if the first call succeed
 	result = WebsterGetHeader(request, &header);
 	if (result != WBERR_OK) return result;
@@ -187,27 +183,33 @@ static int main_serverHandler(
 	strncat(temp, header->resource, sizeof(temp) - 1);
 	fileName = realpath(temp, NULL);
 
+	printf("Requested '%s'\n", fileName);
+
+	result = WBERR_OK;
 	struct stat info;
-	if (stat(fileName, &info) != 0) return WBERR_OK;
-	if (info.st_mode & S_IFREG)
+	if (fileName == NULL || stat(fileName, &info) != 0) result = WBERR_INVALID_ARGUMENT;
+	if (result == WBERR_OK && info.st_mode & S_IFREG)
 	{
 		WebsterSetStatus(response, 200);
 		main_downloadFile(response, fileName, (int) info.st_size);
 	}
 	else
-	if (info.st_mode & S_IFDIR)
+	if (result == WBERR_OK && info.st_mode & S_IFDIR)
 	{
 		WebsterSetStatus(response, 200);
 		main_listDirectory(response, fileName);
 	}
 	else
 	{
-		WebsterSetIntegerField(response, "Content-Length", 14);
-		WebsterWriteString(response, "Invalid entity");
+		WebsterSetStatus(response, 404);
+		WebsterSetIntegerField(response, "Content-Length", 9);
+		WebsterWriteString(response, "Not found");
 	}
 
-	free(fileName);
-	return 0;
+	WebsterFinish(response);
+	if (fileName != NULL) free(fileName);
+	printf("\n");
+	return result;
 }
 
 
@@ -236,7 +238,12 @@ int main(int argc, char* argv[])
 		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
 		{
 			while (serverState == SERVER_RUNNING)
-				WebsterAccept(&server, main_serverHandler, NULL);
+			{
+				webster_client_t remote;
+				if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
+				WebsterCommunicate(&remote, main_serverHandler, NULL);
+				WebsterDisconnect(&remote);
+			}
 		}
 		WebsterDestroy(&server);
 	}

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-
+/*
 static char *duplicate(
 	const char *text )
 {
@@ -17,7 +17,7 @@ static char *duplicate(
 		s[size - 1] = 0; // to be sure
 	}
 	return s;
-}
+}*/
 
 
 int WebsterConnect(
@@ -33,24 +33,42 @@ int WebsterConnect(
 	if (resource == NULL || resource[0] == 0)
 		resource = "/";
 
-	*client = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_));
+	size_t hostLen = strlen(host);
+	size_t resourceLen = strlen(resource);
+
+	// allocate memory for everything
+	*client = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_)
+		+ hostLen + 1 + resourceLen + 1);
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
+	// try to connect with the remote host
 	int result = network_open( &(*client)->channel );
-	if (result != WBERR_OK) return result;
+	if (result != WBERR_OK) goto ESCAPE;
 	result = network_connect((*client)->channel, host, port);
-	if (result != WBERR_OK)
-	{
-		network_close((*client)->channel);
-		return result;
-	}
+	if (result != WBERR_OK) goto ESCAPE;
+
 	(*client)->port = port;
-	(*client)->host = duplicate(host);
-	(*client)->resource = duplicate(resource);
+	(*client)->host = (char*) (*client) + sizeof(struct webster_client_t_);
+	strcpy((*client)->host, host);
+	(*client)->resource = (*client)->host + hostLen + 1;
+	strcpy((*client)->resource, resource);
 	(*client)->pfd.events = POLLIN;
 
 	return WBERR_OK;
+
+ESCAPE:
+	if (*client != NULL)
+	{
+		if ((*client)->channel != NULL) network_close((*client)->channel);
+		free(*client);
+		*client = NULL;
+	}
+	return result;
 }
+
+
+int webster_releaseMessage(
+	webster_message_t *message );
 
 
 int WebsterCommunicate(
@@ -79,6 +97,10 @@ int WebsterCommunicate(
 
 	callback(&request, &response, data);
 
+	webster_releaseMessage(&request);
+	webster_releaseMessage(&response);
+	free(buffers);
+
 	return WBERR_OK;
 }
 
@@ -87,5 +109,7 @@ int WebsterDisconnect(
     webster_client_t *client )
 {
 	network_close((*client)->channel);
+	free(*client);
+	*client = NULL;
 	return WBERR_OK;
 }

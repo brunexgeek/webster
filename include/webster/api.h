@@ -220,8 +220,7 @@ WEBSTER_EXPORTED int WebsterStop(
 
 WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
-    webster_handler_t *handler,
-    void *data );
+	webster_client_t *remote );
 
 WEBSTER_EXPORTED int WebsterSetOption(
 	webster_server_t *server,

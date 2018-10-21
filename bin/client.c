@@ -16,7 +16,7 @@ static const char *HTTP_METHODS[] =
 };
 
 
-static int clientHandler(
+static int main_clientHandler(
     webster_message_t *request,
     webster_message_t *response,
     void *data )
@@ -74,6 +74,8 @@ static int clientHandler(
 		}
 	} while (1);
 
+	WebsterFinish(response);
+
     return WBERR_OK;
 }
 
@@ -84,9 +86,9 @@ int main( int argc, char **argv )
 	(void) argv;
 
     webster_client_t client;
-    if (WebsterConnect(&client, "google.com", 80, "/") == WBERR_OK)
+    if (WebsterConnect(&client, "duckduckgo.com", 80, "/") == WBERR_OK)
     {
-        WebsterCommunicate(&client, clientHandler, NULL);
+        WebsterCommunicate(&client, main_clientHandler, NULL);
         WebsterDisconnect(&client);
     }
     else
