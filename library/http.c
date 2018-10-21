@@ -189,9 +189,12 @@ const webster_field_t *http_getFieldByName(
     const webster_header_t *header,
     const char *name )
 {
-    for (int i = 0; i < header->fieldCount; ++i)
-        if (strcmp(header->fields[i].name, name) == 0)
-            return header->fields + i;
+    webster_field_t *field = header->fields;
+    while (field != NULL)
+    {
+        if (strcmp(field->name, name) == 0) return field;
+        field = field->next;
+    }
 
     return NULL;
 }
@@ -201,9 +204,12 @@ const webster_field_t *http_getFieldById(
     const webster_header_t *header,
     int id )
 {
-    for (int i = 0; i < header->fieldCount; ++i)
-        if (header->fields[i].id == id)
-            return header->fields + i;
+    webster_field_t *field = header->fields;
+    while (field != NULL)
+    {
+        if (field->id == id) return field;
+        field = field->next;
+    }
 
     return NULL;
 }

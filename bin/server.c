@@ -57,6 +57,24 @@ static void main_signalHandler(
 #endif
 
 
+static const char *main_getMime(
+	const char *fileName )
+{
+	int len = strlen(fileName);
+	if (len < 4) return "application/octet-stream";
+	fileName += len - 4;
+
+	if (strstr(fileName, ".jpg") || strstr(fileName, ".jpeg")) return "image/jpeg";
+	if (strstr(fileName, ".png")) return "image/png";
+	if (strstr(fileName, ".gif")) return "image/gif";
+	if (strstr(fileName, ".mp4")) return "video/mp4";
+	if (strstr(fileName, ".mp3")) return "audio/mp3";
+	if (strstr(fileName, "webm")) return "video/webm";
+
+	return "application/octet-stream";
+}
+
+
 static void main_downloadFile(
 	webster_message_t *response,
 	const char *fileName,
@@ -66,22 +84,32 @@ static void main_downloadFile(
 
 	char buffer[1024];
 
+	const char *mime = main_getMime(fileName);
+	printf("Requested '%s' (%s) with %d bytes\n", fileName, mime, contentLength);
+
 	WebsterSetStatus(response, 200);
 	WebsterSetIntegerField(response, "Content-Length", contentLength);
+	WebsterSetStringField(response, "Content-Type", mime);
+	WebsterSetStringField(response, "Cache-Control", "max-age=10, must-revalidate");
+	WebsterSetStringField(response, "Content-Encoding", "identity");
 	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
 
+	size_t sent = 0;
 	FILE *fp = fopen(fileName, "rb");
 	if (fp != NULL)
 	{
 		size_t read = 0;
 		do {
 			read = fread(buffer, 1, sizeof(buffer), fp);
-			if (read > 0) WebsterWriteData(response, (uint8_t*) buffer, (int) read);
+			if (read > 0)
+			{
+				if (WebsterWriteData(response, (uint8_t*) buffer, (int) read) == WBERR_OK) sent += read;
+			}
 		} while (read > 0);
 		fclose(fp);
 	}
 
-	printf("Returned %d bytes from %s\n", contentLength, fileName);
+	printf("Returned %d bytes\n", sent);
 }
 
 
@@ -195,15 +223,34 @@ static int main_serverHandler(
 	strncat(temp, header->resource, sizeof(temp) - 1);
 	fileName = realpath(temp, NULL);
 
-	printf("Requested '%s'\n", fileName);
-
 	result = WBERR_OK;
 	struct stat info;
 	if (fileName == NULL || stat(fileName, &info) != 0) result = WBERR_INVALID_ARGUMENT;
 	if (result == WBERR_OK && info.st_mode & S_IFREG)
 	{
-		WebsterSetStatus(response, 200);
-		main_downloadFile(response, fileName, (int) info.st_size);
+		const char *accept = NULL;
+		if (WebsterGetStringField(request, 0, "accept", &accept) == WBERR_OK)
+		{
+			const char *mime = main_getMime(fileName);
+			// a very simple (and not recomended) way to check the accepted types
+			if (strstr(accept, mime) == NULL && strstr(accept, "*/*") == NULL)
+			{
+				WebsterSetStatus(response, 406);
+				WebsterSetStringField(response, "content-type", mime);
+				WebsterSetIntegerField(response, "content-length", strlen(mime));
+				WebsterWriteString(response, mime);
+			}
+			else
+			{
+				WebsterSetStatus(response, 200);
+				main_downloadFile(response, fileName, (int) info.st_size);
+			}
+		}
+		else
+		{
+			WebsterSetStatus(response, 500);
+			WebsterSetIntegerField(response, "content-length", 0);
+		}
 	}
 	else
 	if (result == WBERR_OK && info.st_mode & S_IFDIR)
@@ -214,8 +261,8 @@ static int main_serverHandler(
 	else
 	{
 		WebsterSetStatus(response, 404);
-		WebsterSetIntegerField(response, "Content-Length", 9);
-		WebsterWriteString(response, "Not found");
+		WebsterSetIntegerField(response, "Content-Length", 18);
+		WebsterWriteString(response, "<h1>Not found</h1>");
 	}
 
 	WebsterFinish(response);
