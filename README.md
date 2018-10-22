@@ -5,8 +5,8 @@ Lightweight HTTP server and client API. It implements the [RFC-7230 - Message Sy
 Webster enables you to communicate with HTTP servers and implement your own HTTP server. It automatically parses request headers and also simplify creating response headers. The input/output body data is handled as a stream (with chunked transfer encoding or not): to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amount of data using less memory.
 
 However, Webster do not:
-* Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231)
-* Communicate through SSL/TLS natively. You have to integrate with some 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org))
+* Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231).
+* Communicate through SSL/TLS natively. You have to integrate with some 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
 
 ## Client example
 
@@ -100,7 +100,7 @@ if (WebsterCreate(&server, 100) == WBERR_OK)
 }
 ```
 
-Note that the server also uses ``WebsterCommunicate`` because remote connections are client entities. In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``bin/server_sample.c``.
+Note that the server also uses ``WebsterCommunicate`` since remote connections are client entities. In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``bin/server_sample.c``.
 
 ## Limitations
 

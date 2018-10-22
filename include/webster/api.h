@@ -2,16 +2,21 @@
 #define WEBSTER_API_H
 
 
-#if BUILDING_WEBSTER && defined(_MSC_VER)
+#if BUILDING_WEBSTER && (defined(_MSC_VER) || defined(WIN32) || defined(_WIN32))
 #define WEBSTER_EXPORTED __declspec(dllexport)
 #elif BUILDING_WEBSTER
 #define WEBSTER_EXPORTED __attribute__((__visibility__("default")))
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
 #define WEBSTER_EXPORTED __declspec(dllimport)
 #else
 #define WEBSTER_EXPORTED
 #endif
 
+#if defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
+#define WEBSTER_PRIVATE
+#else
+#define WEBSTER_PRIVATE __attribute__((__visibility__("hidden")))
+#endif
 
 #include <stdint.h>
 
@@ -177,6 +182,50 @@ typedef int (webster_handler_t)(
     void *data );
 
 
+typedef int webster_network_open(
+	void **channel );
+
+typedef int webster_network_close(
+	void *channel );
+
+typedef int webster_network_connect(
+	void *channel,
+	const char *host,
+    int port );
+
+typedef int webster_network_receive(
+	void *channel,
+	uint8_t *buffer,
+    uint32_t *size,
+	int timeout );
+
+typedef int webster_network_send(
+	void *channel,
+	const uint8_t *buffer,
+    uint32_t size );
+
+typedef int webster_network_accept(
+	void *channel,
+	void **client );
+
+typedef int webster_network_listen(
+	void *channel,
+	const char *host,
+    int port,
+	int maxClients );
+
+typedef struct
+{
+	webster_network_open *open;
+	webster_network_close *close;
+	webster_network_connect *connect;
+	webster_network_receive *receive;
+	webster_network_send *send;
+	webster_network_accept *accept;
+	webster_network_listen *listen;
+} webster_network_t;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -304,6 +353,16 @@ WEBSTER_EXPORTED int WebsterFinish(
 WEBSTER_EXPORTED int WebsterGetOutputState(
 	webster_message_t *output,
     int *state );
+
+
+/**
+ * Network implementation API
+ */
+
+WEBSTER_EXPORTED int WebsterSetNetworkImpl(
+	webster_network_t *impl );
+
+WEBSTER_EXPORTED int WebsterResetNetworkImpl();
 
 #ifdef __cplusplus
 }

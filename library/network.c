@@ -47,7 +47,7 @@ static int network_lookupIPv4(
 }
 
 
-int network_open(
+static int network_open(
 	void **channel )
 {
 	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
@@ -70,7 +70,7 @@ int network_open(
 }
 
 
-int network_close(
+static int network_close(
 	void *channel )
 {
 	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
@@ -86,7 +86,7 @@ int network_close(
 }
 
 
-int network_connect(
+static int network_connect(
 	void *channel,
 	const char *host,
     int port )
@@ -110,10 +110,10 @@ int network_connect(
 }
 
 
-int network_receive(
+static int network_receive(
 	void *channel,
 	uint8_t *buffer,
-    size_t *size,
+    uint32_t *size,
 	int timeout )
 {
 	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
@@ -128,35 +128,35 @@ int network_receive(
 	if (result < 0)
 		return WBERR_SOCKET;
 
-	ssize_t bytes = recv(chann->socket, buffer, *size, 0);
+	ssize_t bytes = recv(chann->socket, buffer, (size_t) *size, 0);
 	if (bytes < 0)
 	{
 		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
-	*size = (size_t) bytes;
+	*size = (uint32_t) bytes;
 
 	return WBERR_OK;
 }
 
 
-int network_send(
+static int network_send(
 	void *channel,
 	const uint8_t *buffer,
-    size_t size )
+    uint32_t size )
 {
 	if (buffer == NULL || size == 0) return WBERR_INVALID_ARGUMENT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
-	if (send(chann->socket, buffer, size, MSG_NOSIGNAL) != 0)
+	if (send(chann->socket, buffer, (size_t) size, MSG_NOSIGNAL) != 0)
 		return WBERR_SOCKET;
 
 	return WBERR_OK;
 }
 
 
-int network_accept(
+static int network_accept(
 	void *channel,
 	void **client )
 {
@@ -196,7 +196,7 @@ int network_accept(
 }
 
 
-int network_listen(
+static int network_listen(
 	void *channel,
 	const char *host,
     int port,
@@ -224,5 +224,65 @@ int network_listen(
 		return WBERR_SOCKET;
 	}
 
+	return WBERR_OK;
+}
+
+
+static webster_network_t DEFAULT_IMPL =
+{
+	network_open,
+	network_close,
+	network_connect,
+	network_receive,
+	network_send,
+	network_accept,
+	network_listen
+};
+
+WEBSTER_PRIVATE webster_network_t networkImpl =
+{
+	network_open,
+	network_close,
+	network_connect,
+	network_receive,
+	network_send,
+	network_accept,
+	network_listen
+};
+
+
+int WebsterSetNetworkImpl(
+	webster_network_t *impl )
+{
+	if (impl == NULL ||
+		impl->open == NULL ||
+		impl->close == NULL ||
+		impl->connect == NULL ||
+		impl->receive == NULL ||
+		impl->send == NULL ||
+		impl->accept == NULL ||
+		impl->listen == NULL)
+		return WBERR_INVALID_ARGUMENT;
+
+	networkImpl.open    = impl->open;
+	networkImpl.close   = impl->close;
+	networkImpl.connect = impl->connect;
+	networkImpl.receive = impl->receive;
+	networkImpl.send    = impl->send;
+	networkImpl.accept  = impl->accept;
+	networkImpl.listen  = impl->listen;
+	return WBERR_OK;
+}
+
+
+int WebsterResetNetworkImpl()
+{
+	networkImpl.open    = DEFAULT_IMPL.open;
+	networkImpl.close   = DEFAULT_IMPL.close;
+	networkImpl.connect = DEFAULT_IMPL.connect;
+	networkImpl.receive = DEFAULT_IMPL.receive;
+	networkImpl.send    = DEFAULT_IMPL.send;
+	networkImpl.accept  = DEFAULT_IMPL.accept;
+	networkImpl.listen  = DEFAULT_IMPL.listen;
 	return WBERR_OK;
 }

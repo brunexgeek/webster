@@ -60,7 +60,7 @@ static void main_signalHandler(
 static const char *main_getMime(
 	const char *fileName )
 {
-	int len = strlen(fileName);
+	int len = (int) strlen(fileName);
 	if (len < 4) return "application/octet-stream";
 	fileName += len - 4;
 
@@ -109,7 +109,7 @@ static void main_downloadFile(
 		fclose(fp);
 	}
 
-	printf("Returned %d bytes\n", sent);
+	printf("Returned %d bytes\n", (int) sent);
 }
 
 
@@ -237,7 +237,7 @@ static int main_serverHandler(
 			{
 				WebsterSetStatus(response, 406);
 				WebsterSetStringField(response, "content-type", mime);
-				WebsterSetIntegerField(response, "content-length", strlen(mime));
+				WebsterSetIntegerField(response, "content-length", (int) strlen(mime));
 				WebsterWriteString(response, mime);
 			}
 			else

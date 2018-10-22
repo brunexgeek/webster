@@ -57,10 +57,10 @@ int WebsterStart(
 {
 	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
 
-	int result = network_open(&(*server)->channel);
+	int result = WBNET_OPEN(&(*server)->channel);
 	if (result != WBERR_OK) return result;
 
-	return network_listen((*server)->channel, host, port, (*server)->maxClients);
+	return WBNET_LISTEN((*server)->channel, host, port, (*server)->maxClients);
 }
 
 
@@ -69,7 +69,7 @@ int WebsterStop(
 {
 	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
 
-	network_close((*server)->channel);
+	WBNET_CLOSE((*server)->channel);
 	(*server)->channel = NULL;
 
 	return WBERR_OK;
@@ -83,14 +83,14 @@ int WebsterAccept(
 	if (server == NULL || remote == NULL) return WBERR_INVALID_ARGUMENT;
 
 	void *client = NULL;
-	int result = network_accept((*server)->channel, &client);
+	int result = WBNET_ACCEPT((*server)->channel, &client);
 	if (result != WBERR_OK) return result;
 
 	*remote = (struct webster_client_t_*) calloc(1,
 		sizeof(struct webster_client_t_) + (size_t) (*server)->bufferSize * 2 );
 	if (*remote == NULL)
 	{
-		network_close(client);
+		WBNET_CLOSE(client);
 		return WBERR_MEMORY_EXHAUSTED;
 	}
 

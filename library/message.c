@@ -37,7 +37,7 @@ static int webster_receive(
 
 	// receive new data and adjust pending information
 	size_t bytes = input->buffer.size - 1;
-	int result = network_receive(input->channel, input->buffer.data, &bytes, timeout);
+	int result = WBNET_RECEIVE(input->channel, input->buffer.data, &bytes, timeout);
 	if (result < 0) return result;
 	input->buffer.pending = (int) bytes;
 	input->buffer.current = input->buffer.data;
@@ -64,14 +64,14 @@ static int webster_writeOrSend(
 	// send any pending data if the given one does not fit the internal buffer
 	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
 	{
-		network_send(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
+		WBNET_SEND(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 
 	// if the data does not fit the internal buffer at all, send immediately;
 	// otherwise, copy the data to the intenal buffer
 	if (size > (int) output->buffer.size)
-		network_send(output->channel, buffer, (size_t) size);
+		WBNET_SEND(output->channel, buffer, (size_t) size);
 	else
 	{
 		memcpy(output->buffer.current, buffer, (size_t) size);
@@ -436,7 +436,7 @@ int WebsterFlush(
 	// send all remaining body data
 	if (output->buffer.current > output->buffer.data)
 	{
-		network_send(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
+		WBNET_SEND(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 
@@ -453,7 +453,7 @@ int WebsterFinish(
 
 	// send the last marker if using chunked transfer encoding
 	if (output->body.expected < 0)
-		network_send(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
+		WBNET_SEND(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	output->state = WBS_COMPLETE;
 

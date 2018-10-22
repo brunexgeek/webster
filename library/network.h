@@ -3,39 +3,16 @@
 
 
 #include "internal.h"
-#include <netdb.h>
 
+#define WBNET_OPEN        networkImpl.open
+#define WBNET_CLOSE       networkImpl.close
+#define WBNET_CONNECT     networkImpl.connect
+#define WBNET_RECEIVE     networkImpl.receive
+#define WBNET_SEND        networkImpl.send
+#define WBNET_ACCEPT      networkImpl.accept
+#define WBNET_LISTEN      networkImpl.listen
 
-int network_open(
-	void **channel );
+extern webster_network_t networkImpl;
 
-int network_close(
-	void *channel );
-
-int network_connect(
-	void *channel,
-	const char *host,
-    int port );
-
-int network_receive(
-	void *channel,
-	uint8_t *buffer,
-    size_t *size,
-	int timeout );
-
-int network_send(
-	void *channel,
-	const uint8_t *buffer,
-    size_t size );
-
-int network_accept(
-	void *channel,
-	void **client );
-
-int network_listen(
-	void *channel,
-	const char *host,
-    int port,
-	int maxClients );
 
 #endif // WEBSTER_NETWORK_HH

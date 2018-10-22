@@ -26,9 +26,9 @@ int WebsterConnect(
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	// try to connect with the remote host
-	int result = network_open( &(*client)->channel );
+	int result = WBNET_OPEN( &(*client)->channel );
 	if (result != WBERR_OK) goto ESCAPE;
-	result = network_connect((*client)->channel, host, port);
+	result = WBNET_CONNECT((*client)->channel, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
 	(*client)->port = port;
@@ -43,7 +43,7 @@ int WebsterConnect(
 ESCAPE:
 	if (*client != NULL)
 	{
-		if ((*client)->channel != NULL) network_close((*client)->channel);
+		if ((*client)->channel != NULL) WBNET_CLOSE((*client)->channel);
 		free(*client);
 		*client = NULL;
 	}
@@ -92,7 +92,7 @@ int WebsterCommunicate(
 int WebsterDisconnect(
     webster_client_t *client )
 {
-	network_close((*client)->channel);
+	WBNET_CLOSE((*client)->channel);
 	free(*client);
 	*client = NULL;
 	return WBERR_OK;
