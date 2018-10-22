@@ -8,7 +8,13 @@ However, Webster do not:
 * Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231).
 * Communicate through SSL/TLS natively. You have to integrate with some 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
 
-## Client example
+The library also includes three sample programs in the ``bin`` directory:
+
+* ``client_sample.c``: simple client program that send a request and print the response;
+* ``server_sample.c``: simple server program that echo to clients some information about its request;
+* ``server.c``: more elaborated server program that implements directory indexing.
+
+## Client implementation
 
 To send a message to a HTTP server, just create a client entity and start the communication:
 
@@ -76,7 +82,7 @@ int clientHandler(
 
 The source file ``bin/client_sample.c`` contains a complete example of a client program.
 
-## Server example
+## Server implementation
 
 The server keeps listening for connections and handle each one of them. To start the server, do something like:
 
@@ -108,6 +114,7 @@ Note that the server also uses ``WebsterCommunicate`` since remote connections a
 
 ## Roadmap
 
+* Ensure compatibility with Windows
 * Documentation
 * Request URI decoding
 * HTTP Basic authentication

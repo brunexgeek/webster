@@ -141,6 +141,9 @@ static int main_serverHandler(
 
 int main(int argc, char* argv[])
 {
+    (void) argc;
+    (void) argv;
+
 	#if defined(_WIN32) || defined(WIN32)
 
 	SetConsoleCtrlHandler(main_signalHandler, TRUE);

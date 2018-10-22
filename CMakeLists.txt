@@ -115,3 +115,13 @@ set_target_properties(client_test PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
+
+
+add_executable(server "${CMAKE_CURRENT_LIST_DIR}/bin/server.c")
+target_link_libraries(server libwebster)
+target_compile_definitions(server PRIVATE _DEFAULT_SOURCE)
+set_target_properties(server PROPERTIES
+    OUTPUT_NAME "server"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
