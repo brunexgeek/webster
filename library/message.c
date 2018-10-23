@@ -36,7 +36,7 @@ static int webster_receive(
 	//       so we can use the function 'WebsterReadString'.
 
 	// receive new data and adjust pending information
-	size_t bytes = input->buffer.size - 1;
+	uint32_t bytes = (uint32_t) input->buffer.size - 1;
 	int result = WBNET_RECEIVE(input->channel, input->buffer.data, &bytes, timeout);
 	if (result < 0) return result;
 	input->buffer.pending = (int) bytes;
@@ -64,14 +64,14 @@ static int webster_writeOrSend(
 	// send any pending data if the given one does not fit the internal buffer
 	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
 	{
-		WBNET_SEND(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
+		WBNET_SEND(output->channel, output->buffer.data, (uint32_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 
 	// if the data does not fit the internal buffer at all, send immediately;
 	// otherwise, copy the data to the intenal buffer
 	if (size > (int) output->buffer.size)
-		WBNET_SEND(output->channel, buffer, (size_t) size);
+		WBNET_SEND(output->channel, buffer, (uint32_t) size);
 	else
 	{
 		memcpy(output->buffer.current, buffer, (size_t) size);
@@ -436,7 +436,7 @@ int WebsterFlush(
 	// send all remaining body data
 	if (output->buffer.current > output->buffer.data)
 	{
-		WBNET_SEND(output->channel, output->buffer.data, (size_t) (output->buffer.current - output->buffer.data));
+		WBNET_SEND(output->channel, output->buffer.data, (uint32_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 

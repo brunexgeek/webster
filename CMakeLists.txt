@@ -84,8 +84,9 @@ find_package(Threads REQUIRED)
 file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/library/*.c")
 
 add_definitions(-DBUILDING_WEBSTER=1)
-include_directories("${CMAKE_CURRENT_LIST_DIR}/include")
 add_library(libwebster ${LIBRARY_TYPE} ${SOURCES})
+target_include_directories(libwebster
+    PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 #target_link_libraries(libwebster ${CMAKE_THREAD_LIBS_INIT})
 set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"
