@@ -3,7 +3,6 @@
 
 
 #include "http.h"
-#include <sys/socket.h>
 #include <webster/api.h>
 #include <poll.h>
 
@@ -33,7 +32,6 @@ struct webster_server_t_
     char *host;
     int port;
     int maxClients;
-    struct pollfd pfd;
     uint32_t bufferSize;
 };
 

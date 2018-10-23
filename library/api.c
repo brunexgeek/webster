@@ -3,16 +3,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stdarg.h>
 #include "network.h"
 
 
@@ -155,7 +145,6 @@ int WebsterCreate(
 	(*server)->channel = NULL;
 	(*server)->port = -1;
 	(*server)->host = NULL;
-	(*server)->pfd.events = POLLIN;
 	(*server)->bufferSize = WEBSTER_MAX_HEADER;
 
 	return WBERR_OK;
