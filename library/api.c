@@ -30,7 +30,247 @@ static const char *HTTP_METHODS[] =
 };
 
 
-int webster_releaseMessage(
+static int webster_releaseMessage(
+	webster_message_t *message );
+
+
+//
+// Client API
+//
+
+
+int WebsterConnect(
+    webster_client_t *client,
+    const char *host,
+    int port,
+	const char *resource )
+{
+	if (client == NULL || port < 0 || port > 0xFFFF)
+		return WBERR_INVALID_ARGUMENT;
+	if (host == NULL || host[0] == 0)
+		host = "127.0.0.1";
+	if (resource == NULL || resource[0] == 0)
+		resource = "/";
+
+	size_t hostLen = strlen(host);
+	size_t resourceLen = strlen(resource);
+
+	// allocate memory for everything
+	*client = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_)
+		+ hostLen + 1 + resourceLen + 1);
+	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	// try to connect with the remote host
+	int result = WBNET_OPEN( &(*client)->channel );
+	if (result != WBERR_OK) goto ESCAPE;
+	result = WBNET_CONNECT((*client)->channel, host, port);
+	if (result != WBERR_OK) goto ESCAPE;
+
+	(*client)->port = port;
+	(*client)->host = (char*) (*client) + sizeof(struct webster_client_t_);
+	strcpy((*client)->host, host);
+	(*client)->resource = (*client)->host + hostLen + 1;
+	strcpy((*client)->resource, resource);
+	(*client)->bufferSize = WEBSTER_MAX_HEADER;
+
+	return WBERR_OK;
+
+ESCAPE:
+	if (*client != NULL)
+	{
+		if ((*client)->channel != NULL) WBNET_CLOSE((*client)->channel);
+		free(*client);
+		*client = NULL;
+	}
+	return result;
+}
+
+
+int WebsterCommunicate(
+    webster_client_t *client,
+    webster_handler_t *callback,
+    void *data )
+{
+	struct webster_message_t_ request, response;
+	uint8_t *buffers = (uint8_t*) malloc((*client)->bufferSize * 2);
+	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	memset(&request, 0, sizeof(struct webster_message_t_));
+	request.channel = (*client)->channel;
+	request.buffer.data = buffers;
+	request.buffer.data[0] = 0;
+	request.buffer.size = (*client)->bufferSize;
+	request.type = WBMT_REQUEST;
+	request.header.method = WBM_GET;
+	request.body.expected = -1;
+	request.header.resource = (*client)->resource;
+
+	memset(&response, 0, sizeof(struct webster_message_t_));
+	response.channel = (*client)->channel;
+	response.buffer.data = buffers + (*client)->bufferSize;
+	response.buffer.data[0] = 0;
+	response.buffer.size = (*client)->bufferSize;
+	response.type = WBMT_RESPONSE;
+	response.header.method = WBM_NONE;
+	response.body.expected = -1;
+
+	callback(&request, &response, data);
+
+	webster_releaseMessage(&request);
+	webster_releaseMessage(&response);
+	free(buffers);
+
+	return WBERR_OK;
+}
+
+
+int WebsterDisconnect(
+    webster_client_t *client )
+{
+	WBNET_CLOSE((*client)->channel);
+	free(*client);
+	*client = NULL;
+	return WBERR_OK;
+}
+
+
+//
+// Server API
+//
+
+
+
+int WebsterCreate(
+    webster_server_t *server,
+	int maxClients )
+{
+	if (server == NULL) return WBERR_INVALID_ARGUMENT;
+
+	if (maxClients <= 0 || maxClients >= WEBSTER_MAX_CONNECTIONS)
+		maxClients = WEBSTER_MAX_CONNECTIONS;
+
+	*server = (webster_server_t) calloc(1, sizeof(struct webster_server_t_));
+	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	(*server)->channel = NULL;
+	(*server)->port = -1;
+	(*server)->host = NULL;
+	(*server)->pfd.events = POLLIN;
+	(*server)->bufferSize = WEBSTER_MAX_HEADER;
+
+	return WBERR_OK;
+}
+
+
+int WebsterDestroy(
+    webster_server_t *server )
+{
+	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+
+	WebsterStop(server);
+
+	if ((*server)->host != NULL) free((*server)->host);
+	free(*server);
+	*server = NULL;
+
+	return WBERR_OK;
+}
+
+
+int WebsterStart(
+	webster_server_t *server,
+    const char *host,
+    int port )
+{
+	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+
+	int result = WBNET_OPEN(&(*server)->channel);
+	if (result != WBERR_OK) return result;
+
+	return WBNET_LISTEN((*server)->channel, host, port, (*server)->maxClients);
+}
+
+
+int WebsterStop(
+    webster_server_t *server )
+{
+	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+
+	WBNET_CLOSE((*server)->channel);
+	(*server)->channel = NULL;
+
+	return WBERR_OK;
+}
+
+
+int WebsterAccept(
+    webster_server_t *server,
+	webster_client_t *remote )
+{
+	if (server == NULL || remote == NULL) return WBERR_INVALID_ARGUMENT;
+
+	void *client = NULL;
+	int result = WBNET_ACCEPT((*server)->channel, &client);
+	if (result != WBERR_OK) return result;
+
+	*remote = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_));
+	if (*remote == NULL)
+	{
+		WBNET_CLOSE(client);
+		return WBERR_MEMORY_EXHAUSTED;
+	}
+
+	(*remote)->channel = client;
+	(*remote)->port = 0;
+	(*remote)->host = NULL;
+	(*remote)->resource = NULL;
+	(*remote)->bufferSize = (*server)->bufferSize;
+
+	return WBERR_OK;
+}
+
+
+int WebsterSetOption(
+	webster_server_t *server,
+    int option,
+    int value )
+{
+	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+
+	if (option == WBO_BUFFER_SIZE)
+	{
+		if (value < 1024 || value > 1024 * 1024 * 10) value = WEBSTER_MAX_HEADER;
+		(*server)->bufferSize = (uint32_t) (value & 0x7FFFFFFF);
+	}
+	else
+		return WBERR_INVALID_ARGUMENT;
+
+	return WBERR_OK;
+}
+
+
+int WebsterGetOption(
+	webster_server_t *server,
+    int option,
+    int *value )
+{
+	if (server == NULL || *server == NULL || value == NULL) return WBERR_INVALID_ARGUMENT;
+
+	if (option == WBO_BUFFER_SIZE)
+		*value = (int) (*server)->bufferSize;
+	else
+		return WBERR_INVALID_ARGUMENT;
+
+	return WBERR_OK;
+}
+
+
+//
+// Request and response API
+//
+
+
+static int webster_releaseMessage(
 	webster_message_t *message )
 {
 	if (message == NULL) return WBERR_INVALID_ARGUMENT;
@@ -513,3 +753,4 @@ WEBSTER_EXPORTED int WebsterGetOutputState(
 
 	return WBERR_OK;
 }
+

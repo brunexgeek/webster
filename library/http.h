@@ -8,9 +8,6 @@
 #include "internal.h"
 
 
-#define HTTP_MAX_HEADER       (4 * 1024)
-
-
 WEBSTER_PRIVATE
 const char *http_statusMessage(
     int status );

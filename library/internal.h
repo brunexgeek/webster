@@ -6,14 +6,11 @@
 #include <sys/socket.h>
 #include <webster/api.h>
 #include <poll.h>
-#include <stdbool.h>
 
 
 #define WEBSTER_MAX_CONNECTIONS     1000
 #define WEBSTER_MAX_HEADER          (1024 * 4) // 4KB
 #define WEBSTER_READ_TIMEOUT        10000
-
-#define GET_DATA_POINTER(ptr, type) ( (uint8_t*) (x) + sizeof(type) )
 
 #define WBMT_UNKNOWN    0x00
 #define WBMT_REQUEST    0x01
@@ -26,7 +23,7 @@ struct webster_client_t_
 	char *host;
 	int port;
     char *resource;
-    int bufferSize;
+    uint32_t bufferSize;
 };
 
 
@@ -37,7 +34,7 @@ struct webster_server_t_
     int port;
     int maxClients;
     struct pollfd pfd;
-    int bufferSize;
+    uint32_t bufferSize;
 };
 
 
