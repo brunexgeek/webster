@@ -26,7 +26,7 @@ struct webster_client_t_
 	char *host;
 	int port;
     char *resource;
-	struct pollfd pfd;
+    int bufferSize;
 };
 
 

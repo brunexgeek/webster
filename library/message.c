@@ -16,6 +16,20 @@
 #include "network.h"
 
 
+static const char *HTTP_METHODS[] =
+{
+    "",
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "CONNECT",
+    "OPTIONS",
+    "TRACE"
+};
+
+
 int webster_releaseMessage(
 	webster_message_t *message )
 {
@@ -264,6 +278,19 @@ int WebsterSetStatus(
 }
 
 
+int WebsterSetMethod(
+    webster_message_t *output,
+    int method )
+{
+	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+
+	if (method >= WBM_GET && method <= WBM_TRACE)
+		output->header.method = method;
+
+	return WBERR_OK;
+}
+
+
 static int webster_writeStatusLine(
 	webster_message_t *output )
 {
@@ -293,8 +320,11 @@ static int webster_writeResourceLine(
 	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
 	output->state = WBS_HEADER;
 
+	if (output->header.method < WBM_GET || output->header.method > WBM_TRACE)
+		output->header.method = WBM_GET;
+
 	char temp[128];
-	snprintf(temp, sizeof(temp) - 1, "GET %s HTTP/1.1\r\n", output->header.resource);
+	snprintf(temp, sizeof(temp) - 1, "%s %s HTTP/1.1\r\n", HTTP_METHODS[output->header.method], output->header.resource);
 	return webster_writeOrSend(output, (uint8_t*) temp, (int) strlen(temp));
 }
 

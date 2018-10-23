@@ -36,7 +36,7 @@ int WebsterConnect(
 	strcpy((*client)->host, host);
 	(*client)->resource = (*client)->host + hostLen + 1;
 	strcpy((*client)->resource, resource);
-	(*client)->pfd.events = POLLIN;
+	(*client)->bufferSize = WEBSTER_MAX_HEADER;
 
 	return WBERR_OK;
 
@@ -61,22 +61,26 @@ int WebsterCommunicate(
     void *data )
 {
 	struct webster_message_t_ request, response;
-	uint8_t *buffers = (uint8_t*) malloc(WEBSTER_MAX_HEADER * 2);
+	uint8_t *buffers = (uint8_t*) malloc((*client)->bufferSize * 2);
 	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	memset(&request, 0, sizeof(struct webster_message_t_));
 	request.channel = (*client)->channel;
 	request.buffer.data = buffers;
-	request.buffer.size = WEBSTER_MAX_HEADER;
+	request.buffer.data[0] = 0;
+	request.buffer.size = (*client)->bufferSize;
 	request.type = WBMT_REQUEST;
-	request.header.resource = (*client)->resource;
+	request.header.method = WBM_GET;
 	request.body.expected = -1;
+	request.header.resource = (*client)->resource;
 
 	memset(&response, 0, sizeof(struct webster_message_t_));
 	response.channel = (*client)->channel;
-	response.buffer.data = buffers + WEBSTER_MAX_HEADER;
-	response.buffer.size = WEBSTER_MAX_HEADER;
+	response.buffer.data = buffers + (*client)->bufferSize;
+	response.buffer.data[0] = 0;
+	response.buffer.size = (*client)->bufferSize;
 	response.type = WBMT_RESPONSE;
+	response.header.method = WBM_NONE;
 	response.body.expected = -1;
 
 	callback(&request, &response, data);

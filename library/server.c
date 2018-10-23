@@ -86,8 +86,7 @@ int WebsterAccept(
 	int result = WBNET_ACCEPT((*server)->channel, &client);
 	if (result != WBERR_OK) return result;
 
-	*remote = (struct webster_client_t_*) calloc(1,
-		sizeof(struct webster_client_t_) + (size_t) (*server)->bufferSize * 2 );
+	*remote = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_));
 	if (*remote == NULL)
 	{
 		WBNET_CLOSE(client);
@@ -98,7 +97,7 @@ int WebsterAccept(
 	(*remote)->port = 0;
 	(*remote)->host = NULL;
 	(*remote)->resource = NULL;
-	(*remote)->pfd.events = POLLIN;
+	(*remote)->bufferSize = (*server)->bufferSize;
 
 	return WBERR_OK;
 }

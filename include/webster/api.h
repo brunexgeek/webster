@@ -43,6 +43,7 @@
 #define WBT_BODY                         2
 #define WBT_EMPTY                        3
 
+#define WBM_NONE                         0
 #define WBM_GET                          1
 #define WBM_HEAD                         2
 #define WBM_POST                         3
@@ -323,6 +324,10 @@ WEBSTER_EXPORTED int WebsterGetInputState(
 WEBSTER_EXPORTED int WebsterSetStatus(
     webster_message_t *output,
     int status );
+
+WEBSTER_EXPORTED int WebsterSetMethod(
+    webster_message_t *output,
+    int method );
 
 WEBSTER_EXPORTED int WebsterSetStringField(
     webster_message_t *output,
