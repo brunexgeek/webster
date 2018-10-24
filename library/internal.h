@@ -4,7 +4,6 @@
 
 #include "http.h"
 #include <webster/api.h>
-#include <poll.h>
 
 
 #define WEBSTER_MAX_CONNECTIONS     1000

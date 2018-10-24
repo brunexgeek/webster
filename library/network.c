@@ -2,12 +2,21 @@
 
 #include <sys/types.h>
 #include "network.h"
+
+#if defined(_WIN32) || defined(WIN32)
+typedef SSIZE_T ssize_t;
+#include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <unistd.h>
+#include <poll.h>
+#endif
+
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
 #include <stdlib.h>
 
 
@@ -77,8 +86,14 @@ static int network_close(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
+	#if defined(_WIN32) || defined(WIN32)
+	shutdown(chann->socket, SD_BOTH);
+	closesocket(chann->socket);
+	#else
 	shutdown(chann->socket, SHUT_RDWR);
 	close(chann->socket);
+	#endif
+
 	chann->socket = chann->poll.fd = 0;
 	free(channel);
 
@@ -121,7 +136,11 @@ static int network_receive(
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
 	// wait for data arrive
+	#if defined(_WIN32) || defined(WIN32)
+	int result = WSAPoll(&chann->poll, 1, timeout);
+	#else
 	int result = poll(&chann->poll, 1, timeout);
+	#endif
 	if (result == 0)
 		return WBERR_TIMEOUT;
 	else
@@ -149,7 +168,12 @@ static int network_send(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
-	if (send(chann->socket, buffer, (size_t) size, MSG_NOSIGNAL) != 0)
+	#if defined(_WIN32) || defined(WIN32)
+	int flags = 0;
+	#else
+	int flags = MSG_NOSIGNAL;
+	#endif
+	if (send(chann->socket, buffer, (size_t) size, flags) != 0)
 		return WBERR_SOCKET;
 
 	return WBERR_OK;
@@ -164,7 +188,11 @@ static int network_accept(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
+	#if defined(_WIN32) || defined(WIN32)
+	int result = WSAPoll(&chann->poll, 1, 1000);
+	#else
 	int result = poll(&chann->poll, 1, 1000);
+	#endif
 	if (result == 0)
 		return WBERR_TIMEOUT;
 	else
@@ -175,7 +203,7 @@ static int network_accept(
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	struct sockaddr_in address;
-	socklen_t addressLength = sizeof(address);
+	size_t addressLength = sizeof(address);
 	int socket = accept(chann->socket, (struct sockaddr *) &address, &addressLength);
 
 	if (socket < 0)

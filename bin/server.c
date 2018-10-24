@@ -17,6 +17,56 @@
 #define PROGRAM_TITLE     "Webster HTTP Server"
 
 
+struct mime_t
+{
+	const char *extension;
+	const char *mime;
+};
+
+
+static const struct mime_t MIME_TABLE[] =
+{
+	{ "7z"   , "application/x-7z-compressed" },
+	{ "aac"  , "audio/aac" },
+	{ "avi"  , "video/x-msvideo" },
+	{ "bmp"  , "image/bmp" },
+	{ "bz"   , "application/x-bzip" },
+	{ "bz2"  , "application/x-bzip2" },
+	{ "csh"  , "text/plain" },
+	{ "css"  , "text/css" },
+	{ "csv"  , "text/csv" },
+	{ "gif"  , "image/gif" },
+	{ "htm"  , "text/html" },
+	{ "html" , "text/html" },
+	{ "jpeg" , "text/html" },
+	{ "jpg"  , "image/jpeg" },
+	{ "js"   , "application/javascript" },
+	{ "json" , "application/json" },
+	{ "mp3"  , "audio/mp3" },
+	{ "mp4"  , "video/mp4" },
+	{ "mpeg" , "video/mpeg" },
+	{ "oga"  , "audio/ogg" },
+	{ "ogg"  , "audio/ogg" },
+	{ "ogv"  , "video/ogg" },
+	{ "png"  , "image/png" },
+	{ "pdf"  , "application/pdf" },
+	{ "rar"  , "application/x-rar-compressed" },
+	{ "sh"   , "text/plain" },
+	{ "svg"  , "image/svg+xml" },
+	{ "tar"  , "application/x-tar" },
+	{ "tif"  , "image/tiff" },
+	{ "tiff" , "image/tiff" },
+	{ "txt"  , "text/plain" },
+	{ "wav"  , "audio/wav" },
+	{ "weba" , "audio/webm" },
+	{ "webm" , "video/webm" },
+	{ "webp" , "image/webp" },
+	{ "xml"  , "application/xml" },
+	{ "zip"  , "application/zip" },
+};
+#define MIME_COUNT   sizeof(MIME_TABLE) / sizeof(struct mime_t)
+
+
 static int serverState = SERVER_RUNNING;
 
 static char rootDirectory[PATH_MAX];
@@ -60,18 +110,26 @@ static void main_signalHandler(
 static const char *main_getMime(
 	const char *fileName )
 {
-	int len = (int) strlen(fileName);
-	if (len < 4) return "application/octet-stream";
-	fileName += len - 4;
+	static const char *DEFAULT_MIME = "application/octet-stream";
+	if (fileName == NULL || fileName[0] == 0) return DEFAULT_MIME;
+	const char *ptr = strrchr(fileName, '.');
+	if (ptr == NULL || ++ptr == 0) return DEFAULT_MIME;
 
-	if (strstr(fileName, ".jpg") || strstr(fileName, ".jpeg")) return "image/jpeg";
-	if (strstr(fileName, ".png")) return "image/png";
-	if (strstr(fileName, ".gif")) return "image/gif";
-	if (strstr(fileName, ".mp4")) return "video/mp4";
-	if (strstr(fileName, ".mp3")) return "audio/mp3";
-	if (strstr(fileName, "webm")) return "video/webm";
+	int first = 0;
+    int last = MIME_COUNT - 1;
 
-	return "application/octet-stream";
+    while (first <= last)
+	{
+		int current = (first + last) / 2;
+		int dir = strcmp(ptr, MIME_TABLE[current].extension);
+		if (dir == 0) return MIME_TABLE[current].mime;
+		if (dir < 0)
+			last = current - 1;
+		else
+			first = current + 1;
+	}
+
+	return DEFAULT_MIME;
 }
 
 
