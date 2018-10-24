@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include "network.h"
 
-#if defined(_WIN32) || defined(WIN32)
+#ifdef WB_WINDOWS
 typedef SSIZE_T ssize_t;
 #include <winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
@@ -19,6 +19,20 @@ typedef SSIZE_T ssize_t;
 #include <errno.h>
 #include <stdlib.h>
 
+
+#if defined(WB_WINDOWS) && (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
+HINSTANCE winSocketLib;
+
+// Note: on Windows XP or older, the functions 'getaddrinfo' and 'freeaddrinfo'
+//       should be loaded manually.
+
+getaddrinfo_f getaddrinfo;
+
+freeaddrinfo_f freeaddrinfo;
+
+#endif
+
+static webster_memory_t memory = { NULL, NULL };
 
 typedef struct
 {
@@ -56,6 +70,58 @@ static int network_lookupIPv4(
 }
 
 
+static int network_initialize(
+	webster_memory_t *mem )
+{
+	memory.malloc = mem->malloc;
+	memory.free   = mem->free;
+
+	#ifdef WB_WINDOWS
+	int err = 0;
+
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	wVersionRequested = MAKEWORD( 2, 0 );
+	err = WSAStartup( wVersionRequested, &wsaData );
+	if(err != 0) return WBERR_SOCKET;
+
+	#if (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
+	winSocketLib = LoadLibrary( "WS2_32.dll" );
+	if (winSocketLib == NULL) return WBERR_SOCKET;
+
+	getaddrinfo = NULL;
+	freeaddrinfo = NULL
+
+	getaddrinfo = (getaddrinfo_f)GetProcAddress(winSocketLib, "getaddrinfo");
+	if (getaddrinfo == NULL) return;
+
+	freeaddrinfo = (freeaddrinfo_f)GetProcAddress(winSocketLib, "freeaddrinfo");
+	if (freeaddrinfo == NULL) return;
+	#endif
+
+	#endif // __WINDOWS__
+
+	return WBERR_OK;
+}
+
+
+static int network_terminate()
+{
+	memory.malloc = NULL;
+	memory.free   = NULL;
+
+	#ifdef WB_WINDOWS
+	#if (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
+	getaddrinfo = NULL;
+	freeaddrinfo = NULL;
+	#endif
+	WSACleanup();
+	#endif
+
+	return WBERR_OK;
+}
+
+
 static int network_open(
 	void **channel )
 {
@@ -86,7 +152,7 @@ static int network_close(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
-	#if defined(_WIN32) || defined(WIN32)
+	#ifdef WB_WINDOWS
 	shutdown(chann->socket, SD_BOTH);
 	closesocket(chann->socket);
 	#else
@@ -136,7 +202,7 @@ static int network_receive(
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
 	// wait for data arrive
-	#if defined(_WIN32) || defined(WIN32)
+	#ifdef WB_WINDOWS
 	int result = WSAPoll(&chann->poll, 1, timeout);
 	#else
 	int result = poll(&chann->poll, 1, timeout);
@@ -168,7 +234,7 @@ static int network_send(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
-	#if defined(_WIN32) || defined(WIN32)
+	#ifdef WB_WINDOWS
 	int flags = 0;
 	#else
 	int flags = MSG_NOSIGNAL;
@@ -188,7 +254,7 @@ static int network_accept(
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
-	#if defined(_WIN32) || defined(WIN32)
+	#ifdef WB_WINDOWS
 	int result = WSAPoll(&chann->poll, 1, 1000);
 	#else
 	int result = poll(&chann->poll, 1, 1000);
@@ -203,7 +269,12 @@ static int network_accept(
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	struct sockaddr_in address;
-	size_t addressLength = sizeof(address);
+	#ifdef WB_WINDOWS
+	size_t addressLength;
+	#else
+	socklen_t addressLength;
+	#endif
+	addressLength = sizeof(address);
 	int socket = accept(chann->socket, (struct sockaddr *) &address, &addressLength);
 
 	if (socket < 0)
@@ -258,6 +329,8 @@ static int network_listen(
 
 static webster_network_t DEFAULT_IMPL =
 {
+	network_initialize,
+	network_terminate,
 	network_open,
 	network_close,
 	network_connect,
@@ -267,22 +340,17 @@ static webster_network_t DEFAULT_IMPL =
 	network_listen
 };
 
-WEBSTER_PRIVATE webster_network_t networkImpl =
-{
-	network_open,
-	network_close,
-	network_connect,
-	network_receive,
-	network_send,
-	network_accept,
-	network_listen
-};
+WEBSTER_PRIVATE webster_network_t networkImpl = { NULL, NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL };
 
 
 int WebsterSetNetworkImpl(
 	webster_network_t *impl )
 {
-	if (impl == NULL ||
+	if (impl == NULL) impl = &DEFAULT_IMPL;
+
+	if (impl->initialize == NULL ||
+		impl->terminate == NULL ||
 		impl->open == NULL ||
 		impl->close == NULL ||
 		impl->connect == NULL ||
@@ -292,25 +360,29 @@ int WebsterSetNetworkImpl(
 		impl->listen == NULL)
 		return WBERR_INVALID_ARGUMENT;
 
-	networkImpl.open    = impl->open;
-	networkImpl.close   = impl->close;
-	networkImpl.connect = impl->connect;
-	networkImpl.receive = impl->receive;
-	networkImpl.send    = impl->send;
-	networkImpl.accept  = impl->accept;
-	networkImpl.listen  = impl->listen;
+	networkImpl.initialize = impl->initialize;
+	networkImpl.terminate  = impl->terminate;
+	networkImpl.open       = impl->open;
+	networkImpl.close      = impl->close;
+	networkImpl.connect    = impl->connect;
+	networkImpl.receive    = impl->receive;
+	networkImpl.send       = impl->send;
+	networkImpl.accept     = impl->accept;
+	networkImpl.listen     = impl->listen;
 	return WBERR_OK;
 }
 
 
 int WebsterResetNetworkImpl()
 {
-	networkImpl.open    = DEFAULT_IMPL.open;
-	networkImpl.close   = DEFAULT_IMPL.close;
-	networkImpl.connect = DEFAULT_IMPL.connect;
-	networkImpl.receive = DEFAULT_IMPL.receive;
-	networkImpl.send    = DEFAULT_IMPL.send;
-	networkImpl.accept  = DEFAULT_IMPL.accept;
-	networkImpl.listen  = DEFAULT_IMPL.listen;
+	networkImpl.initialize = NULL;
+	networkImpl.terminate  = NULL;
+	networkImpl.open       = NULL;
+	networkImpl.close      = NULL;
+	networkImpl.connect    = NULL;
+	networkImpl.receive    = NULL;
+	networkImpl.send       = NULL;
+	networkImpl.accept     = NULL;
+	networkImpl.listen     = NULL;
 	return WBERR_OK;
 }

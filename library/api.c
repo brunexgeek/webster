@@ -20,8 +20,52 @@ static const char *HTTP_METHODS[] =
 };
 
 
+WEBSTER_PRIVATE webster_memory_t memory = { NULL, NULL };
+
+
 static int webster_releaseMessage(
 	webster_message_t *message );
+
+
+int WebsterInitialize(
+    webster_memory_t *mem,
+	webster_network_t *net )
+{
+	if (mem != NULL && (mem->malloc == NULL || mem->free == NULL))
+		return WBERR_INVALID_ARGUMENT;
+
+	if (mem != NULL)
+	{
+		memory.malloc = mem->malloc;
+		memory.free = mem->free;
+	}
+	else
+	{
+		memory.malloc = malloc;
+		memory.free = free;
+	}
+
+	int result = WebsterSetNetworkImpl(net);
+	if (result != WBERR_OK) goto ESCAPE;
+	result = WBNET_INITIALIZE(&memory);
+	if (result != WBERR_OK) goto ESCAPE;
+
+	return WBERR_OK;
+ESCAPE:
+	WebsterTerminate();
+	return result;
+}
+
+
+int WebsterTerminate()
+{
+	if (WBNET_TERMINATE != NULL) WBNET_TERMINATE();
+	WebsterResetNetworkImpl();
+	memory.malloc = NULL;
+	memory.free = NULL;
+
+	return WBERR_OK;
+}
 
 
 //
@@ -69,7 +113,7 @@ ESCAPE:
 	if (*client != NULL)
 	{
 		if ((*client)->channel != NULL) WBNET_CLOSE((*client)->channel);
-		free(*client);
+		memory.free(*client);
 		*client = NULL;
 	}
 	return result;
@@ -82,7 +126,7 @@ int WebsterCommunicate(
     void *data )
 {
 	struct webster_message_t_ request, response;
-	uint8_t *buffers = (uint8_t*) malloc((*client)->bufferSize * 2);
+	uint8_t *buffers = (uint8_t*) memory.malloc((*client)->bufferSize * 2);
 	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	memset(&request, 0, sizeof(struct webster_message_t_));
@@ -108,7 +152,7 @@ int WebsterCommunicate(
 
 	webster_releaseMessage(&request);
 	webster_releaseMessage(&response);
-	free(buffers);
+	memory.free(buffers);
 
 	return WBERR_OK;
 }
@@ -118,7 +162,7 @@ int WebsterDisconnect(
     webster_client_t *client )
 {
 	WBNET_CLOSE((*client)->channel);
-	free(*client);
+	memory.free(*client);
 	*client = NULL;
 	return WBERR_OK;
 }
@@ -158,8 +202,8 @@ int WebsterDestroy(
 
 	WebsterStop(server);
 
-	if ((*server)->host != NULL) free((*server)->host);
-	free(*server);
+	if ((*server)->host != NULL) memory.free((*server)->host);
+	memory.free(*server);
 	*server = NULL;
 
 	return WBERR_OK;

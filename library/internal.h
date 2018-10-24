@@ -6,6 +6,11 @@
 #include <webster/api.h>
 
 
+#if defined(_WIN32) || defined(WIN32)
+#define WB_WINDOWS
+#endif
+
+
 #define WEBSTER_MAX_CONNECTIONS     1000
 #define WEBSTER_MAX_HEADER          (1024 * 4) // 4KB
 #define WEBSTER_READ_TIMEOUT        10000

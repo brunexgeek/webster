@@ -4,6 +4,8 @@
 
 #include "internal.h"
 
+#define WBNET_INITIALIZE  networkImpl.initialize
+#define WBNET_TERMINATE   networkImpl.terminate
 #define WBNET_OPEN        networkImpl.open
 #define WBNET_CLOSE       networkImpl.close
 #define WBNET_CONNECT     networkImpl.connect
@@ -14,5 +16,9 @@
 
 extern webster_network_t networkImpl;
 
+WEBSTER_PRIVATE int WebsterSetNetworkImpl(
+	webster_network_t *impl );
+
+WEBSTER_PRIVATE int WebsterResetNetworkImpl();
 
 #endif // WEBSTER_NETWORK_HH

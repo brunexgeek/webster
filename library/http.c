@@ -7,6 +7,9 @@
 #include <stdio.h>
 
 
+extern webster_memory_t memory;
+
+
 const char *http_statusMessage(
     int status )
 {
@@ -223,7 +226,7 @@ int http_addField(
     const char *value )
 {
 	size_t size = sizeof(webster_field_t) + strlen(value) + 1 + strlen(name) + 1;
-	webster_field_t *field = (webster_field_t*) malloc(size);
+	webster_field_t *field = (webster_field_t*) memory.malloc(size);
 	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
     field->name = (char*) field + sizeof(webster_field_t);
     field->value = field->name + strlen(name) + 1;
@@ -256,7 +259,7 @@ void http_releaseFields(
     {
         ptr = field;
         field = field->next;
-        free(ptr);
+        memory.free(ptr);
     }
     header->fields = NULL;
     header->fieldCount = 0;
@@ -430,7 +433,7 @@ ESCAPE:
     while (field != NULL)
     {
         next = field->next;
-        free(field);
+        memory.free(field);
         field = next;
     }
     header->fields = NULL;

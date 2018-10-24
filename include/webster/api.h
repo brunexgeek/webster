@@ -19,6 +19,7 @@
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 
 
 #define WBERR_OK                         0
@@ -183,6 +184,18 @@ typedef int (webster_handler_t)(
     void *data );
 
 
+typedef struct
+{
+    void *(*malloc)(size_t size);
+    void (*free)(void *ptr);
+} webster_memory_t;
+
+
+typedef int webster_network_initialize(
+    webster_memory_t *memory );
+
+typedef int webster_network_terminate();
+
 typedef int webster_network_open(
 	void **channel );
 
@@ -217,6 +230,8 @@ typedef int webster_network_listen(
 
 typedef struct
 {
+    webster_network_initialize *initialize;
+    webster_network_terminate *terminate;
 	webster_network_open *open;
 	webster_network_close *close;
 	webster_network_connect *connect;
@@ -230,6 +245,14 @@ typedef struct
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+WEBSTER_EXPORTED int WebsterInitialize(
+    webster_memory_t *mem,
+	webster_network_t *net );
+
+WEBSTER_EXPORTED int WebsterTerminate();
+
 
 /*
  * HTTP client API
@@ -359,15 +382,6 @@ WEBSTER_EXPORTED int WebsterGetOutputState(
 	webster_message_t *output,
     int *state );
 
-
-/**
- * Network implementation API
- */
-
-WEBSTER_EXPORTED int WebsterSetNetworkImpl(
-	webster_network_t *impl );
-
-WEBSTER_EXPORTED int WebsterResetNetworkImpl();
 
 #ifdef __cplusplus
 }
