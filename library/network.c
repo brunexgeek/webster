@@ -35,7 +35,7 @@ freeaddrinfo_f freeaddrinfo;
 
 #endif
 
-static webster_memory_t memory = { NULL, NULL };
+static webster_memory_t memory = { NULL, NULL, NULL };
 
 typedef struct
 {
@@ -77,6 +77,7 @@ static int network_initialize(
 	webster_memory_t *mem )
 {
 	memory.malloc = mem->malloc;
+	memory.calloc = mem->calloc;
 	memory.free   = mem->free;
 
 	#ifdef WB_WINDOWS
@@ -110,6 +111,7 @@ static int network_initialize(
 
 static int network_terminate()
 {
+	memory.malloc = NULL;
 	memory.malloc = NULL;
 	memory.free   = NULL;
 

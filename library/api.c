@@ -20,7 +20,7 @@ static const char *HTTP_METHODS[] =
 };
 
 
-WEBSTER_PRIVATE webster_memory_t memory = { NULL, NULL };
+WEBSTER_PRIVATE webster_memory_t memory = { NULL, NULL, NULL };
 
 
 static int webster_releaseMessage(
@@ -37,11 +37,13 @@ int WebsterInitialize(
 	if (mem != NULL)
 	{
 		memory.malloc = mem->malloc;
+		memory.calloc = mem->calloc;
 		memory.free = mem->free;
 	}
 	else
 	{
 		memory.malloc = malloc;
+		memory.calloc = calloc;
 		memory.free = free;
 	}
 
@@ -62,6 +64,7 @@ int WebsterTerminate()
 	if (WBNET_TERMINATE != NULL) WBNET_TERMINATE();
 	WebsterResetNetworkImpl();
 	memory.malloc = NULL;
+	memory.calloc = NULL;
 	memory.free = NULL;
 
 	return WBERR_OK;
@@ -101,12 +104,8 @@ int WebsterParseURL(
 		{
 			pe = ++pb;
 			while (*pe >= '0' && *pe <= '9') ++pe;
-			if (pb == pe) return WBERR_INVALID_URL;
+			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_URL;
 			rb = pe;
-		}
-		else
-		{
-			pb = NULL;
 		}
 
 		// extract the resource
@@ -117,28 +116,13 @@ int WebsterParseURL(
 		}
 		if (re != NULL && *re != 0) return WBERR_INVALID_URL;
 
-		if (url[4] == ':')
-			*proto = WBP_HTTP;
-		else
-			*proto = WBP_HTTPS;
-
-		// return the host
-		if (host != NULL)
+		// return the protocol
+		if (proto != NULL)
 		{
-			*host = memory.malloc(he - hb + 1);
-			if (*host != NULL) strncpy(*host, hb, he - hb);
-		}
-
-		// return the resource, if any
-		if (resource != NULL)
-		{
-			if (re != NULL)
-			{
-				*resource = memory.malloc(re - rb + 1);
-				if (*resource != NULL) strncpy(*resource, rb, re - rb);
-			}
+			if (url[4] == ':')
+				*proto = WBP_HTTP;
 			else
-				*resource = NULL;
+				*proto = WBP_HTTPS;
 		}
 
 		// return the port number, if any
@@ -153,9 +137,29 @@ int WebsterParseURL(
 					*port += (int) (*pe - '0') * mult;
 					mult *= 10;
 				}
+				if (*port > 65535) return WBERR_INVALID_URL;
 			}
 			else
 				*port = -1;
+		}
+
+		// return the host
+		if (host != NULL)
+		{
+			*host = memory.calloc(1, he - hb + 1);
+			if (*host != NULL) strncpy(*host, hb, he - hb);
+		}
+
+		// return the resource, if any
+		if (resource != NULL)
+		{
+			if (re != NULL)
+			{
+				*resource = memory.calloc(1, re - rb + 1);
+				if (*resource != NULL) strncpy(*resource, rb, re - rb);
+			}
+			else
+				*resource = NULL;
 		}
 
 		return WBERR_OK;

@@ -139,6 +139,8 @@
 #define WBP_HTTP         1
 #define WBP_HTTPS        2
 
+#define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_TRACE )
+
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;
 
@@ -190,6 +192,7 @@ typedef int (webster_handler_t)(
 typedef struct
 {
     void *(*malloc)(size_t size);
+    void *(*calloc)(size_t count, size_t size);
     void (*free)(void *ptr);
 } webster_memory_t;
 
