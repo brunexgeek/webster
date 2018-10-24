@@ -68,6 +68,103 @@ int WebsterTerminate()
 }
 
 
+int WebsterParseURL(
+	const char *url,
+	int *proto,
+	char **host,
+	int *port,
+	char **resource )
+{
+	if (url == NULL || url[0] == 0) return WBERR_INVALID_ARGUMENT;
+
+	if (tolower(url[0]) == 'h' &&
+		tolower(url[1]) == 't' &&
+		tolower(url[2]) == 't' &&
+		tolower(url[3]) == 'p' &&
+		(tolower(url[4]) == 's' || url[4] == ':'))
+	{
+		// extract the host name
+		char *hb = strstr(url, "://");
+		if (hb == NULL) return WBERR_INVALID_URL;
+		hb += 3;
+		char *he = hb;
+		while (*he != ':' && *he != '/' && *he != 0) ++he;
+		if (hb == he) return WBERR_INVALID_URL;
+
+		char *rb = he;
+		char *re = NULL;
+
+		// extract the port number, if any
+		char *pb = he;
+		char *pe = NULL;
+		if (*pb == ':')
+		{
+			pe = ++pb;
+			while (*pe >= '0' && *pe <= '9') ++pe;
+			if (pb == pe) return WBERR_INVALID_URL;
+			rb = pe;
+		}
+		else
+		{
+			pb = NULL;
+		}
+
+		// extract the resource
+		if (*rb == '/')
+		{
+			re = ++rb;
+			while (*re != 0) ++re;
+		}
+		if (re != NULL && *re != 0) return WBERR_INVALID_URL;
+
+		if (url[4] == ':')
+			*proto = WBP_HTTP;
+		else
+			*proto = WBP_HTTPS;
+
+		// return the host
+		if (host != NULL)
+		{
+			*host = memory.malloc(he - hb + 1);
+			if (*host != NULL) strncpy(*host, hb, he - hb);
+		}
+
+		// return the resource, if any
+		if (resource != NULL)
+		{
+			if (re != NULL)
+			{
+				*resource = memory.malloc(re - rb + 1);
+				if (*resource != NULL) strncpy(*resource, rb, re - rb);
+			}
+			else
+				*resource = NULL;
+		}
+
+		// return the port number, if any
+		if (port != NULL)
+		{
+			if (pe != NULL)
+			{
+				*port = 0;
+				int mult = 1;
+				while (--pe >= pb)
+				{
+					*port += (int) (*pe - '0') * mult;
+					mult *= 10;
+				}
+			}
+			else
+				*port = -1;
+		}
+
+		return WBERR_OK;
+	}
+
+	return WBERR_INVALID_URL;
+}
+
+
 //
 // Client API
 //

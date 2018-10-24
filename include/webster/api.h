@@ -39,6 +39,7 @@
 #define WBERR_INVALID_HEADER_FIELD       -15
 #define WBERR_INVALID_HTTP_VERSION       -16
 #define WBERR_INVALID_HTTP_MESSAGE       -17
+#define WBERR_INVALID_URL                -18
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -135,6 +136,8 @@
 #define WBFI_WARNING                                  67
 #define WBFI_WWW_AUTHENTICATE                         68
 
+#define WBP_HTTP         1
+#define WBP_HTTPS        2
 
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;
@@ -253,6 +256,12 @@ WEBSTER_EXPORTED int WebsterInitialize(
 
 WEBSTER_EXPORTED int WebsterTerminate();
 
+WEBSTER_EXPORTED int WebsterParseURL(
+    const char *url,
+    int *proto,
+    char **host,
+    int *port,
+    char **resource );
 
 /*
  * HTTP client API
