@@ -358,19 +358,23 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
-	if (WebsterCreate(&server, 100) == WBERR_OK)
+	if (WebsterInitialize(NULL, NULL) == WBERR_OK)
 	{
-		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
+		if (WebsterCreate(&server, 100) == WBERR_OK)
 		{
-			while (serverState == SERVER_RUNNING)
+			if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
 			{
-				webster_client_t remote;
-				if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
-				WebsterCommunicate(&remote, main_serverHandler, NULL);
-				WebsterDisconnect(&remote);
+				while (serverState == SERVER_RUNNING)
+				{
+					webster_client_t remote;
+					if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
+					WebsterCommunicate(&remote, main_serverHandler, NULL);
+					WebsterDisconnect(&remote);
+				}
 			}
+			WebsterDestroy(&server);
 		}
-		WebsterDestroy(&server);
+		WebsterTerminate();
 	}
 
 	printf("Server terminated!\n");

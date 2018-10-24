@@ -85,6 +85,8 @@ int main( int argc, char **argv )
 	(void) argc;
 	(void) argv;
 
+	WebsterInitialize(NULL, NULL);
+
     webster_client_t client;
     if (WebsterConnect(&client, "duckduckgo.com", 80, "/") == WBERR_OK)
     {
@@ -93,5 +95,8 @@ int main( int argc, char **argv )
     }
     else
         printf("Failed!\n");
+
+	WebsterTerminate();
+
     return 0;
 }

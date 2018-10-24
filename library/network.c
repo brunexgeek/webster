@@ -4,9 +4,12 @@
 #include "network.h"
 
 #ifdef WB_WINDOWS
-typedef SSIZE_T ssize_t;
 #include <winsock2.h>
+#if (_WIN32_WINNT > 0x0501 || WINVER > 0x0501)
+#include <WS2tcpip.h>
+#endif
 #pragma comment(lib, "ws2_32.lib")
+typedef SSIZE_T ssize_t;
 #else
 #include <sys/socket.h>
 #include <arpa/inet.h>

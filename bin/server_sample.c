@@ -4,8 +4,12 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <linux/limits.h>
 
+#if defined(_WIN32) || defined(WIN32)
+#include <Windows.h>
+#else
+#include <linux/limits.h>
+#endif
 
 #define SERVER_RUNNING    1
 #define SERVER_STOPPING   2
@@ -164,6 +168,7 @@ int main(int argc, char* argv[])
 
 	printf(PROGRAM_TITLE "\n");
 
+	WebsterInitialize(NULL, NULL);
 	if (WebsterCreate(&server, 100) == WBERR_OK)
 	{
 		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
@@ -178,7 +183,7 @@ int main(int argc, char* argv[])
 		}
 		WebsterDestroy(&server);
 	}
-
+	WebsterTerminate();
 	printf("Server terminated!\n");
 
     return 0;
