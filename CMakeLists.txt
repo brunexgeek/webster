@@ -13,12 +13,6 @@ set(CMAKE_BUILD_TYPE "Release"  CACHE STRING  "Specify the build type")
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 
 
-if (NOT LIBRARY_TYPE STREQUAL "STATIC" AND
-    NOT LIBRARY_TYPE STREQUAL "SHARED")
-    set(LIBRARY_TYPE "SHARED")
-endif()
-
-
 if (UNIX)
     set(CMAKE_BUILD_PLATFORM "auto"  CACHE STRING  "Target platform which the binaries will be generated")
     set_property(CACHE CMAKE_BUILD_PLATFORM PROPERTY STRINGS "auto" "x86_64" "x86")
@@ -83,11 +77,25 @@ find_package(Threads REQUIRED)
 
 file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/library/*.c")
 
-add_library(libwebster ${LIBRARY_TYPE} ${SOURCES})
+add_library(libwebster SHARED ${SOURCES})
 target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster
     PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
 set_target_properties(libwebster PROPERTIES
+    OUTPUT_NAME "webster"
+    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    PREFIX "lib" )
+
+
+add_library(libwebster_static STATIC ${SOURCES})
+target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
+target_include_directories(libwebster_static
+    PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+set_target_properties(libwebster_static PROPERTIES
     OUTPUT_NAME "webster"
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
     SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
