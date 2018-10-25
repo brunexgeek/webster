@@ -40,6 +40,14 @@
 #define WBERR_INVALID_HTTP_VERSION       -16
 #define WBERR_INVALID_HTTP_MESSAGE       -17
 #define WBERR_INVALID_URL                -18
+#define WBERR_INVALID_PROTOCOL           -19
+#define WBERR_INVALID_HOST               -20
+#define WBERR_INVALID_PORT               -21
+#define WBERR_INVALID_CHANNEL            -22
+#define WBERR_INVALID_RESOURCE           -23
+#define WBERR_INVALID_CLIENT             -24
+#define WBERR_INVALID_SERVER             -25
+#define WBERR_INVALID_MESSAGE            -26
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -140,6 +148,8 @@
 #define WBP_HTTPS        2
 
 #define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_TRACE )
+#define WB_IS_VALID_PROTO(x)   ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
+
 
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;
@@ -210,6 +220,7 @@ typedef int webster_network_close(
 
 typedef int webster_network_connect(
 	void *channel,
+    int proto,
 	const char *host,
     int port );
 
@@ -272,6 +283,7 @@ WEBSTER_EXPORTED int WebsterParseURL(
 
 WEBSTER_EXPORTED int WebsterConnect(
     webster_client_t *client,
+    int proto,
     const char *host,
     int port,
     const char *resource );
@@ -390,8 +402,8 @@ WEBSTER_EXPORTED int WebsterFlush(
 WEBSTER_EXPORTED int WebsterFinish(
 	webster_message_t *output );
 
-WEBSTER_EXPORTED int WebsterGetOutputState(
-	webster_message_t *output,
+WEBSTER_EXPORTED int WebsterGetState(
+	webster_message_t *message,
     int *state );
 
 

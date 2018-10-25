@@ -176,16 +176,21 @@ int WebsterParseURL(
 
 int WebsterConnect(
     webster_client_t *client,
-    const char *host,
+    int proto,
+	const char *host,
     int port,
 	const char *resource )
 {
-	if (client == NULL || port < 0 || port > 0xFFFF)
-		return WBERR_INVALID_ARGUMENT;
+	if (client == NULL)
+		return WBERR_INVALID_CLIENT;
+	if (port < 0 || port > 0xFFFF)
+		return WBERR_INVALID_PORT;
 	if (host == NULL || host[0] == 0)
-		host = "127.0.0.1";
+		return WBERR_INVALID_HOST;
 	if (resource == NULL || resource[0] == 0)
-		resource = "/";
+		return WBERR_INVALID_RESOURCE;
+	if (!WB_IS_VALID_PROTO(proto))
+		return WBERR_INVALID_PROTOCOL;
 
 	size_t hostLen = strlen(host);
 	size_t resourceLen = strlen(resource);
@@ -198,7 +203,7 @@ int WebsterConnect(
 	// try to connect with the remote host
 	int result = WBNET_OPEN( &(*client)->channel );
 	if (result != WBERR_OK) goto ESCAPE;
-	result = WBNET_CONNECT((*client)->channel, host, port);
+	result = WBNET_CONNECT((*client)->channel, proto, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
 	(*client)->port = port;
@@ -226,6 +231,9 @@ int WebsterCommunicate(
     webster_handler_t *callback,
     void *data )
 {
+	if (client == NULL) return WBERR_INVALID_CLIENT;
+	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
+
 	struct webster_message_t_ request, response;
 	uint8_t *buffers = (uint8_t*) memory.malloc((*client)->bufferSize * 2);
 	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
@@ -262,6 +270,8 @@ int WebsterCommunicate(
 int WebsterDisconnect(
     webster_client_t *client )
 {
+	if (client == NULL) WBERR_INVALID_CLIENT;
+
 	WBNET_CLOSE((*client)->channel);
 	memory.free(*client);
 	*client = NULL;
@@ -279,7 +289,7 @@ int WebsterCreate(
     webster_server_t *server,
 	int maxClients )
 {
-	if (server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 
 	if (maxClients <= 0 || maxClients >= WEBSTER_MAX_CONNECTIONS)
 		maxClients = WEBSTER_MAX_CONNECTIONS;
@@ -299,7 +309,7 @@ int WebsterCreate(
 int WebsterDestroy(
     webster_server_t *server )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
 
 	WebsterStop(server);
 
@@ -316,7 +326,7 @@ int WebsterStart(
     const char *host,
     int port )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
 
 	int result = WBNET_OPEN(&(*server)->channel);
 	if (result != WBERR_OK) return result;
@@ -328,7 +338,7 @@ int WebsterStart(
 int WebsterStop(
     webster_server_t *server )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
 
 	WBNET_CLOSE((*server)->channel);
 	(*server)->channel = NULL;
@@ -341,7 +351,8 @@ int WebsterAccept(
     webster_server_t *server,
 	webster_client_t *remote )
 {
-	if (server == NULL || remote == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL) return WBERR_INVALID_SERVER;
+	if (remote == NULL) return WBERR_INVALID_CLIENT;
 
 	void *client = NULL;
 	int result = WBNET_ACCEPT((*server)->channel, &client);
@@ -369,7 +380,7 @@ int WebsterSetOption(
     int option,
     int value )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
 
 	if (option == WBO_BUFFER_SIZE)
 	{
@@ -388,7 +399,8 @@ int WebsterGetOption(
     int option,
     int *value )
 {
-	if (server == NULL || *server == NULL || value == NULL) return WBERR_INVALID_ARGUMENT;
+	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (value == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (option == WBO_BUFFER_SIZE)
 		*value = (int) (*server)->bufferSize;
@@ -498,7 +510,8 @@ int WebsterWaitEvent(
     webster_message_t *input,
     webster_event_t *event )
 {
-	if (input == NULL || event == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (event == NULL) return WBERR_INVALID_ARGUMENT;
 
 	event->size = 0;
 	event->type = 0;
@@ -553,7 +566,8 @@ int WebsterGetHeader(
     webster_message_t *input,
     const webster_header_t **header )
 {
-	if (input == NULL || header == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (header == NULL) return WBERR_INVALID_ARGUMENT;
 
 	*header = &input->header;
 
@@ -567,7 +581,8 @@ int WebsterGetStringField(
 	const char *name,
     const char **value )
 {
-	if (input == NULL || value == 0 || (name == NULL && id != WBFI_NON_STANDARD))
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (value == 0 || (name == NULL && id != WBFI_NON_STANDARD))
 		return WBERR_INVALID_ARGUMENT;
 	if (id < 0 || id > WBFI_WWW_AUTHENTICATE)
 		return WBERR_INVALID_ARGUMENT;
@@ -606,7 +621,8 @@ int WebsterReadData(
     const uint8_t **buffer,
 	int *size )
 {
-	if (input == NULL || buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (input->buffer.pending <= 0 || input->buffer.current == NULL) return WBERR_NO_DATA;
 
@@ -624,7 +640,8 @@ int WebsterReadString(
     webster_message_t *input,
     const char **buffer )
 {
-	if (input == NULL || buffer == NULL) return WBERR_INVALID_ARGUMENT;
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (buffer == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (input->buffer.pending <= 0 || input->buffer.current == NULL) return WBERR_NO_DATA;
 
@@ -644,7 +661,7 @@ int WebsterSetStatus(
     webster_message_t *output,
     int status )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 
 	output->header.status = status;
 
@@ -656,7 +673,7 @@ int WebsterSetMethod(
     webster_message_t *output,
     int method )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 
 	if (method >= WBM_GET && method <= WBM_TRACE)
 		output->header.method = method;
@@ -668,7 +685,7 @@ int WebsterSetMethod(
 static int webster_writeStatusLine(
 	webster_message_t *output )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
 	output->state = WBS_HEADER;
 
@@ -690,7 +707,7 @@ static int webster_writeStatusLine(
 static int webster_writeResourceLine(
 	webster_message_t *output )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
 	output->state = WBS_HEADER;
 
@@ -708,7 +725,8 @@ int WebsterSetStringField(
     const char *name,
     const char *value )
 {
-	if (output == NULL || name == NULL || name[0] == 0 || value == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	if (name == NULL || name[0] == 0 || value == NULL) return WBERR_INVALID_ARGUMENT;
 	if (output->state >= WBS_BODY) return WBERR_INVALID_STATE;
 
 	int result = WBERR_OK;
@@ -778,7 +796,8 @@ int WebsterWriteData(
     const uint8_t *buffer,
     int size )
 {
-	if (output == NULL || buffer == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	if (buffer == NULL) return WBERR_INVALID_ARGUMENT;
 	if (output->state == WBS_COMPLETE) return WBERR_INVALID_STATE;
 
 	int result = 0;
@@ -832,7 +851,7 @@ WEBSTER_EXPORTED int WebsterWriteString(
 int WebsterFlush(
 	webster_message_t *output )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 
 	// ensure we are done with the HTTP header
 	if (output->state != WBS_BODY)
@@ -851,7 +870,7 @@ int WebsterFlush(
 int WebsterFinish(
 	webster_message_t *output )
 {
-	if (output == NULL) return WBERR_INVALID_ARGUMENT;
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 
 	WebsterFlush(output);
 
@@ -865,26 +884,14 @@ int WebsterFinish(
 }
 
 
-WEBSTER_EXPORTED int WebsterGetInputState(
-	webster_message_t *input,
+WEBSTER_EXPORTED int WebsterGetState(
+	webster_message_t *message,
     int *state )
 {
-	if (input == NULL || state == NULL) return WBERR_INVALID_ARGUMENT;
+	if (message == NULL) return WBERR_INVALID_MESSAGE;
+	if (state == NULL) return WBERR_INVALID_ARGUMENT;
 
-	*state = input->state;
+	*state = message->state;
 
 	return WBERR_OK;
 }
-
-
-WEBSTER_EXPORTED int WebsterGetOutputState(
-	webster_message_t *output,
-    int *state )
-{
-	if (output == NULL || state == NULL) return WBERR_INVALID_ARGUMENT;
-
-	*state = output->state;
-
-	return WBERR_OK;
-}
-

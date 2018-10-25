@@ -130,7 +130,7 @@ static int network_terminate()
 static int network_open(
 	void **channel )
 {
-	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
+	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 
 	*channel = calloc(1, sizeof(webster_channel_t));
 	if (*channel == NULL) return WBERR_MEMORY_EXHAUSTED;
@@ -153,7 +153,7 @@ static int network_open(
 static int network_close(
 	void *channel )
 {
-	if (channel == NULL) return WBERR_INVALID_ARGUMENT;
+	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
@@ -174,11 +174,18 @@ static int network_close(
 
 static int network_connect(
 	void *channel,
+	int proto,
 	const char *host,
     int port )
 {
-	if (channel == NULL || host == NULL || (port < 0 && port > 0xFFFF))
-		return WBERR_INVALID_ARGUMENT;
+	if (channel == NULL)
+		return WBERR_INVALID_CHANNEL;
+	if (port < 0 && port > 0xFFFF)
+		return WBERR_INVALID_PORT;
+	if (host == NULL || host[0] == 0)
+		return WBERR_INVALID_HOST;
+	if (proto != WBP_HTTP)
+		return WBERR_INVALID_PROTOCOL;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
@@ -202,6 +209,7 @@ static int network_receive(
     uint32_t *size,
 	int timeout )
 {
+	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
@@ -235,6 +243,7 @@ static int network_send(
 	const uint8_t *buffer,
     uint32_t size )
 {
+	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 	if (buffer == NULL || size == 0) return WBERR_INVALID_ARGUMENT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
@@ -255,7 +264,8 @@ static int network_accept(
 	void *channel,
 	void **client )
 {
-	if (channel == NULL || client == NULL) return WBERR_INVALID_ARGUMENT;
+	if (channel == NULL) return WBERR_INVALID_CHANNEL;
+	if (client == NULL) return WBERR_INVALID_ARGUMENT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
@@ -306,8 +316,12 @@ static int network_listen(
     int port,
 	int maxClients )
 {
-	if (channel == NULL || host == NULL || (port < 0 && port > 0xFFFF))
-		return WBERR_INVALID_ARGUMENT;
+	if (channel == NULL)
+		return WBERR_INVALID_CHANNEL;
+	if ( host == NULL || host[0] == 0)
+		return WBERR_INVALID_HOST;
+	if (port < 0 && port > 0xFFFF)
+		return WBERR_INVALID_PORT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
