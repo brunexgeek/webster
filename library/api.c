@@ -246,7 +246,7 @@ int WebsterCommunicate(
 	request.channel = (*client)->channel;
 	request.buffer.data = buffers;
 	request.buffer.data[0] = 0;
-	request.buffer.size = (*client)->bufferSize;
+	request.buffer.size = (int) (*client)->bufferSize;
 	request.type = WBMT_REQUEST;
 	request.header.method = WBM_GET;
 	request.body.expected = -1;
@@ -256,7 +256,7 @@ int WebsterCommunicate(
 	response.channel = (*client)->channel;
 	response.buffer.data = buffers + (*client)->bufferSize;
 	response.buffer.data[0] = 0;
-	response.buffer.size = (*client)->bufferSize;
+	response.buffer.size = (int) (*client)->bufferSize;
 	response.type = WBMT_RESPONSE;
 	response.header.method = WBM_NONE;
 	response.body.expected = -1;
@@ -274,7 +274,7 @@ int WebsterCommunicate(
 int WebsterDisconnect(
     webster_client_t *client )
 {
-	if (client == NULL) WBERR_INVALID_CLIENT;
+	if (client == NULL) return WBERR_INVALID_CLIENT;
 
 	WBNET_CLOSE((*client)->channel);
 	memory.free(*client);
@@ -425,6 +425,7 @@ static int webster_releaseMessage(
 {
 	if (message == NULL) return WBERR_INVALID_ARGUMENT;
 	http_releaseFields(&message->header);
+	if (message->header.resource != NULL) free(message->header.resource);
 	return WBERR_OK;
 }
 
@@ -458,7 +459,7 @@ static int webster_receive(
 
 	while (input->buffer.pending < input->buffer.size)
 	{
-		uint32_t bytes = (uint32_t) input->buffer.size - input->buffer.pending - 1;
+		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
 		// receive new data and adjust pending information
 		int result = WBNET_RECEIVE(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
 		if (result != WBERR_OK) bytes = 0;
@@ -471,8 +472,8 @@ static int webster_receive(
 
 		if (isHeader)
 		{
-			if (strstr(input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
-			if (webster_getTime() - startTime > timeout) return WBERR_TIMEOUT;
+			if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
+			if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
 		}
 	}
 

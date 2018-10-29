@@ -10,6 +10,17 @@
 extern webster_memory_t memory;
 
 
+static char *cloneString(
+    const char *text )
+{
+    if (text == NULL) return NULL;
+    size_t len = strlen(text);
+    char *clone = malloc(len + 1);
+    strcpy(clone, text);
+    return clone;
+}
+
+
 const char *http_statusMessage(
     int status )
 {
@@ -318,6 +329,47 @@ char *http_removeTrailing(
 }
 
 
+static int hexDigit(
+    uint8_t digit )
+{
+    if (digit >= '0' && digit <= '9')
+        return digit - '0';
+    if (digit >= 'a' && digit <= 'f')
+        digit = (uint8_t) (digit - 32);
+    if (digit >= 'A' && digit <= 'F')
+        return digit - 'A' + 10;
+    return 0;
+}
+
+
+static char * http_decodeUrl(
+    char *text )
+{
+    if (text == NULL) return NULL;
+
+    uint8_t *i = (uint8_t*) text;
+    uint8_t *o = (uint8_t*) text;
+    while (*i != 0)
+    {
+        if (*i == '%' && isxdigit(*(i + 1)) && isxdigit(*(i + 2)))
+        {
+            *o = (uint8_t) (hexDigit(*(i + 1)) * 16 + hexDigit(*(i + 2)));
+            i += 3;
+            ++o;
+        }
+        else
+        {
+            *o = *i;
+            ++i;
+            ++o;
+        }
+    }
+    *o = 0;
+
+    return text;
+}
+
+
 int http_parseHeader(
     char *data,
     struct webster_message_t_ *message )
@@ -373,7 +425,7 @@ int http_parseHeader(
         else
             return WBERR_INVALID_HTTP_METHOD;
 
-        header->resource = tokens[1];
+        header->resource = cloneString(tokens[1]);
         header->query = NULL;
         char *tmp = strchr(header->resource, '?');
         if (tmp != NULL)
@@ -381,6 +433,7 @@ int http_parseHeader(
             header->query = tmp + 1;
             *tmp = 0;
         }
+        http_decodeUrl(header->resource);
     }
     else
     {
