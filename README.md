@@ -21,7 +21,7 @@ To send a message to a HTTP server, just create a client entity and start the co
 ``` c
 webster_client_t client;
 // connect to 'http://duckduckgo.com/'
-if (WebsterConnect(&client, "duckduckgo.com", 80, "/") == WBERR_OK)
+if (WebsterConnect(&client, WBP_HTTP, "duckduckgo.com", 80, "/") == WBERR_OK)
 {
     // start the communication
     WebsterCommunicate(&client, clientHandler, NULL);

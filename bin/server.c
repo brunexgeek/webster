@@ -16,9 +16,15 @@
 
 #define PROGRAM_TITLE     "Webster HTTP Server"
 
-#define HTML_BEGIN "<html><head><title>" PROGRAM_TITLE "</title></head>" \
-	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px; line-height: 22px} " \
+#define HTML_BEGIN "<html><head><meta charset='UTF-8'><title>" PROGRAM_TITLE "</title></head>" \
+	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px;} " \
 	"a{text-decoration: none}</style><body>"
+
+#define DIR_FORMAT "<tr><td><img src='https://svn.apache.org/icons/folder.gif'>" \
+	"</td><td><strong><a href='%s/%s'>%s/</a></strong></div></td><td></td></tr>"
+
+#define FIL_FORMAT "<tr><td><img src='https://svn.apache.org/icons/unknown.gif'>" \
+	"</td><td><a href='%s/%s'>%s</a></td><td>%s</td></tr>"
 
 struct mime_t
 {
@@ -177,7 +183,7 @@ static void main_downloadFile(
 struct dir_entry
 {
 	int type;
-	const char *fileName;
+	char *fileName;
 	size_t size;
 };
 
@@ -205,11 +211,9 @@ static void enumerateFiles(
 	struct dir_entry **entries,
 	int *count )
 {
-	struct dir_entry *head = NULL;
-
 	DIR *dr = opendir(path);
 	struct dirent *de = NULL;
-	if (dr == NULL) return NULL;
+	if (dr == NULL) return;
 
 	*count = 0;
 	while ((de = readdir(dr)) != NULL) (*count)++;
@@ -217,15 +221,15 @@ static void enumerateFiles(
 	if (*count < 0)
 	{
 		closedir(dr);
-		return NULL;
+		return;
 	}
 	rewinddir(dr);
 
-	*entries = (struct dir_entry *) malloc(*count * sizeof(struct dir_entry));
+	*entries = (struct dir_entry *) malloc( (size_t) *count * sizeof(struct dir_entry));
 	if (*entries == NULL)
 	{
 		closedir(dr);
-		return NULL;
+		return;
 	}
 	printf("Found %d files at '%s'\n", *count, path);
 
@@ -240,7 +244,7 @@ static void enumerateFiles(
 	}
 	closedir(dr);
 
-	qsort(*entries, *count, sizeof(struct dir_entry), compareDirEntry);
+	qsort(*entries, (size_t) *count, sizeof(struct dir_entry), compareDirEntry);
 }
 
 
@@ -248,9 +252,6 @@ static void main_listDirectory(
 	webster_message_t *response,
 	const char *fileName )
 {
-	static const char *DIR_FORMAT = "<tr><td><img src='https://svn.apache.org/vc-static/images/dir.png'></td><td><strong><a href='%s/%s'>%s/</a></strong></div></td></tr>";
-	static const char *FIL_FORMAT = "<tr><td><img src='https://svn.apache.org/vc-static/images/text.png'></td><td><a href='%s/%s'>%s</a></td></tr>";
-
 	char temp[1024];
 
 	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
@@ -267,20 +268,22 @@ static void main_listDirectory(
 	if (total > 0)
 	{
 		int i = 0;
-		const char *format = NULL;
 		for (; i < total; ++i)
 		{
 			if (entries[i].fileName == NULL) continue;
 
 			if (entries[i].type == DT_DIR)
-				format = DIR_FORMAT;
+				snprintf(temp, sizeof(temp) - 1, DIR_FORMAT, fileName + length, entries[i].fileName,
+					entries[i].fileName);
 			else
 			if (entries[i].type == DT_REG)
-				format = FIL_FORMAT;
+			{
+
+				snprintf(temp, sizeof(temp) - 1, FIL_FORMAT, fileName + length, entries[i].fileName,
+					entries[i].fileName, "0 bytes");
+			}
 			else
 				continue;
-
-			snprintf(temp, sizeof(temp) - 1, format, fileName + length, entries[i].fileName, entries[i].fileName);
 			temp[sizeof(temp) - 1] = 0;
 			WebsterWriteString(response, temp);
 			free(entries[i].fileName);
@@ -299,11 +302,6 @@ static int main_serverHandler(
 {
 	(void) data;
 
-	#if 0
-	if (requests > 1) return 0;
-	++requests;
-	#endif
-
 	webster_event_t event;
 	const webster_header_t *header;
 	int result = 0;
@@ -312,7 +310,6 @@ static int main_serverHandler(
 	{
 		// wait for some request data
 		result = WebsterWaitEvent(request, &event);
-		//printf("WebsterWaitEvent = %d\n", result);
 		if (result == WBERR_COMPLETE) break;
 		if (result == WBERR_NO_DATA) continue;
 		if (result != WBERR_OK) return 0;
