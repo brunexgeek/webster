@@ -66,7 +66,7 @@ struct webster_message_t_
     struct
     {
         uint8_t *data;
-        size_t size;
+        int size;
         uint8_t *current;
         int pending;
     } buffer;

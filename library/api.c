@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include "network.h"
 
+#ifndef WB_WINDOWS
+#include <sys/time.h>
+#endif
+
 
 static const char *HTTP_METHODS[] =
 {
@@ -146,8 +150,8 @@ int WebsterParseURL(
 		// return the host
 		if (host != NULL)
 		{
-			*host = memory.calloc(1, he - hb + 1);
-			if (*host != NULL) strncpy(*host, hb, he - hb);
+			*host = memory.calloc(1, (size_t) (he - hb) + 1);
+			if (*host != NULL) strncpy(*host, hb, (size_t) (he - hb));
 		}
 
 		// return the resource, if any
@@ -155,8 +159,8 @@ int WebsterParseURL(
 		{
 			if (re != NULL)
 			{
-				*resource = memory.calloc(1, re - rb + 1);
-				if (*resource != NULL) strncpy(*resource, rb, re - rb);
+				*resource = memory.calloc(1, (size_t) (re - rb) + 1);
+				if (*resource != NULL) strncpy(*resource, rb, (size_t) (re - rb));
 			}
 			else
 				*resource = NULL;
@@ -425,24 +429,52 @@ static int webster_releaseMessage(
 }
 
 
+static size_t webster_getTime()
+{
+	struct timeval info;
+	gettimeofday(&info, NULL);
+	return (size_t) (info.tv_usec / 1000 + info.tv_sec * 1000);
+}
+
+
 static int webster_receive(
 	webster_message_t *input,
-	int timeout )
+	int timeout,
+	int isHeader )
 {
 	// if we have data in the buffer, just return success
 	if (input->buffer.pending > 0) return WBERR_OK;
+	input->buffer.pending = 0;
 
 	// Note: when reading input data we leave room in the buffer for a null-terminator
 	//       so we can use the function 'WebsterReadString'.
 
-	// receive new data and adjust pending information
-	uint32_t bytes = (uint32_t) input->buffer.size - 1;
-	int result = WBNET_RECEIVE(input->channel, input->buffer.data, &bytes, timeout);
-	if (result < 0) return result;
-	input->buffer.pending = (int) bytes;
-	input->buffer.current = input->buffer.data;
-	// ensure we have a null-terminator at the end
-	*(input->buffer.current + input->buffer.pending) = 0;
+	// when reading header data, we have 'timeout' milliseconds to receive the
+	// entire HTTP header
+	int recvTimeout = timeout;
+	if (isHeader) recvTimeout = 500;
+
+	size_t startTime = webster_getTime();
+
+	while (input->buffer.pending < input->buffer.size)
+	{
+		uint32_t bytes = (uint32_t) input->buffer.size - input->buffer.pending - 1;
+		// receive new data and adjust pending information
+		int result = WBNET_RECEIVE(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
+		if (result != WBERR_OK) bytes = 0;
+		if ((result == WBERR_TIMEOUT && !isHeader) || (result != WBERR_OK && result != WBERR_TIMEOUT)) return result;
+
+		input->buffer.pending += (int) bytes;
+		input->buffer.current = input->buffer.data;
+		// ensure we have a null-terminator at the end
+		*(input->buffer.current + input->buffer.pending) = 0;
+
+		if (isHeader)
+		{
+			if (strstr(input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
+			if (webster_getTime() - startTime > timeout) return WBERR_TIMEOUT;
+		}
+	}
 
 	return WBERR_OK;
 }
@@ -485,7 +517,7 @@ static int webster_writeOrSend(
 static int webster_receiveHeader(
 	webster_message_t *input )
 {
-	int result = webster_receive(input, WEBSTER_READ_TIMEOUT);
+	int result = webster_receive(input, WEBSTER_READ_TIMEOUT, 1);
 	if (result != WBERR_OK) return result;
 
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
@@ -533,13 +565,16 @@ int WebsterWaitEvent(
 	{
 		if (input->body.expected == 0) return WBERR_COMPLETE;
 
-		result = webster_receive(input, WEBSTER_READ_TIMEOUT);
+		// TODO: should not receive more data than expected
+		result = webster_receive(input, WEBSTER_READ_TIMEOUT, 0);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra byte beyond content length
 			if (input->body.size + input->buffer.pending > input->body.expected)
 			{
 				input->buffer.pending = input->body.expected - input->body.size;
+				if (input->buffer.pending < 0) input->buffer.pending = 0;
+				input->buffer.data[input->buffer.pending] = 0;
 				// we still have some data to return?
 				if (input->buffer.pending <= 0)
 				{

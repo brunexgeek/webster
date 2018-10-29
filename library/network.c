@@ -213,6 +213,8 @@ static int network_receive(
 	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
+	uint32_t bufferSize = *size;
+	*size = 0;
 
 	// wait for data arrive
 	#ifdef WB_WINDOWS
@@ -220,15 +222,13 @@ static int network_receive(
 	#else
 	int result = poll(&chann->poll, 1, timeout);
 	#endif
-	if (result == 0)
-		return WBERR_TIMEOUT;
-	else
-	if (result < 0)
-		return WBERR_SOCKET;
+	if (result == 0) return WBERR_TIMEOUT;
+	if (result < 0) return WBERR_SOCKET;
 
-	ssize_t bytes = recv(chann->socket, buffer, (size_t) *size, 0);
+	ssize_t bytes = recv(chann->socket, buffer, (size_t) bufferSize, 0);
 	if (bytes < 0)
 	{
+		*size = 0;
 		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
