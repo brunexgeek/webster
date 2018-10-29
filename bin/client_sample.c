@@ -21,7 +21,7 @@ static int main_clientHandler(
     webster_message_t *response,
     void *data )
 {
-	(void) data;
+    (void) data;
 
     // send a HTTP request
     WebsterSetStringField(request, "host", "google.com");
@@ -30,51 +30,51 @@ static int main_clientHandler(
 
     printf("Request sent!\n");
 
-	webster_event_t event;
-	const webster_header_t *header;
-	do
-	{
-		// wait for response data
-		int result = WebsterWaitEvent(response, &event);
-		if (result == WBERR_COMPLETE) break;
-		if (result == WBERR_NO_DATA) continue;
+    webster_event_t event;
+    const webster_header_t *header;
+    do
+    {
+        // wait for response data
+        int result = WebsterWaitEvent(response, &event);
+        if (result == WBERR_COMPLETE) break;
+        if (result == WBERR_NO_DATA) continue;
         if (result != WBERR_OK) return 0;
 
-		if (result == WBERR_OK)
-		{
-			// check if received the HTTP header
-			if (event.type ==  WBT_HEADER)
-			{
-				if (WebsterGetHeader(response, &header) == WBERR_OK)
-				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
-					// print all HTTP header fields
-					webster_field_t *field = header->fields;
-					while (field != NULL)
-					{
-						printf("  %s: '%s'\n", field->name, field->value);
-						field = field->next;
-					}
-				}
-				printf("Waiting for body\n");
-			}
-			else
-			// check if we received the HTTP body (or part of it)
-			if (event.type == WBT_BODY)
-			{
-				const uint8_t *ptr = NULL;
-				int size = 0;
-				WebsterReadData(response, &ptr, &size);
-				for (int i = 0; i < size; ++i)
-				{
-					if (i != 0 && i % 8 == 0) printf("\n");
-					printf("%02X ", ptr[i]);
-				}
-			}
-		}
-	} while (1);
+        if (result == WBERR_OK)
+        {
+            // check if received the HTTP header
+            if (event.type ==  WBT_HEADER)
+            {
+                if (WebsterGetHeader(response, &header) == WBERR_OK)
+                {
+                    printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
+                    // print all HTTP header fields
+                    webster_field_t *field = header->fields;
+                    while (field != NULL)
+                    {
+                        printf("  %s: '%s'\n", field->name, field->value);
+                        field = field->next;
+                    }
+                }
+                printf("Waiting for body\n");
+            }
+            else
+            // check if we received the HTTP body (or part of it)
+            if (event.type == WBT_BODY)
+            {
+                const uint8_t *ptr = NULL;
+                int size = 0;
+                WebsterReadData(response, &ptr, &size);
+                for (int i = 0; i < size; ++i)
+                {
+                    if (i != 0 && i % 8 == 0) printf("\n");
+                    printf("%02X ", ptr[i]);
+                }
+            }
+        }
+    } while (1);
 
-	WebsterFinish(response);
+    WebsterFinish(response);
 
     return WBERR_OK;
 }
@@ -82,13 +82,13 @@ static int main_clientHandler(
 
 int main( int argc, char **argv )
 {
-	(void) argc;
-	(void) argv;
+    (void) argc;
+    (void) argv;
 
-	WebsterInitialize(NULL, NULL);
+    WebsterInitialize(NULL, NULL);
 
     webster_client_t client;
-    if (WebsterConnect(&client, "duckduckgo.com", 80, "/") == WBERR_OK)
+    if (WebsterConnect(&client, WBP_HTTP, "duckduckgo.com", 80, "/") == WBERR_OK)
     {
         WebsterCommunicate(&client, main_clientHandler, NULL);
         WebsterDisconnect(&client);
@@ -96,7 +96,7 @@ int main( int argc, char **argv )
     else
         printf("Failed!\n");
 
-	WebsterTerminate();
+    WebsterTerminate();
 
     return 0;
 }

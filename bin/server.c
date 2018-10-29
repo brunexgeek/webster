@@ -16,6 +16,9 @@
 
 #define PROGRAM_TITLE     "Webster HTTP Server"
 
+#define HTML_BEGIN "<html><head><title>" PROGRAM_TITLE "</title></head>" \
+	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px; line-height: 22px} " \
+	"a{text-decoration: none}</style><body>"
 
 struct mime_t
 {
@@ -38,7 +41,7 @@ static const struct mime_t MIME_TABLE[] =
 	{ "gif"  , "image/gif" },
 	{ "htm"  , "text/html" },
 	{ "html" , "text/html" },
-	{ "jpeg" , "text/html" },
+	{ "jpeg" , "image/jpeg" },
 	{ "jpg"  , "image/jpeg" },
 	{ "js"   , "application/javascript" },
 	{ "json" , "application/json" },
@@ -171,45 +174,121 @@ static void main_downloadFile(
 }
 
 
+struct dir_entry
+{
+	int type;
+	const char *fileName;
+	size_t size;
+};
+
+
+static int compareDirEntry(
+	const void *first,
+	const void *second )
+{
+	const struct dir_entry *a = (const struct dir_entry *) first;
+	const struct dir_entry *b = (const struct dir_entry *) second;
+
+	if (a->type != b->type)
+	{
+		if (a->type == DT_DIR)
+			return -1;
+		else
+			return 1;
+	}
+	return strcmp(a->fileName, b->fileName);
+}
+
+
+static void enumerateFiles(
+	const char *path,
+	struct dir_entry **entries,
+	int *count )
+{
+	struct dir_entry *head = NULL;
+
+	DIR *dr = opendir(path);
+	struct dirent *de = NULL;
+	if (dr == NULL) return NULL;
+
+	*count = 0;
+	while ((de = readdir(dr)) != NULL) (*count)++;
+	(*count)--; // ignore '.'
+	if (*count < 0)
+	{
+		closedir(dr);
+		return NULL;
+	}
+	rewinddir(dr);
+
+	*entries = (struct dir_entry *) malloc(*count * sizeof(struct dir_entry));
+	if (*entries == NULL)
+	{
+		closedir(dr);
+		return NULL;
+	}
+	printf("Found %d files at '%s'\n", *count, path);
+
+	int i = 0;
+	while ((de = readdir(dr)) != NULL)
+	{
+		if (de->d_name[0] == '.' && de->d_name[1] == 0) continue;
+		(*entries)[i].fileName = strdup(de->d_name);
+		(*entries)[i].size = 0;
+		(*entries)[i].type = de->d_type;
+		if (++i >= *count) break;
+	}
+	closedir(dr);
+
+	qsort(*entries, *count, sizeof(struct dir_entry), compareDirEntry);
+}
+
+
 static void main_listDirectory(
 	webster_message_t *response,
 	const char *fileName )
 {
-	static const char *DIR_FORMAT = "<li><strong><a href='%s/%s'>[%s]</a></strong></li>";
-	static const char *FIL_FORMAT = "<li><a href='%s/%s'>%s</a></li>";
+	static const char *DIR_FORMAT = "<tr><td><img src='https://svn.apache.org/vc-static/images/dir.png'></td><td><strong><a href='%s/%s'>%s/</a></strong></div></td></tr>";
+	static const char *FIL_FORMAT = "<tr><td><img src='https://svn.apache.org/vc-static/images/text.png'></td><td><a href='%s/%s'>%s</a></td></tr>";
 
 	char temp[1024];
 
 	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
 
-	snprintf(temp, sizeof(temp) - 1, "<html><head><title>" PROGRAM_TITLE
-		"</title></head><body style='font-family: monospace; font-size: 16px; line-height: 22px;'><ul><h1>%s</h1>", fileName);
-	WebsterWriteString(response, temp);
+	WebsterWriteString(response, HTML_BEGIN);
+	WebsterWriteString(response, "<h1>");
+	WebsterWriteString(response, fileName);
+	WebsterWriteString(response, "</h1><table>");
 
-	DIR *dr = opendir(fileName);
-	struct dirent *de = NULL;
-	if (dr != NULL)
+	size_t length = strlen(rootDirectory);
+	struct dir_entry *entries;
+	int total;
+	enumerateFiles(fileName, &entries, &total);
+	if (total > 0)
 	{
-		int length = (int) strlen(rootDirectory);
-		while ((de = readdir(dr)) != NULL)
+		int i = 0;
+		const char *format = NULL;
+		for (; i < total; ++i)
 		{
-			const char *format;
-			if (de->d_type == DT_DIR)
+			if (entries[i].fileName == NULL) continue;
+
+			if (entries[i].type == DT_DIR)
 				format = DIR_FORMAT;
 			else
-			if (de->d_type == DT_REG)
+			if (entries[i].type == DT_REG)
 				format = FIL_FORMAT;
 			else
 				continue;
 
-			snprintf(temp, sizeof(temp) - 1, format, fileName + length, de->d_name, de->d_name);
+			snprintf(temp, sizeof(temp) - 1, format, fileName + length, entries[i].fileName, entries[i].fileName);
 			temp[sizeof(temp) - 1] = 0;
 			WebsterWriteString(response, temp);
+			free(entries[i].fileName);
 		}
+		free(entries);
 	}
-	closedir(dr);
 
-	WebsterWriteString(response, "</ul></body>");
+	WebsterWriteString(response, "</table><hr/>");
 }
 
 
@@ -329,6 +408,7 @@ static int main_serverHandler(
 	return result;
 }
 
+#include <sys/time.h>
 
 int main(int argc, char* argv[])
 {
