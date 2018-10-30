@@ -200,8 +200,7 @@ int WebsterConnect(
 	size_t resourceLen = strlen(resource);
 
 	// allocate memory for everything
-	*client = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_)
-		+ hostLen + 1 + resourceLen + 1);
+	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_) + hostLen + 1);
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	// try to connect with the remote host
@@ -210,10 +209,12 @@ int WebsterConnect(
 	result = WBNET_CONNECT((*client)->channel, proto, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
+	(*client)->host     = (char*) (*client) + sizeof(struct webster_client_t_);
+	(*client)->resource = (char*) memory.malloc(resourceLen + 1);
+	if ((*client)->resource == NULL) goto ESCAPE;
+
 	(*client)->port = port;
-	(*client)->host = (char*) (*client) + sizeof(struct webster_client_t_);
 	strcpy((*client)->host, host);
-	(*client)->resource = (*client)->host + hostLen + 1;
 	strcpy((*client)->resource, resource);
 	(*client)->bufferSize = WEBSTER_MAX_HEADER;
 
@@ -425,7 +426,7 @@ static int webster_releaseMessage(
 {
 	if (message == NULL) return WBERR_INVALID_ARGUMENT;
 	http_releaseFields(&message->header);
-	if (message->header.resource != NULL) free(message->header.resource);
+	if (message->header.resource != NULL) memory.free(message->header.resource);
 	return WBERR_OK;
 }
 

@@ -132,7 +132,7 @@ static int network_open(
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 
-	*channel = calloc(1, sizeof(webster_channel_t));
+	*channel = memory.calloc(1, sizeof(webster_channel_t));
 	if (*channel == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	webster_channel_t *chann = (webster_channel_t*) *channel;
@@ -166,7 +166,7 @@ static int network_close(
 	#endif
 
 	chann->socket = chann->poll.fd = 0;
-	free(channel);
+	memory.free(channel);
 
 	return WBERR_OK;
 }
@@ -280,7 +280,7 @@ static int network_accept(
 	if (result < 0)
 		return WBERR_SOCKET;
 
-	*client = calloc(1, sizeof(webster_channel_t));
+	*client = memory.calloc(1, sizeof(webster_channel_t));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	struct sockaddr_in address;
@@ -294,7 +294,7 @@ static int network_accept(
 
 	if (socket < 0)
 	{
-		free(*client);
+		memory.free(*client);
 		*client = NULL;
 		if (socket == EAGAIN || socket == EWOULDBLOCK)
 			return WBERR_NO_CLIENT;
