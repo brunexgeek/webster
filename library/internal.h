@@ -42,20 +42,25 @@ struct webster_server_t_
 
 struct webster_message_t_
 {
+    /**
+     * @brief Current state of the message.
+     *
+     * The machine state if defined by @c WBS_* macros.
+     */
     int state;
+
+    /**
+     * Pointer to the opaque entity representing the network channel.
+     */
     void *channel;
 
     /**
      * @brief Message type (WBMT_REQUEST or WBMT_RESPONSE).
      */
     int type;
+
     struct
     {
-        /**
-         * @brief Buffer capacity.
-         */
-        int size;
-
         /**
          * @brief Message expected size.
          *
@@ -63,13 +68,33 @@ struct webster_message_t_
          */
         int expected;
     } body;
+
     struct
     {
+        /**
+         *  Pointer to the buffer content.
+         */
         uint8_t *data;
+
+        /**
+         * Size of the buffer in bytes.
+         */
         int size;
+
+        /**
+         * Pointer to the buffer position in the buffer content.
+         */
         uint8_t *current;
+
+        /**
+         * Amount of useful data from the current position.
+         */
         int pending;
     } buffer;
+
+    /**
+     * HTTP header
+     */
     webster_header_t header;
 };
 

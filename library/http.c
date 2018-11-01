@@ -440,6 +440,7 @@ int http_parseHeader(
         // we only accept HTTP 1.1 messages
         if (strcmp(tokens[0], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
         header->status = atoi(tokens[1]);
+        header->message = cloneString(tokens[2]);
     }
 
     // parse up to 128 fields

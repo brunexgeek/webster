@@ -31,6 +31,17 @@ static int webster_releaseMessage(
 	webster_message_t *message );
 
 
+static char *cloneString(
+    const char *text )
+{
+    if (text == NULL) return NULL;
+    size_t len = strlen(text);
+    char *clone = (char*) malloc(len + 1);
+    strcpy(clone, text);
+    return clone;
+}
+
+
 int WebsterInitialize(
     webster_memory_t *mem,
 	webster_network_t *net )
@@ -196,11 +207,8 @@ int WebsterConnect(
 	if (!WB_IS_VALID_PROTO(proto))
 		return WBERR_INVALID_PROTOCOL;
 
-	size_t hostLen = strlen(host);
-	size_t resourceLen = strlen(resource);
-
 	// allocate memory for everything
-	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_) + hostLen + 1);
+	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	// try to connect with the remote host
@@ -209,13 +217,9 @@ int WebsterConnect(
 	result = WBNET_CONNECT((*client)->channel, proto, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
-	(*client)->host     = (char*) (*client) + sizeof(struct webster_client_t_);
-	(*client)->resource = (char*) memory.malloc(resourceLen + 1);
-	if ((*client)->resource == NULL) goto ESCAPE;
-
-	(*client)->port = port;
-	strcpy((*client)->host, host);
-	strcpy((*client)->resource, resource);
+	(*client)->host       = cloneString(host);
+	(*client)->port       = port;
+	(*client)->resource   = cloneString(resource);
 	(*client)->bufferSize = WEBSTER_MAX_HEADER;
 
 	return WBERR_OK;
@@ -244,23 +248,23 @@ int WebsterCommunicate(
 	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	memset(&request, 0, sizeof(struct webster_message_t_));
+	request.type = WBMT_REQUEST;
 	request.channel = (*client)->channel;
+	request.body.expected = -1;
 	request.buffer.data = buffers;
 	request.buffer.data[0] = 0;
 	request.buffer.size = (int) (*client)->bufferSize;
-	request.type = WBMT_REQUEST;
 	request.header.method = WBM_GET;
-	request.body.expected = -1;
-	request.header.resource = (*client)->resource;
+	request.header.resource = cloneString((*client)->resource);
 
 	memset(&response, 0, sizeof(struct webster_message_t_));
+	response.type = WBMT_RESPONSE;
 	response.channel = (*client)->channel;
+	response.body.expected = -1;
 	response.buffer.data = buffers + (*client)->bufferSize;
 	response.buffer.data[0] = 0;
 	response.buffer.size = (int) (*client)->bufferSize;
-	response.type = WBMT_RESPONSE;
 	response.header.method = WBM_NONE;
-	response.body.expected = -1;
 
 	callback(&request, &response, data);
 
@@ -278,6 +282,8 @@ int WebsterDisconnect(
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 
 	WBNET_CLOSE((*client)->channel);
+	memory.free((*client)->host);
+	memory.free((*client)->resource);
 	memory.free(*client);
 	*client = NULL;
 	return WBERR_OK;
@@ -426,7 +432,10 @@ static int webster_releaseMessage(
 {
 	if (message == NULL) return WBERR_INVALID_ARGUMENT;
 	http_releaseFields(&message->header);
-	if (message->header.resource != NULL) memory.free(message->header.resource);
+
+	// 'resource' and 'query' uses the same memory allocation
+	memory.free(message->header.resource);
+	memory.free(message->header.message);
 	return WBERR_OK;
 }
 
@@ -478,6 +487,8 @@ static int webster_receive(
 				if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
 				if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
 			}
+			else
+				return WBERR_OK;
 		}
 		else
 			return result;
@@ -577,23 +588,21 @@ int WebsterWaitEvent(
 		if (result == WBERR_OK)
 		{
 			// truncate any extra bytes beyond content length
-			if (input->body.size + input->buffer.pending > input->body.expected)
+			if (input->buffer.pending > input->body.expected)
 			{
-				input->buffer.pending = input->body.expected - input->body.size;
-				if (input->buffer.pending < 0) input->buffer.pending = 0;
+				input->buffer.pending = input->body.expected;
 				input->buffer.data[input->buffer.pending] = 0;
 				// we still have some data to return?
 				if (input->buffer.pending <= 0)
 				{
 					input->state = WBS_COMPLETE;
 					input->buffer.pending = 0;
-					return WBERR_NO_DATA;
+					return WBERR_COMPLETE;
 				}
 			}
 			event->type = WBT_BODY;
 			event->size = input->buffer.pending;
 			input->state = WBS_BODY;
-			input->body.size += input->buffer.pending;
 			input->body.expected -= input->buffer.pending;
 		}
 

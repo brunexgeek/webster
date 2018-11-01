@@ -24,21 +24,24 @@ static int main_clientHandler(
     (void) data;
 
     // send a HTTP request
-    WebsterSetStringField(request, "host", "google.com");
+    WebsterSetStringField(request, "host", "duckduckgo.com");
     WebsterSetIntegerField(request, "content-length", 0);
     WebsterFinish(request);
 
     printf("Request sent!\n");
 
+    int received = 0;
+    int result = 0;
+    int j = 0;
     webster_event_t event;
     const webster_header_t *header;
     do
     {
         // wait for response data
-        int result = WebsterWaitEvent(response, &event);
+        result = WebsterWaitEvent(response, &event);
         if (result == WBERR_COMPLETE) break;
         if (result == WBERR_NO_DATA) continue;
-        if (result != WBERR_OK) return 0;
+        if (result != WBERR_OK) break;
 
         if (result == WBERR_OK)
         {
@@ -47,7 +50,7 @@ static int main_clientHandler(
             {
                 if (WebsterGetHeader(response, &header) == WBERR_OK)
                 {
-                    printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
+                    printf("HTTP/1.1 %d %s\n", header->status, header->message);
                     // print all HTTP header fields
                     webster_field_t *field = header->fields;
                     while (field != NULL)
@@ -65,16 +68,19 @@ static int main_clientHandler(
                 const uint8_t *ptr = NULL;
                 int size = 0;
                 WebsterReadData(response, &ptr, &size);
-                for (int i = 0; i < size; ++i)
+                received += size;
+                for (int i = 0; i < size; ++i, ++j)
                 {
-                    if (i != 0 && i % 8 == 0) printf("\n");
-                    printf("%02X ", ptr[i]);
+                    if (j != 0 && j % 16 == 0) printf("\n");
+                    printf("%02x ", ptr[i]);
                 }
             }
         }
     } while (1);
 
     WebsterFinish(response);
+
+    printf("\nReceived %d bytes (%d)\n", received, result);
 
     return WBERR_OK;
 }
