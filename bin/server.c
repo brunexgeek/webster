@@ -445,6 +445,7 @@ int main(int argc, char* argv[])
 				{
 					webster_client_t remote;
 					if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
+					// you problably should handle the client request in another thread
 					WebsterCommunicate(&remote, main_serverHandler, NULL);
 					WebsterDisconnect(&remote);
 				}

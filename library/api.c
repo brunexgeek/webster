@@ -463,19 +463,24 @@ static int webster_receive(
 		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
 		// receive new data and adjust pending information
 		int result = WBNET_RECEIVE(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
-		if (result != WBERR_OK) bytes = 0;
-		if ((result == WBERR_TIMEOUT && !isHeader) || (result != WBERR_OK && result != WBERR_TIMEOUT)) return result;
+		// only keep trying if receiving header data
+		if (result == WBERR_TIMEOUT && isHeader) continue;
 
-		input->buffer.pending += (int) bytes;
-		input->buffer.current = input->buffer.data;
-		// ensure we have a null-terminator at the end
-		*(input->buffer.current + input->buffer.pending) = 0;
-
-		if (isHeader)
+		if (result == WBERR_OK)
 		{
-			if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
-			if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
+			input->buffer.pending += (int) bytes;
+			input->buffer.current = input->buffer.data;
+			// ensure we have a null-terminator at the end
+			*(input->buffer.current + input->buffer.pending) = 0;
+
+			if (isHeader)
+			{
+				if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
+				if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
+			}
 		}
+		else
+			return result;
 	}
 
 	return WBERR_OK;
@@ -571,7 +576,7 @@ int WebsterWaitEvent(
 		result = webster_receive(input, WEBSTER_READ_TIMEOUT, 0);
 		if (result == WBERR_OK)
 		{
-			// truncate any extra byte beyond content length
+			// truncate any extra bytes beyond content length
 			if (input->body.size + input->buffer.pending > input->body.expected)
 			{
 				input->buffer.pending = input->body.expected - input->body.size;
