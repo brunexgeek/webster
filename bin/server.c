@@ -322,7 +322,7 @@ static int main_serverHandler(
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
+					printf("%s %s\n", HTTP_METHODS[header->method], header->target->origin.path);
 					// print all HTTP header fields
 					webster_field_t *field = header->fields;
 					while (field != NULL)
@@ -330,19 +330,6 @@ static int main_serverHandler(
 						printf("  %s: '%s'\n", field->name, field->value);
 						field = field->next;
 					}
-				}
-			}
-			else
-			// check if we received the HTTP body (or part of it)
-			if (event.type == WBT_BODY)
-			{
-				const uint8_t *ptr = NULL;
-				int size = 0;
-				WebsterReadData(request, &ptr, &size);
-				for (int i = 0; i < size; ++i)
-				{
-					if (i != 0 && i % 8 == 0) printf("\n");
-					printf("%02X ", ptr[i]);
 				}
 			}
 		}
@@ -355,7 +342,7 @@ static int main_serverHandler(
 	char *fileName = NULL;
 	char temp[512];
 	strncpy(temp, rootDirectory, sizeof(temp) - 1);
-	strncat(temp, header->resource, sizeof(temp) - 1);
+	strncat(temp, header->target->origin.path, sizeof(temp) - 1);
 	fileName = realpath(temp, NULL);
 
 	result = WBERR_OK;
@@ -364,7 +351,7 @@ static int main_serverHandler(
 	if (result == WBERR_OK && info.st_mode & S_IFREG)
 	{
 		const char *accept = NULL;
-		if (WebsterGetStringField(request, 0, "accept", &accept) == WBERR_OK)
+		if (WebsterGetStringField(request, WBFI_ACCEPT, NULL, &accept) == WBERR_OK)
 		{
 			const char *mime = main_getMime(fileName);
 			// a very simple (and not recomended) way to check the accepted types
@@ -447,7 +434,7 @@ int main(int argc, char* argv[])
 					webster_client_t remote;
 					if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
 					// you problably should handle the client request in another thread
-					WebsterCommunicate(&remote, main_serverHandler, NULL);
+					WebsterCommunicateURL(&remote, NULL, main_serverHandler, NULL);
 					WebsterDisconnect(&remote);
 				}
 			}

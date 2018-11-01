@@ -20,7 +20,8 @@ static const char *HTTP_METHODS[] =
     "DELETE",
     "CONNECT",
     "OPTIONS",
-    "TRACE"
+    "TRACE",
+	"PATCH",
 };
 
 
@@ -88,99 +89,16 @@ int WebsterTerminate()
 
 int WebsterParseURL(
 	const char *url,
-	int *proto,
-	char **host,
-	int *port,
-	char **resource )
+	webster_target_t **target )
 {
-	if (url == NULL || url[0] == 0) return WBERR_INVALID_ARGUMENT;
+	return http_parseTarget(url, target);
+}
 
-	if (tolower(url[0]) == 'h' &&
-		tolower(url[1]) == 't' &&
-		tolower(url[2]) == 't' &&
-		tolower(url[3]) == 'p' &&
-		(tolower(url[4]) == 's' || url[4] == ':'))
-	{
-		// extract the host name
-		char *hb = strstr(url, "://");
-		if (hb == NULL) return WBERR_INVALID_URL;
-		hb += 3;
-		char *he = hb;
-		while (*he != ':' && *he != '/' && *he != 0) ++he;
-		if (hb == he) return WBERR_INVALID_URL;
 
-		char *rb = he;
-		char *re = NULL;
-
-		// extract the port number, if any
-		char *pb = he;
-		char *pe = NULL;
-		if (*pb == ':')
-		{
-			pe = ++pb;
-			while (*pe >= '0' && *pe <= '9') ++pe;
-			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_URL;
-			rb = pe;
-		}
-
-		// extract the resource
-		if (*rb == '/')
-		{
-			re = ++rb;
-			while (*re != 0) ++re;
-		}
-		if (re != NULL && *re != 0) return WBERR_INVALID_URL;
-
-		// return the protocol
-		if (proto != NULL)
-		{
-			if (url[4] == ':')
-				*proto = WBP_HTTP;
-			else
-				*proto = WBP_HTTPS;
-		}
-
-		// return the port number, if any
-		if (port != NULL)
-		{
-			if (pe != NULL)
-			{
-				*port = 0;
-				int mult = 1;
-				while (--pe >= pb)
-				{
-					*port += (int) (*pe - '0') * mult;
-					mult *= 10;
-				}
-				if (*port > 65535) return WBERR_INVALID_URL;
-			}
-			else
-				*port = -1;
-		}
-
-		// return the host
-		if (host != NULL)
-		{
-			*host = memory.calloc(1, (size_t) (he - hb) + 1);
-			if (*host != NULL) strncpy(*host, hb, (size_t) (he - hb));
-		}
-
-		// return the resource, if any
-		if (resource != NULL)
-		{
-			if (re != NULL)
-			{
-				*resource = memory.calloc(1, (size_t) (re - rb) + 1);
-				if (*resource != NULL) strncpy(*resource, rb, (size_t) (re - rb));
-			}
-			else
-				*resource = cloneString("/");
-		}
-
-		return WBERR_OK;
-	}
-
-	return WBERR_INVALID_URL;
+int WebsterFreeURL(
+    webster_target_t *target )
+{
+	return http_freeTarget(target);
 }
 
 
@@ -191,10 +109,9 @@ int WebsterParseURL(
 
 int WebsterConnect(
     webster_client_t *client,
-    int proto,
+    int scheme,
 	const char *host,
-    int port,
-	const char *resource )
+    int port )
 {
 	if (client == NULL)
 		return WBERR_INVALID_CLIENT;
@@ -202,10 +119,8 @@ int WebsterConnect(
 		return WBERR_INVALID_PORT;
 	if (host == NULL || host[0] == 0)
 		return WBERR_INVALID_HOST;
-	if (resource == NULL || resource[0] == 0)
-		return WBERR_INVALID_RESOURCE;
-	if (!WB_IS_VALID_PROTO(proto))
-		return WBERR_INVALID_PROTOCOL;
+	if (!WB_IS_VALID_SCHEME(scheme))
+		return WBERR_INVALID_SCHEME;
 
 	// allocate memory for everything
 	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
@@ -214,12 +129,11 @@ int WebsterConnect(
 	// try to connect with the remote host
 	int result = WBNET_OPEN( &(*client)->channel );
 	if (result != WBERR_OK) goto ESCAPE;
-	result = WBNET_CONNECT((*client)->channel, proto, host, port);
+	result = WBNET_CONNECT((*client)->channel, scheme, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
 	(*client)->host       = cloneString(host);
 	(*client)->port       = port;
-	(*client)->resource   = cloneString(resource);
 	(*client)->bufferSize = WEBSTER_MAX_HEADER;
 
 	return WBERR_OK;
@@ -237,11 +151,28 @@ ESCAPE:
 
 int WebsterCommunicate(
     webster_client_t *client,
+    char *path,
+    char *query,
+    webster_handler_t *callback,
+    void *data )
+{
+	webster_origin_form_t url;
+	url.type = WBRT_ORIGIN;
+	url.path = path;
+	url.query = query;
+	return WebsterCommunicateURL(client, (webster_target_t*) &url, callback, data);
+}
+
+
+int WebsterCommunicateURL(
+    webster_client_t *client,
+    webster_target_t *url,
     webster_handler_t *callback,
     void *data )
 {
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
+	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
 	struct webster_message_t_ request, response;
 	uint8_t *buffers = (uint8_t*) memory.malloc((*client)->bufferSize * 2);
@@ -255,8 +186,8 @@ int WebsterCommunicate(
 	request.buffer.data[0] = 0;
 	request.buffer.size = (int) (*client)->bufferSize;
 	request.header.method = WBM_GET;
-	request.header.resource = cloneString((*client)->resource);
 	request.client = *client;
+	request.header.target = url;
 
 	memset(&response, 0, sizeof(struct webster_message_t_));
 	response.type = WBMT_RESPONSE;
@@ -267,6 +198,7 @@ int WebsterCommunicate(
 	response.buffer.size = (int) (*client)->bufferSize;
 	response.header.method = WBM_NONE;
 	response.client = *client;
+	response.header.target = url;
 
 	callback(&request, &response, data);
 
@@ -285,7 +217,7 @@ int WebsterDisconnect(
 
 	WBNET_CLOSE((*client)->channel);
 	memory.free((*client)->host);
-	memory.free((*client)->resource);
+	//memory.free((*client)->resource);
 	memory.free(*client);
 	*client = NULL;
 	return WBERR_OK;
@@ -381,7 +313,6 @@ int WebsterAccept(
 	(*remote)->channel = client;
 	(*remote)->port = 0;
 	(*remote)->host = NULL;
-	(*remote)->resource = NULL;
 	(*remote)->bufferSize = (*server)->bufferSize;
 
 	return WBERR_OK;
@@ -436,8 +367,7 @@ static int webster_releaseMessage(
 	http_releaseFields(&message->header);
 
 	// 'resource' and 'query' uses the same memory allocation
-	memory.free(message->header.resource);
-	memory.free(message->header.message);
+	//memory.free(message->header.resource);
 	return WBERR_OK;
 }
 
@@ -469,7 +399,7 @@ static int webster_receive(
 	// when reading header data, we have 'timeout' milliseconds to receive the
 	// entire HTTP header
 	int recvTimeout = (timeout >= 0) ? timeout : 0;
-	if (isHeader) recvTimeout = 100;
+	if (isHeader) recvTimeout = 50;
 
 	size_t startTime = webster_getTime();
 
@@ -504,11 +434,12 @@ static int webster_receive(
 }
 
 
-static int webster_writeOrSend(
+static int webster_writeBuffer(
 	webster_message_t *output,
 	const uint8_t *buffer,
     int size )
 {
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (size == 0 || buffer == NULL) return WBERR_OK;
 
 	// ensures the current pointer is valid
@@ -524,7 +455,7 @@ static int webster_writeOrSend(
 	int fit = output->buffer.size - (int)(output->buffer.current - output->buffer.data);
 	while (size > fit)
 	{
-		result = webster_writeOrSend(output, buffer + offset, fit);
+		result = webster_writeBuffer(output, buffer + offset, fit);
 		size -= fit;
 		offset += fit;
 		fit = output->buffer.size - (int)(output->buffer.current - output->buffer.data);
@@ -537,11 +468,39 @@ static int webster_writeOrSend(
 	// send pending data if the buffer is full
 	if (output->buffer.current >= output->buffer.data + output->buffer.size)
 	{
-		result = WBNET_SEND(output->channel, output->buffer.data, (size_t) output->buffer.size);
+		result = WBNET_SEND(output->channel, output->buffer.data, (uint32_t) output->buffer.size);
 		output->buffer.current = output->buffer.data;
 	}
 
 	return result;
+}
+
+
+static int webster_writeString(
+	webster_message_t *output,
+	const char *text )
+{
+	if (text == NULL) return WBERR_INVALID_ARGUMENT;
+	return webster_writeBuffer(output, (uint8_t*) text, (int) strlen(text));
+}
+
+
+static int webster_writeChar(
+	webster_message_t *output,
+	char value )
+{
+	return webster_writeBuffer(output, (uint8_t*) &value, 1);
+}
+
+
+static int webster_writeInteger(
+	webster_message_t *output,
+	int value )
+{
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	char temp[16] = { 0 };
+	snprintf(temp, sizeof(temp) - 1, "%d", value);
+	return webster_writeBuffer(output, (uint8_t*) temp, (int) strlen(temp));
 }
 
 
@@ -554,16 +513,13 @@ static int webster_receiveHeader(
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
 	char *ptr = strstr((char*) input->buffer.data, "\r\n\r\n");
 	if (ptr == NULL) return WBERR_TOO_LONG;
-	*(ptr)     = 0;
-	*(ptr + 1) = 0;
-	*(ptr + 2) = 0;
 	*(ptr + 3) = 0;
 	// remember the last position
 	input->buffer.current = (uint8_t*) ptr + 4;
 	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
 
 	// parse HTTP header fields and retrieve the content length
-	result = http_parseHeader((char*)input->buffer.data, input);
+	result = http_parse((char*)input->buffer.data, input->type, input);
 	input->header.contentLength = input->body.expected;
 	return result;
 }
@@ -739,7 +695,7 @@ int WebsterSetMethod(
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
 
-	if (method >= WBM_GET && method <= WBM_TRACE)
+	if (WB_IS_VALID_METHOD(method))
 		output->header.method = method;
 
 	return WBERR_OK;
@@ -755,16 +711,16 @@ static int webster_writeStatusLine(
 
 	const char *message = NULL;
 	if (output->header.status == 0)
-	{
 		output->header.status = 200;
-		message = "OK";
-	}
-	else
-		message = http_statusMessage(output->header.status);
 
-	char temp[128];
-	snprintf(temp, sizeof(temp) - 1, "HTTP/1.1 %d %s\r\n", output->header.status, message);
-	return webster_writeOrSend(output, (uint8_t*) temp, (int) strlen(temp));
+	message = http_statusMessage(output->header.status);
+
+	webster_writeString(output, "HTTP/1.1 ");
+	webster_writeInteger(output, output->header.status);
+	webster_writeChar(output, ' ');
+	webster_writeString(output, message);
+	webster_writeString(output, "\r\n");
+	return WBERR_OK;
 }
 
 
@@ -775,12 +731,29 @@ static int webster_writeResourceLine(
 	if (output->state != WBS_IDLE) return WBERR_INVALID_STATE;
 	output->state = WBS_HEADER;
 
-	if (output->header.method < WBM_GET || output->header.method > WBM_TRACE)
+	if (!WB_IS_VALID_METHOD(output->header.method))
 		output->header.method = WBM_GET;
 
-	char temp[128];
-	snprintf(temp, sizeof(temp) - 1, "%s %s HTTP/1.1\r\n", HTTP_METHODS[output->header.method], output->header.resource);
-	return webster_writeOrSend(output, (uint8_t*) temp, (int) strlen(temp));
+	webster_writeString(output, HTTP_METHODS[output->header.method]);
+	webster_writeChar(output, ' ');
+
+	switch (output->header.target->type)
+	{
+		case WBRT_ORIGIN:
+			webster_writeString(output, output->header.target->origin.path);
+			if (output->header.target->origin.query != NULL)
+			{
+				webster_writeChar(output, '&');
+				webster_writeString(output, output->header.target->origin.query);
+			}
+			break;
+		default:
+			return WBERR_INVALID_RESOURCE;
+	}
+
+	webster_writeString(output, " HTTP/1.1\r\n");
+
+	return WBERR_OK;
 }
 
 
@@ -843,14 +816,14 @@ static void webster_commitHeaderFields(
 		const char *name = field->name;
 		const char *value = field->value;
 
-		webster_writeOrSend(output, (const uint8_t*) name, (int) strlen(name));
-		webster_writeOrSend(output, (const uint8_t*) ": ", 2);
-		webster_writeOrSend(output, (const uint8_t*) value, (int) strlen(value));
-		webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
+		webster_writeBuffer(output, (const uint8_t*) name, (int) strlen(name));
+		webster_writeBuffer(output, (const uint8_t*) ": ", 2);
+		webster_writeBuffer(output, (const uint8_t*) value, (int) strlen(value));
+		webster_writeBuffer(output, (const uint8_t*) "\r\n", 2);
 
 		field = field->next;
 	}
-	webster_writeOrSend(output, (const uint8_t*)"\r\n", 2);
+	webster_writeBuffer(output, (const uint8_t*)"\r\n", 2);
 	output->state = WBS_BODY;
 }
 
@@ -900,13 +873,13 @@ int WebsterWriteData(
 		char temp[16];
 		snprintf(temp, sizeof(temp) - 1, "%X\r\n", size);
 		temp[15] = 0;
-		webster_writeOrSend(output, (const uint8_t*) temp, (int) strlen(temp));
+		webster_writeBuffer(output, (const uint8_t*) temp, (int) strlen(temp));
 	}
 	// write data
-	webster_writeOrSend(output, buffer, size);
+	webster_writeBuffer(output, buffer, size);
 	// append the block terminator, if using chuncked transfer encoding
 	if (output->body.expected < 0)
-		webster_writeOrSend(output, (const uint8_t*) "\r\n", 2);
+		webster_writeBuffer(output, (const uint8_t*) "\r\n", 2);
 
 	return WBERR_OK;
 }

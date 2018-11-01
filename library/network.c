@@ -174,7 +174,7 @@ static int network_close(
 
 static int network_connect(
 	void *channel,
-	int proto,
+	int scheme,
 	const char *host,
     int port )
 {
@@ -184,8 +184,8 @@ static int network_connect(
 		return WBERR_INVALID_PORT;
 	if (host == NULL || host[0] == 0)
 		return WBERR_INVALID_HOST;
-	if (proto != WBP_HTTP)
-		return WBERR_INVALID_PROTOCOL;
+	if (scheme != WBP_HTTP)
+		return WBERR_INVALID_SCHEME;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 

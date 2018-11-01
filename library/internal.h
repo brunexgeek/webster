@@ -25,7 +25,6 @@ struct webster_client_t_
 	void *channel;
 	char *host;
 	int port;
-    char *resource;
     uint32_t bufferSize;
 };
 

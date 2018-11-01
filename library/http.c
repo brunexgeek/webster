@@ -15,9 +15,26 @@ static char *cloneString(
 {
     if (text == NULL) return NULL;
     size_t len = strlen(text);
-    char *clone = malloc(len + 1);
-    strcpy(clone, text);
-    return clone;
+    char *output = memory.malloc(len + 1);
+    strcpy(output, text);
+    return output;
+}
+
+
+static char *subString(
+    const char *text,
+    size_t offset,
+    size_t length )
+{
+    if (text == NULL) return NULL;
+
+    size_t len = strlen(text);
+    if (offset + length > len) return NULL;
+
+    char *output = memory.malloc(length + 1);
+    if (output == NULL) return NULL;
+    memcpy(output, text + offset, length);
+    return output;
 }
 
 
@@ -276,45 +293,6 @@ void http_releaseFields(
     header->fieldCount = 0;
 }
 
-static int tokenize(
-    char *buffer,
-    const char *delimiter,
-    char terminator,
-    char **tokens,
-    size_t size )
-{
-    size_t count = 0;
-    char *ptr = buffer;
-    char *start = buffer;
-    int useless = 1;
-
-    memset(tokens, 0, sizeof(char*) * size);
-
-    for (; count < size; ++ptr)
-    {
-        char current = *ptr;
-
-        if (strchr(delimiter, *ptr) != NULL)
-        {
-            if (useless) continue;
-
-            *ptr = 0;
-            tokens[count++] = start;
-            start = ptr + 1;
-            useless = 1;
-        }
-        else
-        {
-            useless = 0;
-            if (*ptr == '\r') *ptr = 0;
-        }
-
-        if (current == terminator || current == 0) break;
-    }
-
-    return (int) count;
-}
-
 
 char *http_removeTrailing(
     char *text )
@@ -370,126 +348,369 @@ static char * http_decodeUrl(
 }
 
 
-int http_parseHeader(
-    char *data,
-    struct webster_message_t_ *message )
+struct webster_context_t
 {
-    webster_field_t *field = NULL;
-    webster_field_t *next = NULL;
-    char *ptr = NULL;
-    char *tokens[128];
+    const char *content;
+    size_t length;
+    const char *current;
+};
 
-    webster_header_t *header = &message->header;
 
-    // find the first header field
-    ptr = strstr(data, "\r\n");
-    if (ptr == NULL) return WBERR_INVALID_HTTP_MESSAGE;
-    ptr += 2;
+#define STATE_FIRST_LINE     1
+#define STATE_HEADER_FIELD   2
+#define STATE_COMPLETE       3
 
-    // reset content length to zero
-    message->body.expected = 0;
 
-    int count = tokenize((char*) data, " \n", '\n', tokens, 8);
+int http_parseTarget(
+    const char *url,
+    webster_target_t **output )
+{
+    if (url == NULL || url[0] == 0 || output == NULL) return WBERR_INVALID_URL;
 
-    if (message->type == WBMT_REQUEST)
+    // TODO: change to make an allocation for all fields
+    *output = memory.calloc(1, sizeof(webster_target_t));
+    if (*output == NULL) return WBERR_MEMORY_EXHAUSTED;
+    webster_target_t *target = *output;
+
+    // handle asterisk form
+    if (url[0] == '*' && url[1] == 0)
+        target->type = WBRT_ASTERISK;
+    else
+    // handle origin form
+    if (url[0] == '/')
     {
-        if (count != 3) return WBERR_INVALID_HTTP_MESSAGE;
+        target->type = WBRT_ORIGIN;
 
-        // we only accept HTTP 1.1 messages
-        if (strcmp(tokens[2], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
+        const char *ptr = url;
+        while (*ptr != '?' && *ptr != 0) ++ptr;
 
-        // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
-        if (strcmp(tokens[0], "GET") == 0)
-            header->method = WBM_GET;
-        else
-        if (strcmp(tokens[0], "POST") == 0)
-            header->method = WBM_POST;
-        else
-        if (strcmp(tokens[0], "HEAD") == 0)
-            header->method = WBM_HEAD;
-        else
-        if (strcmp(tokens[0], "PUT") == 0)
-            header->method = WBM_PUT;
-        else
-        if (strcmp(tokens[0], "DELETE") == 0)
-            header->method = WBM_DELETE;
-        else
-        if (strcmp(tokens[0], "CONNECT") == 0)
-            header->method = WBM_CONNECT;
-        else
-        if (strcmp(tokens[0], "OPTIONS") == 0)
-            header->method = WBM_OPTIONS;
-        else
-        if (strcmp(tokens[0], "TRACE") == 0)
-            header->method = WBM_TRACE;
-        else
-            return WBERR_INVALID_HTTP_METHOD;
-
-        header->resource = cloneString(tokens[1]);
-        header->query = NULL;
-        char *tmp = strchr(header->resource, '?');
-        if (tmp != NULL)
+        if (*ptr == '?')
         {
-            header->query = tmp + 1;
-            *tmp = 0;
+            size_t pos = (size_t) (ptr - url);
+            target->origin.path = subString(url, 0, pos);
+            target->origin.query = subString(url, pos + 1, strlen(url) - pos - 1);
         }
-        http_decodeUrl(header->resource);
+        else
+        {
+            target->origin.path = cloneString(url);
+        }
     }
     else
+    // handle absolute form
+    if (tolower(url[0]) == 'h' &&
+		tolower(url[1]) == 't' &&
+		tolower(url[2]) == 't' &&
+		tolower(url[3]) == 'p' &&
+		(tolower(url[4]) == 's' || url[4] == ':'))
+	{
+        target->type = WBRT_ABSOLUTE;
+
+		// extract the host name
+		char *hb = strstr(url, "://");
+		if (hb == NULL) return WBERR_INVALID_URL;
+		hb += 3;
+		char *he = hb;
+		while (*he != ':' && *he != '/' && *he != 0) ++he;
+		if (hb == he) return WBERR_INVALID_URL;
+
+		char *rb = he;
+		char *re = NULL;
+
+		// extract the port number, if any
+		char *pb = he;
+		char *pe = NULL;
+		if (*pb == ':')
+		{
+			pe = ++pb;
+			while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
+			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_URL;
+			rb = pe;
+		}
+
+		// extract the resource
+		if (*rb == '/')
+		{
+			re = rb;
+			while (*re != 0) ++re;
+		}
+		if (re != NULL && *re != 0) return WBERR_INVALID_URL;
+
+		// return the scheme
+		if (url[4] == ':')
+			target->absolute.scheme = WBP_HTTP;
+		else
+			target->absolute.scheme = WBP_HTTPS;
+
+		// return the port number, if any
+		if (pe != NULL)
+		{
+			target->absolute.port = 0;
+			int mult = 1;
+			while (--pe >= pb)
+			{
+				target->absolute.port += (int) (*pe - '0') * mult;
+				mult *= 10;
+			}
+			if (target->absolute.port > 65535 || target->authority.port < 0)
+                return WBERR_INVALID_URL;
+		}
+		else
+		{
+			if (target->absolute.scheme == WBP_HTTP)
+				target->absolute.port = 80;
+			else
+				target->absolute.port = 443;
+		}
+
+		// return the host
+        target->absolute.host = subString(hb, 0, (size_t) (he - hb));
+
+		// return the resource, if any
+		if (re != NULL)
+			target->absolute.path = subString(rb, 0, (size_t) (re - rb));
+		else
+			target->absolute.path = cloneString("/");
+
+		return WBERR_OK;
+	}
+    else
+    // handle authority form
     {
-        // we only accept HTTP 1.1 messages
-        if (strcmp(tokens[0], "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
-        header->status = atoi(tokens[1]);
-        header->message = cloneString(tokens[2]);
+        target->type = WBRT_AUTHORITY;
+
+        const char *hb = strchr(url, '@');
+        if (hb != NULL)
+        {
+            target->authority.user = subString(url, 0, (size_t) (hb - url));
+            hb++;
+        }
+        else
+            hb = url;
+
+        const char *he = strchr(hb, ':');
+        if (he != NULL)
+        {
+            target->authority.host = subString(hb, 0, (size_t) (he - hb));
+            target->authority.port = 0;
+
+            const char *pb = he + 1;
+            const char *pe = pb;
+            while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
+            if (*pe != 0) return WBERR_INVALID_URL;
+
+			int mult = 1;
+			while (--pe >= pb)
+			{
+				target->authority.port += (int) (*pe - '0') * mult;
+				mult *= 10;
+			}
+			if (target->authority.port > 65535 || target->authority.port < 0)
+                return WBERR_INVALID_URL;
+        }
+        else
+        {
+            target->authority.host = cloneString(hb);
+            target->authority.port = 80;
+        }
     }
 
-    // parse up to 128 fields
-    count = tokenize(ptr, "\n", 0, tokens, 128);
-    if (count == 0) return WBERR_INVALID_HTTP_MESSAGE;
+    return WBERR_OK;
+}
+
+
+int http_freeTarget(
+    webster_target_t *target )
+{
+    if (target == NULL) return WBERR_INVALID_URL;
+
+    switch (target->type)
+    {
+        case WBRT_ORIGIN:
+            if (target->origin.path != NULL)
+                memory.free(target->origin.path);
+            if (target->origin.query != NULL)
+                memory.free(target->origin.query);
+            break;
+
+        case WBRT_ABSOLUTE:
+            if (target->absolute.user != NULL)
+                memory.free(target->absolute.user);
+            if (target->absolute.host != NULL)
+                memory.free(target->absolute.host);
+            if (target->absolute.path != NULL)
+                memory.free(target->absolute.path);
+            if (target->absolute.query != NULL)
+                memory.free(target->absolute.query);
+            break;
+
+        case WBRT_AUTHORITY:
+            if (target->authority.user != NULL)
+                memory.free(target->authority.user);
+            if (target->authority.host != NULL)
+                memory.free(target->authority.host);
+            break;
+
+        case WBRT_ASTERISK:
+            break;
+
+        default:
+            return WBERR_INVALID_URL;
+    }
+
+    return WBERR_OK;
+}
+
+
+#define IS_HFNC(x) \
+    ((x) == '!'  \
+    || ((x) >= '#' && (x) <= '\'')  \
+    || (x) == '*'  \
+    || (x) == '+'  \
+    || (x) == '-'  \
+    || (x) == '^'  \
+    || (x) == '_'  \
+    || (x) == '|'  \
+    || (x) == '~'  \
+    || ((x) >= 'A' && (x) <= 'Z')  \
+    || ((x) >= 'a' && (x) <= 'z')  \
+    || ((x) >= '0' && (x) <= '9'))
+
+
+int http_parse(
+    char *data,
+    int type,
+    webster_message_t *message )
+{
+    int state = STATE_FIRST_LINE;
+    char *ptr = data;
+    char *token = ptr;
+    int result;
     int isChunked = 0;
 
-    // parse HTTP fields (case-insensitive according to RFC-7230:3.2)
-    for (int i = 0; i < count; ++i)
+    webster_header_t *header = &message->header;
+    header->fieldCount = 0;
+    message->body.expected = 0;
+
+    while (state != STATE_COMPLETE || *ptr == 0)
     {
-        char *p = NULL;
+        if (state == STATE_FIRST_LINE)
+        {
+            for (token = ptr; *ptr != ' ' && *ptr != 0; ++ptr);
+            if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
+            *ptr++ = 0;
 
-        // split the line in half
-        char *value = strchr(tokens[i], ':');
-        if (value == NULL || *tokens[i] == ' ' || value <= tokens[i] || *(value-1) == ' ') goto ESCAPE;
-        *value = 0;
-        ++value;
-        // change the field name to lowercase
-        for (p = tokens[i]; *p && *p != ' '; ++p) *p = (char) tolower(*p);
-        if (*p == ' ') goto ESCAPE;
-        // ignore trailing whitespces in the value
-        value = http_removeTrailing(value);
-        // get the field ID, if any
-        int id = http_getFieldID(tokens[i]);
+            if (strcmp(token, "HTTP/1.1") == 0)
+            {
+                if (type != WBMT_RESPONSE) return WBERR_INVALID_HTTP_MESSAGE;
 
-        if (http_addField(header, id, tokens[i], value) != WBERR_OK) goto ESCAPE;
+                // HTTP status code
+                for (token = ptr; *ptr >= '0' && *ptr <= '9'; ++ptr);
+                if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
+                *ptr++ = 0;
+                header->status = atoi(token);
+                // HTTP status message
+                for (token = ptr; *ptr != '\r' && *ptr != 0; ++ptr);
+                if (ptr[0] != '\r' || ptr[1] != '\n')
+                    return WBERR_INVALID_HTTP_MESSAGE;
+                *ptr++ = 0;
+                ++ptr;
 
-        // if is 'content-length' field, get the value
-        if (id == WBFI_CONTENT_LENGTH)
-            message->body.expected = atoi(value);
+                state = STATE_HEADER_FIELD;
+            }
+            else
+            {
+                if (type != WBMT_REQUEST) return WBERR_INVALID_HTTP_MESSAGE;
+
+                // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
+                if (strcmp(token, "GET") == 0)
+                    header->method = WBM_GET;
+                else
+                if (strcmp(token, "POST") == 0)
+                    header->method = WBM_POST;
+                else
+                if (strcmp(token, "HEAD") == 0)
+                    header->method = WBM_HEAD;
+                else
+                if (strcmp(token, "PUT") == 0)
+                    header->method = WBM_PUT;
+                else
+                if (strcmp(token, "DELETE") == 0)
+                    header->method = WBM_DELETE;
+                else
+                if (strcmp(token, "CONNECT") == 0)
+                    header->method = WBM_CONNECT;
+                else
+                if (strcmp(token, "OPTIONS") == 0)
+                    header->method = WBM_OPTIONS;
+                else
+                if (strcmp(token, "TRACE") == 0)
+                    header->method = WBM_TRACE;
+                else
+                if (strcmp(token, "PATCH") == 0)
+                    header->method = WBM_PATCH;
+                else
+                    return WBERR_INVALID_HTTP_METHOD;
+
+                // target
+                for (token = ptr; *ptr != ' ' && *ptr != 0; ++ptr);
+                if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
+                *ptr++ = 0;
+                result = http_parseTarget(token, &header->target);
+                if (result != WBERR_OK) return result;
+
+                // HTTP version
+                for (token = ptr; *ptr != '\r' && *ptr != 0; ++ptr);
+                if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_HTTP_MESSAGE;
+                *ptr++ = 0;
+                ++ptr;
+                if (strcmp(token, "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
+
+                state = STATE_HEADER_FIELD;
+            }
+        }
         else
-        if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
-            isChunked = 1;
+        if (state == STATE_HEADER_FIELD)
+        {
+            if (ptr[0] == '\r' && ptr[1] == 0) break;
+
+            // header field name
+            char *name = ptr;
+            for (; IS_HFNC(*ptr); ++ptr);
+            if (*ptr != ':') return WBERR_INVALID_HTTP_MESSAGE;
+            *ptr++ = 0;
+            // header field value
+            char *value = ptr;
+            for (; *ptr != '\r' && *ptr != 0; ++ptr);
+            if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_HTTP_MESSAGE;
+            *ptr++ = 0;
+            ++ptr;
+
+            // change the field name to lowercase
+            char *p;
+            for (p = name; *p && *p != ' '; ++p) *p = (char) tolower(*p);
+            // ignore trailing whitespces in the value
+            value = http_removeTrailing(value);
+            // get the field ID, if any
+            int id = http_getFieldID(name);
+
+            http_addField(header, id, name, value);
+
+            // if is 'content-length' field, get the value
+            if (id == WBFI_CONTENT_LENGTH)
+                message->body.expected = atoi(value);
+            else
+            if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
+                isChunked = 1;
+
+            header->fieldCount++;
+        }
+        else
+            break;
     }
-    header->fieldCount = count;
 
     // check whether chunked transfer encoding is enabled
     if (isChunked && message->body.expected == 0)
         message->body.expected = -1;
 
     return WBERR_OK;
-ESCAPE:
-    field = header->fields;
-    while (field != NULL)
-    {
-        next = field->next;
-        memory.free(field);
-        field = next;
-    }
-    header->fields = NULL;
-    return WBERR_INVALID_HEADER_FIELD;
 }

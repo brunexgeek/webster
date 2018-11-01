@@ -40,7 +40,7 @@
 #define WBERR_INVALID_HTTP_VERSION       -16
 #define WBERR_INVALID_HTTP_MESSAGE       -17
 #define WBERR_INVALID_URL                -18
-#define WBERR_INVALID_PROTOCOL           -19
+#define WBERR_INVALID_SCHEME             -19
 #define WBERR_INVALID_HOST               -20
 #define WBERR_INVALID_PORT               -21
 #define WBERR_INVALID_CHANNEL            -22
@@ -62,15 +62,12 @@
 #define WBM_CONNECT                      6
 #define WBM_OPTIONS                      7
 #define WBM_TRACE                        8
+#define WBM_PATCH                        9
 
 #define WBS_IDLE                         0
 #define WBS_HEADER                       1
 #define WBS_BODY                         2
 #define WBS_COMPLETE                     3
-
-/*#define WBO_UNKNOWN                      0
-#define WBO_REQUEST_RESPONSE             1
-#define WBO_RESPONSE_REQUEST             2*/
 
 #define WBO_BUFFER_SIZE                  1
 
@@ -144,11 +141,17 @@
 #define WBFI_WARNING                                  67
 #define WBFI_WWW_AUTHENTICATE                         68
 
+#define WBRT_ORIGIN      1
+#define WBRT_ABSOLUTE    2
+#define WBRT_AUTHORITY   3
+#define WBRT_ASTERISK    4
+
 #define WBP_HTTP         1
 #define WBP_HTTPS        2
 
-#define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_TRACE )
-#define WB_IS_VALID_PROTO(x)   ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
+#define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
+#define WB_IS_VALID_SCHEME(x)  ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
+#define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
 
 
 struct webster_server_t_;
@@ -181,11 +184,50 @@ typedef struct
     int size;
 } webster_event_t;
 
+
 typedef struct
 {
-    char *resource;
+    int type;
+    char *path;
     char *query;
-    char *message;
+} webster_origin_form_t;
+
+typedef struct
+{
+    int type;
+    int scheme;
+    char *user;
+    char *host;
+    int port;
+    char *path;
+    char *query;
+} webster_absolute_form_t;
+
+typedef struct
+{
+    int type;
+    char *user;
+    char *host;
+    int port;
+} webster_authority_form_t;
+
+typedef struct
+{
+    int type;
+} webster_asterisk_form_t;
+
+typedef union
+{
+    int type;
+    webster_origin_form_t origin;
+    webster_absolute_form_t absolute;
+    webster_authority_form_t authority;
+    webster_asterisk_form_t asterisk;
+} webster_target_t;
+
+typedef struct
+{
+    webster_target_t *target;
     int status;
     int method;
     int contentLength;
@@ -220,7 +262,7 @@ typedef int webster_network_close(
 
 typedef int webster_network_connect(
 	void *channel,
-    int proto,
+    int scheme,
 	const char *host,
     int port );
 
@@ -272,10 +314,10 @@ WEBSTER_EXPORTED int WebsterTerminate();
 
 WEBSTER_EXPORTED int WebsterParseURL(
     const char *url,
-    int *proto,
-    char **host,
-    int *port,
-    char **resource );
+    webster_target_t **target );
+
+WEBSTER_EXPORTED int WebsterFreeURL(
+    webster_target_t *target );
 
 /*
  * HTTP client API
@@ -283,13 +325,20 @@ WEBSTER_EXPORTED int WebsterParseURL(
 
 WEBSTER_EXPORTED int WebsterConnect(
     webster_client_t *client,
-    int proto,
+    int scheme,
     const char *host,
-    int port,
-    const char *resource );
+    int port );
 
 WEBSTER_EXPORTED int WebsterCommunicate(
     webster_client_t *client,
+    char *path,
+    char *query,
+    webster_handler_t *callback,
+    void *data );
+
+WEBSTER_EXPORTED int WebsterCommunicateURL(
+    webster_client_t *client,
+    webster_target_t *url,
     webster_handler_t *callback,
     void *data );
 

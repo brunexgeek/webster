@@ -46,5 +46,19 @@ int http_parseHeader(
     char *data,
     struct webster_message_t_ *message );
 
+WEBSTER_PRIVATE
+int http_parseTarget(
+    const char *url,
+    webster_target_t **target );
+
+WEBSTER_PRIVATE
+int http_parse(
+    char *data,
+    int type,
+    webster_message_t *message );
+
+WEBSTER_PRIVATE
+int http_freeTarget(
+    webster_target_t *target );
 
 #endif // #ifndef WEBSTER_HTTP_H
