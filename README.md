@@ -108,6 +108,20 @@ if (WebsterCreate(&server, 100) == WBERR_OK)
 
 Note that the server also uses ``WebsterCommunicate`` since remote connections are client entities. In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``bin/server_sample.c``.
 
+## Features
+
+The following list contains some of the features of HTTP 1.1 specified in RFC-7230. The ones marked with an X are currently implemented.
+
+- [x] Request target in origin form ([RFC-7230 5.3.1](https://tools.ietf.org/html/rfc7230#section-5.3.1))
+- [ ] Request target in absolute form ([RFC-7230 5.3.2](https://tools.ietf.org/html/rfc7230#section-5.3.2))
+- [ ] Request target in authority form ([RFC-7230 5.3.3](https://tools.ietf.org/html/rfc7230#section-5.3.3))
+- [ ] Request target in arterisk form ([RFC-7230 5.3.4](https://tools.ietf.org/html/rfc7230#section-5.3.4))
+- [x] Receive messages without transfer encoding ([RFC-7230 3.2.2](https://tools.ietf.org/html/rfc7230#section-3.2.2))
+- [x] Send messages without transfer encoding
+- [ ] Receive chunked messages ([RFC-7230 4.1](https://tools.ietf.org/html/rfc7230#section-4.1))
+- [x] Send chunked messages
+- [ ] Add 'host' header automatically ([RFC-7230 5.4](https://tools.ietf.org/html/rfc7230#section-5.4))
+
 ## Limitations
 
 * You cannot have multiples header fields with the same name ([RFC-7230 3.2.2 Field order](https://tools.ietf.org/html/rfc7230#section-3.2.2))
@@ -116,5 +130,4 @@ Note that the server also uses ``WebsterCommunicate`` since remote connections a
 
 * Ensure compatibility with Windows
 * Documentation
-* Request URI decoding
-* HTTP Basic authentication
+* HTTP authentication ([RFC-7235](https://tools.ietf.org/html/rfc7235))
