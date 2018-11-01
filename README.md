@@ -110,7 +110,7 @@ Note that the server also uses ``WebsterCommunicate`` since remote connections a
 
 ## Features
 
-The following list contains some of the features of HTTP 1.1 specified in RFC-7230. The ones marked with an X are currently implemented.
+The following list contains some of the features of HTTP 1.1 specified in RFC-7230. The marked ones are currently implemented.
 
 - [x] Request target in origin form ([RFC-7230 5.3.1](https://tools.ietf.org/html/rfc7230#section-5.3.1))
 - [ ] Request target in absolute form ([RFC-7230 5.3.2](https://tools.ietf.org/html/rfc7230#section-5.3.2))

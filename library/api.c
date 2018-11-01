@@ -448,6 +448,10 @@ static size_t webster_getTime()
 }
 
 
+/**
+ * @brief Read data from the network channel until the buffer is full or there's
+ * no more data to read.
+ */
 static int webster_receive(
 	webster_message_t *input,
 	int timeout,
@@ -462,8 +466,8 @@ static int webster_receive(
 
 	// when reading header data, we have 'timeout' milliseconds to receive the
 	// entire HTTP header
-	int recvTimeout = timeout;
-	if (isHeader) recvTimeout = 500;
+	int recvTimeout = (timeout >= 0) ? timeout : 0;
+	if (isHeader) recvTimeout = 100;
 
 	size_t startTime = webster_getTime();
 
@@ -505,30 +509,37 @@ static int webster_writeOrSend(
 {
 	if (size == 0 || buffer == NULL) return WBERR_OK;
 
-	// TODO: change algorithm to always fill the internal buffer before send (keep consistent 'packet' sizes)
-
 	// ensures the current pointer is valid
 	if (output->buffer.current == NULL)
-		output->buffer.current = output->buffer.data;
-	else
-	// send any pending data if the given one does not fit the internal buffer
-	if (output->buffer.current > output->buffer.data && output->buffer.current + size > output->buffer.data + output->buffer.size)
 	{
-		WBNET_SEND(output->channel, output->buffer.data, (uint32_t) (output->buffer.current - output->buffer.data));
+		output->buffer.current = output->buffer.data;
+		output->buffer.pending = 0;
+	}
+
+	// fragment input data through recursive calls until the data size fits the internal buffer
+	int offset = 0;
+	int result = WBERR_OK;
+	int fit = output->buffer.size - (int)(output->buffer.current - output->buffer.data);
+	while (size > fit)
+	{
+		result = webster_writeOrSend(output, buffer + offset, fit);
+		size -= fit;
+		offset += fit;
+		fit = output->buffer.size - (int)(output->buffer.current - output->buffer.data);
+		if (result != WBERR_OK) return result;
+	}
+
+	memcpy(output->buffer.current, buffer + offset, (size_t) size);
+	output->buffer.current += size;
+
+	// send pending data if the buffer is full
+	if (output->buffer.current >= output->buffer.data + output->buffer.size)
+	{
+		result = WBNET_SEND(output->channel, output->buffer.data, output->buffer.size);
 		output->buffer.current = output->buffer.data;
 	}
 
-	// if the data does not fit the internal buffer at all, send immediately;
-	// otherwise, copy the data to the intenal buffer
-	if (size > (int) output->buffer.size)
-		WBNET_SEND(output->channel, buffer, (uint32_t) size);
-	else
-	{
-		memcpy(output->buffer.current, buffer, (size_t) size);
-		output->buffer.current += size;
-	}
-
-	return WBERR_OK;
+	return result;
 }
 
 
@@ -540,10 +551,10 @@ static int webster_receiveHeader(
 
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
 	char *ptr = strstr((char*) input->buffer.data, "\r\n\r\n");
-	if (ptr == NULL || (char*) input->buffer.data + WEBSTER_MAX_HEADER < ptr) return WBERR_TOO_LONG;
-	*(ptr)     = ' ';
-	*(ptr + 1) = ' ';
-	*(ptr + 2) = ' ';
+	if (ptr == NULL) return WBERR_TOO_LONG;
+	*(ptr)     = 0;
+	*(ptr + 1) = 0;
+	*(ptr + 2) = 0;
 	*(ptr + 3) = 0;
 	// remember the last position
 	input->buffer.current = (uint8_t*) ptr + 4;

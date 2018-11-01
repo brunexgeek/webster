@@ -253,7 +253,7 @@ static int network_send(
 	#else
 	int flags = MSG_NOSIGNAL;
 	#endif
-	if (send(chann->socket, buffer, (size_t) size, flags) != 0)
+	if (send(chann->socket, buffer, (size_t) size, flags) < 0)
 		return WBERR_SOCKET;
 
 	return WBERR_OK;

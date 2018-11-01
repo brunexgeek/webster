@@ -106,7 +106,7 @@ set_target_properties(libwebster_static PROPERTIES
 
 
 add_executable(server_test "${CMAKE_CURRENT_LIST_DIR}/bin/server_sample.c")
-target_link_libraries(server_test libwebster)
+target_link_libraries(server_test libwebster_static)
 target_compile_definitions(server_test PRIVATE _DEFAULT_SOURCE)
 set_target_properties(server_test PROPERTIES
     OUTPUT_NAME "server_test"
@@ -116,7 +116,7 @@ set_target_properties(server_test PROPERTIES
 
 
 add_executable(client_test "${CMAKE_CURRENT_LIST_DIR}/bin/client_sample.c")
-target_link_libraries(client_test libwebster)
+target_link_libraries(client_test libwebster_static)
 target_compile_definitions(client_test PRIVATE _DEFAULT_SOURCE)
 set_target_properties(client_test PROPERTIES
     OUTPUT_NAME "client_test"
@@ -126,7 +126,7 @@ set_target_properties(client_test PROPERTIES
 
 
 add_executable(server "${CMAKE_CURRENT_LIST_DIR}/bin/server.c")
-target_link_libraries(server libwebster)
+target_link_libraries(server libwebster_static)
 target_compile_definitions(server PRIVATE _DEFAULT_SOURCE)
 set_target_properties(server PROPERTIES
     OUTPUT_NAME "server"

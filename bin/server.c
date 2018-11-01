@@ -110,6 +110,7 @@ static void main_signalHandler(
 	int handle )
 {
 	(void) handle;
+	if (serverState == SERVER_STOPPING) exit(1);
 	serverState = SERVER_STOPPING;
 }
 
