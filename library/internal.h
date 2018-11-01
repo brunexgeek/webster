@@ -96,6 +96,8 @@ struct webster_message_t_
      * HTTP header
      */
     webster_header_t header;
+
+    struct webster_client_t_ *client;
 };
 
 

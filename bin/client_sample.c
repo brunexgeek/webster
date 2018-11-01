@@ -24,8 +24,8 @@ static int main_clientHandler(
     (void) data;
 
     // send a HTTP request
-    WebsterSetStringField(request, "host", "duckduckgo.com");
     WebsterSetIntegerField(request, "content-length", 0);
+    WebsterSetStringField(request, "connection", "close");
     WebsterFinish(request);
 
     printf("Request sent!\n");
@@ -71,7 +71,7 @@ static int main_clientHandler(
                 received += size;
                 for (int i = 0; i < size; ++i, ++j)
                 {
-                    if (j != 0 && j % 16 == 0) printf("\n");
+                    if (j != 0 && j % 32 == 0) printf("\n");
                     printf("%02x ", ptr[i]);
                 }
             }

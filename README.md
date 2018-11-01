@@ -120,7 +120,7 @@ The following list contains some of the features of HTTP 1.1 specified in RFC-72
 - [x] Send messages without transfer encoding
 - [ ] Receive chunked messages ([RFC-7230 4.1](https://tools.ietf.org/html/rfc7230#section-4.1))
 - [x] Send chunked messages
-- [ ] Add 'host' header automatically ([RFC-7230 5.4](https://tools.ietf.org/html/rfc7230#section-5.4))
+- [x] Add 'host' header automatically ([RFC-7230 5.4](https://tools.ietf.org/html/rfc7230#section-5.4))
 
 ## Limitations
 

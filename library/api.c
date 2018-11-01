@@ -256,6 +256,7 @@ int WebsterCommunicate(
 	request.buffer.size = (int) (*client)->bufferSize;
 	request.header.method = WBM_GET;
 	request.header.resource = cloneString((*client)->resource);
+	request.client = *client;
 
 	memset(&response, 0, sizeof(struct webster_message_t_));
 	response.type = WBMT_RESPONSE;
@@ -265,6 +266,7 @@ int WebsterCommunicate(
 	response.buffer.data[0] = 0;
 	response.buffer.size = (int) (*client)->bufferSize;
 	response.header.method = WBM_NONE;
+	response.client = *client;
 
 	callback(&request, &response, data);
 
@@ -535,7 +537,7 @@ static int webster_writeOrSend(
 	// send pending data if the buffer is full
 	if (output->buffer.current >= output->buffer.data + output->buffer.size)
 	{
-		result = WBNET_SEND(output->channel, output->buffer.data, output->buffer.size);
+		result = WBNET_SEND(output->channel, output->buffer.data, (size_t) output->buffer.size);
 		output->buffer.current = output->buffer.data;
 	}
 
@@ -878,6 +880,14 @@ int WebsterWriteData(
 		// if 'content-length' is not specified, we set 'tranfer-encoding' to chunked
 		if (output->body.expected < 0)
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
+		if (output->type == WBMT_REQUEST &&
+			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
+			output->client != NULL)
+		{
+			char host[255 + 1 + 5 + 1]; // host + ':' + port + '\0'
+			snprintf(host, sizeof(host) -1, "%s:%d", output->client->host, output->client->port);
+			WebsterSetStringField(output, "host", host);
+		}
 		webster_commitHeaderFields(output);
 	}
 
