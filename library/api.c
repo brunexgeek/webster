@@ -174,7 +174,7 @@ int WebsterParseURL(
 				if (*resource != NULL) strncpy(*resource, rb, (size_t) (re - rb));
 			}
 			else
-				*resource = NULL;
+				*resource = cloneString("/");
 		}
 
 		return WBERR_OK;
