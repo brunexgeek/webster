@@ -8,13 +8,24 @@
 #include "internal.h"
 
 
+typedef struct
+{
+    const char *name;
+    int id;
+} webster_field_info_t;
+
+
 WEBSTER_PRIVATE
 const char *http_statusMessage(
     int status );
 
 WEBSTER_PRIVATE
-int http_getFieldID(
+webster_field_info_t *http_getFieldID(
     const char *name );
+
+WEBSTER_PRIVATE
+webster_field_info_t *http_getFieldName(
+    int id );
 
 WEBSTER_PRIVATE
 const webster_field_t *http_getFieldById(
@@ -29,8 +40,8 @@ const webster_field_t *http_getFieldByName(
 WEBSTER_PRIVATE
 int http_addField(
     webster_header_t *header,
-    int id,
-	const char *name,
+	int id,
+    const char *name,
     const char *value );
 
 WEBSTER_PRIVATE

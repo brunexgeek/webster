@@ -602,12 +602,17 @@ int WebsterGetStringField(
     const char **value )
 {
 	if (input == NULL) return WBERR_INVALID_MESSAGE;
-	if (value == 0 || (name == NULL && id != WBFI_NON_STANDARD))
+	if (value == 0 || (name == NULL && id == WBFI_NON_STANDARD))
 		return WBERR_INVALID_ARGUMENT;
 	if (id < 0 || id > WBFI_WWW_AUTHENTICATE)
 		return WBERR_INVALID_ARGUMENT;
 
-	if (name != NULL) id = http_getFieldID(name);
+	if (name != NULL)
+	{
+		id = WBFI_NON_STANDARD;
+		webster_field_info_t *finfo = http_getFieldID(name);
+		if (finfo != NULL) id = finfo->id;
+	}
 
 	const webster_field_t *field = NULL;
 	if (id == WBFI_NON_STANDARD)
@@ -665,7 +670,7 @@ int WebsterReadString(
 
 	if (input->buffer.pending <= 0 || input->buffer.current == NULL) return WBERR_NO_DATA;
 
-	// the 'webster_receive' function is supposed to put a null-terminator
+	// the function 'webster_receive' is supposed to put a null-terminator
 	// at the end of the data, but we want to be sure (better safe than sorry)
 	*(input->buffer.current + input->buffer.pending) = 0;
 	*buffer = (char*) input->buffer.current;
@@ -788,11 +793,14 @@ int WebsterSetStringField(
 
 	// TODO: evaluate field value
 
-	int fid = http_getFieldID(name);
-	if (fid == WBFI_CONTENT_LENGTH)
+	webster_field_info_t *finfo = http_getFieldID(name);
+	if (finfo != NULL && finfo->id == WBFI_CONTENT_LENGTH)
 		output->body.expected = atoi(value);
 
-	return http_addField(&output->header, fid, temp, value);
+	if (finfo != NULL)
+		return http_addField(&output->header, finfo->id, finfo->name, value);
+	else
+		return http_addField(&output->header, WBFI_NON_STANDARD, temp, value);
 }
 
 
@@ -816,10 +824,10 @@ static void webster_commitHeaderFields(
 		const char *name = field->name;
 		const char *value = field->value;
 
-		webster_writeBuffer(output, (const uint8_t*) name, (int) strlen(name));
-		webster_writeBuffer(output, (const uint8_t*) ": ", 2);
-		webster_writeBuffer(output, (const uint8_t*) value, (int) strlen(value));
-		webster_writeBuffer(output, (const uint8_t*) "\r\n", 2);
+		webster_writeString(output, name);
+		webster_writeString(output, ": ");
+		webster_writeString(output, value);
+		webster_writeString(output, "\r\n");
 
 		field = field->next;
 	}

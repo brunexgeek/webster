@@ -10,6 +10,78 @@
 extern webster_memory_t memory;
 
 
+webster_field_info_t HTTP_HEADER_FIELDS[] =
+{
+    { "accept"                          , WBFI_ACCEPT },
+    { "accept-charset"                  , WBFI_ACCEPT_CHARSET },
+    { "accept-encoding"                 , WBFI_ACCEPT_ENCODING },
+    { "accept-language"                 , WBFI_ACCEPT_LANGUAGE },
+    { "accept-patch"                    , WBFI_ACCEPT_PATCH },
+    { "accept-ranges"                   , WBFI_ACCEPT_RANGES },
+    { "access-control-allow-credentials", WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS },
+    { "access-control-allow-headers"    , WBFI_ACCESS_CONTROL_ALLOW_HEADERS },
+    { "access-control-allow-methods"    , WBFI_ACCESS_CONTROL_ALLOW_METHODS },
+    { "access-control-allow-origin"     , WBFI_ACCESS_CONTROL_ALLOW_ORIGIN },
+    { "access-control-expose-headers"   , WBFI_ACCESS_CONTROL_EXPOSE_HEADERS },
+    { "access-control-max-age"          , WBFI_ACCESS_CONTROL_MAX_AGE },
+    { "access-control-request-headers"  , WBFI_ACCESS_CONTROL_REQUEST_HEADERS },
+    { "access-control-request-method"   , WBFI_ACCESS_CONTROL_REQUEST_METHOD },
+    { "age"                             , WBFI_AGE },
+    { "allow"                           , WBFI_ALLOW },
+    { "alt-svc"                         , WBFI_ALT_SVC },
+    { "authorization"                   , WBFI_AUTHORIZATION },
+    { "cache-control"                   , WBFI_CACHE_CONTROL },
+    { "connection"                      , WBFI_CONNECTION },
+    { "content-disposition"             , WBFI_CONTENT_DISPOSITION },
+    { "content-encoding"                , WBFI_CONTENT_ENCODING },
+    { "content-language"                , WBFI_CONTENT_LANGUAGE },
+    { "content-length"                  , WBFI_CONTENT_LENGTH },
+    { "content-location"                , WBFI_CONTENT_LOCATION },
+    { "content-range"                   , WBFI_CONTENT_RANGE },
+    { "content-type"                    , WBFI_CONTENT_TYPE },
+    { "cookie"                          , WBFI_COOKIE },
+    { "date"                            , WBFI_DATE },
+    { "dnt"                             , WBFI_DNT },
+    { "etag"                            , WBFI_ETAG },
+    { "expect"                          , WBFI_EXPECT },
+    { "expires"                         , WBFI_EXPIRES },
+    { "forwarded"                       , WBFI_FORWARDED },
+    { "from"                            , WBFI_FROM },
+    { "host"                            , WBFI_HOST },
+    { "if-match"                        , WBFI_IF_MATCH },
+    { "if-modified-since"               , WBFI_IF_MODIFIED_SINCE },
+    { "if-none-match"                   , WBFI_IF_NONE_MATCH },
+    { "if-range"                        , WBFI_IF_RANGE },
+    { "if-unmodified-since"             , WBFI_IF_UNMODIFIED_SINCE },
+    { "last-modified"                   , WBFI_LAST_MODIFIED },
+    { "link"                            , WBFI_LINK },
+    { "location"                        , WBFI_LOCATION },
+    { "max-forwards"                    , WBFI_MAX_FORWARDS },
+    { "origin"                          , WBFI_ORIGIN },
+    { "pragma"                          , WBFI_PRAGMA },
+    { "proxy-authenticate"              , WBFI_PROXY_AUTHENTICATE },
+    { "proxy-authorization"             , WBFI_PROXY_AUTHORIZATION },
+    { "public-key-pins"                 , WBFI_PUBLIC_KEY_PINS },
+    { "range"                           , WBFI_RANGE },
+    { "referer"                         , WBFI_REFERER },
+    { "retry-after"                     , WBFI_RETRY_AFTER },
+    { "server"                          , WBFI_SERVER },
+    { "set-cookie"                      , WBFI_SET_COOKIE },
+    { "strict-transport-security"       , WBFI_STRICT_TRANSPORT_SECURITY },
+    { "te"                              , WBFI_TE },
+    { "tk"                              , WBFI_TK },
+    { "trailer"                         , WBFI_TRAILER },
+    { "transfer-encoding"               , WBFI_TRANSFER_ENCODING },
+    { "upgrade"                         , WBFI_UPGRADE },
+    { "upgrade-insecure-requests"       , WBFI_UPGRADE_INSECURE_REQUESTS },
+    { "user-agent"                      , WBFI_USER_AGENT },
+    { "vary"                            , WBFI_VARY },
+    { "via"                             , WBFI_VIA },
+    { "warning"                         , WBFI_WARNING },
+    { "www-authenticate"                , WBFI_WWW_AUTHENTICATE },
+};
+
+
 static char *cloneString(
     const char *text )
 {
@@ -96,7 +168,55 @@ const char *http_statusMessage(
     return "";
 }
 
+#if 1
 
+webster_field_info_t *http_getFieldID(
+    const char *name )
+{
+	if (name == NULL || name[0] == 0) return NULL;
+
+	int first = 0;
+    int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;
+
+    while (first <= last)
+	{
+		int current = (first + last) / 2;
+		int dir = strcmp(name, HTTP_HEADER_FIELDS[current].name);
+		if (dir == 0) return &HTTP_HEADER_FIELDS[current];
+		if (dir < 0)
+			last = current - 1;
+		else
+			first = current + 1;
+	}
+
+	return NULL;
+}
+
+
+webster_field_info_t *http_getFieldName(
+    int id )
+{
+	if (id == WBFI_NON_STANDARD) return NULL;
+
+	int first = 0;
+    int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;
+
+    while (first <= last)
+	{
+		int current = (first + last) / 2;
+		if (id == HTTP_HEADER_FIELDS[current].id)
+            return &HTTP_HEADER_FIELDS[current];
+		if (id < HTTP_HEADER_FIELDS[current].id)
+			last = current - 1;
+		else
+			first = current + 1;
+	}
+
+	return WBFI_NON_STANDARD;
+}
+
+
+#else
 int http_getFieldID(
     const char *name )
 {
@@ -214,7 +334,7 @@ int http_getFieldID(
 
     return 0;
 }
-
+#endif
 
 const webster_field_t *http_getFieldByName(
     const webster_header_t *header,
@@ -249,19 +369,30 @@ const webster_field_t *http_getFieldById(
 // TODO: ensure the field does not exists
 int http_addField(
     webster_header_t *header,
-    int id,
-	const char *name,
+	int id,
+    const char *name,
     const char *value )
 {
-	size_t size = sizeof(webster_field_t) + strlen(value) + 1 + strlen(name) + 1;
-	webster_field_t *field = (webster_field_t*) memory.malloc(size);
+    if (value == NULL || header == NULL) return WBERR_INVALID_ARGUMENT;
+    if (id == WBFI_NON_STANDARD && name == NULL) return WBERR_INVALID_ARGUMENT;
+
+    size_t nameLen  = (name != NULL) ? strlen(name) : 0;
+    size_t valueLen = strlen(value);
+
+	size_t size = sizeof(webster_field_t) + valueLen + 1;
+    if (id == WBFI_NON_STANDARD) size += nameLen + 1;
+
+	webster_field_t *field = (webster_field_t*) memory.calloc(1, size);
 	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
-    field->name = (char*) field + sizeof(webster_field_t);
-    field->value = field->name + strlen(name) + 1;
+    field->value = (char*) field + sizeof(webster_field_t);
+    if (id == WBFI_NON_STANDARD)
+        field->name = field->value + valueLen + 1;
+    else
+        field->name = name;
 
 	field->id = id;
-	strcpy(field->name, name);
-	strcpy(field->value, value);
+	strncpy((char*)field->value, value, valueLen);
+    if (id == WBFI_NON_STANDARD) strncpy((char*)field->name, name, nameLen);
 	field->next = NULL;
 
 	if (header->fields == NULL)
@@ -300,7 +431,6 @@ char *http_removeTrailing(
     // remove whitespaces from the start
     while (*text == ' ') ++text;
     if (*text == 0) return text;
-
     // remove whitespaces from the end
     for (char *p = text + strlen(text) - 1; p >= text && *p == ' '; --p) *p = 0;
     return text;
@@ -561,6 +691,7 @@ int http_freeTarget(
 }
 
 
+// is a header field name character?
 #define IS_HFNC(x) \
     ((x) == '!'  \
     || ((x) >= '#' && (x) <= '\'')  \
@@ -593,6 +724,7 @@ int http_parse(
 
     while (state != STATE_COMPLETE || *ptr == 0)
     {
+        // process the first line
         if (state == STATE_FIRST_LINE)
         {
             for (token = ptr; *ptr != ' ' && *ptr != 0; ++ptr);
@@ -669,9 +801,14 @@ int http_parse(
             }
         }
         else
+        // process each header field
         if (state == STATE_HEADER_FIELD)
         {
-            if (ptr[0] == '\r' && ptr[1] == 0) break;
+            if (ptr[0] == '\r' && ptr[1] == 0)
+            {
+                state = STATE_COMPLETE;
+                continue;
+            }
 
             // header field name
             char *name = ptr;
@@ -691,16 +828,20 @@ int http_parse(
             // ignore trailing whitespces in the value
             value = http_removeTrailing(value);
             // get the field ID, if any
-            int id = http_getFieldID(name);
+            webster_field_info_t *finfo = http_getFieldID(name);
+            if (finfo != NULL)
+            {
+                http_addField(header, finfo->id, finfo->name, value);
 
-            http_addField(header, id, name, value);
-
-            // if is 'content-length' field, get the value
-            if (id == WBFI_CONTENT_LENGTH)
-                message->body.expected = atoi(value);
+                // if is 'content-length' field, get the value
+                if (finfo->id == WBFI_CONTENT_LENGTH)
+                    message->body.expected = atoi(value);
+                else
+                if (finfo->id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
+                    isChunked = 1;
+            }
             else
-            if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
-                isChunked = 1;
+                http_addField(header, WBFI_NON_STANDARD, name, value);
 
             header->fieldCount++;
         }

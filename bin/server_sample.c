@@ -82,7 +82,7 @@ static int main_serverHandler(
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->resource);
+					printf("%s %s\n", HTTP_METHODS[header->method], header->target->origin.path);
 					// print all HTTP header fields
 					webster_field_t *field = header->fields;
 					while (field != NULL)
@@ -121,7 +121,7 @@ static int main_serverHandler(
     WebsterWriteString(response, "<p>Received <strong>");
     WebsterWriteString(response, HTTP_METHODS[header->method]);
     WebsterWriteString(response, "</strong> request to <tt style='color: blue'>");
-    WebsterWriteString(response, header->resource);
+    WebsterWriteString(response, header->target->origin.path);
     WebsterWriteString(response, "</tt>!</p>");
 
     WebsterWriteString(response, "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
@@ -177,7 +177,7 @@ int main(int argc, char* argv[])
 			{
 				webster_client_t remote;
 				if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
-				WebsterCommunicate(&remote, main_serverHandler, NULL);
+				WebsterCommunicateURL(&remote, NULL, main_serverHandler, NULL);
 				WebsterDisconnect(&remote);
 			}
 		}
