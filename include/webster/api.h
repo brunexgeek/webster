@@ -48,6 +48,7 @@
 #define WBERR_INVALID_CLIENT             -24
 #define WBERR_INVALID_SERVER             -25
 #define WBERR_INVALID_MESSAGE            -26
+#define WBERR_TOO_MANY_FIELDS            -27
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -152,7 +153,15 @@
 #define WB_IS_VALID_SCHEME(x)  ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
 #define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
 
-#define WB_MAX_HEADER_FIELD_NAME    128
+#define WBL_MAX_FIELD_NAME     128
+#define WBL_MAX_FIELD_VALUE    4096
+#define WBL_MAX_FIELDS         128
+#define WBL_MAX_HOST_NAME      255
+#define WBL_DEF_BUFFER_SIZE    (1024 * 4) // 4KB
+#define WBL_MIN_BUFFER_SIZE    1024
+#define WBL_MAX_BUFFER_SIZE    (10 * 1024 * 1024)
+#define WBL_MAX_CONNECTIONS    1000
+#define WBL_READ_TIMEOUT       10000
 
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;

@@ -292,17 +292,17 @@ static void main_listDirectory(
 				stat(temp, &info);
 				// make the file size human-readable
 				char unit = 'b';
-				float size = info.st_size;
+				float size = (float) info.st_size;
 				if (info.st_size > 1024 * 1024)
 				{
 					unit = 'M';
-					size = (float) info.st_size / (1024.0 * 1024.0);
+					size = (float) info.st_size / (1024.0F * 1024.0F);
 				}
 				else
 				if (info.st_size > 1024)
 				{
 					unit = 'K';
-					size = (float) info.st_size / 1024.0;
+					size = (float) info.st_size / 1024.0F;
 				}
 
 				snprintf(temp, sizeof(temp) - 1, FIL_FORMAT,

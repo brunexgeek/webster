@@ -134,7 +134,7 @@ int WebsterConnect(
 
 	(*client)->host       = cloneString(host);
 	(*client)->port       = port;
-	(*client)->bufferSize = WEBSTER_MAX_HEADER;
+	(*client)->bufferSize = WBL_DEF_BUFFER_SIZE;
 
 	return WBERR_OK;
 
@@ -239,8 +239,8 @@ int WebsterCreate(
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
 
-	if (maxClients <= 0 || maxClients >= WEBSTER_MAX_CONNECTIONS)
-		maxClients = WEBSTER_MAX_CONNECTIONS;
+	if (maxClients <= 0 || maxClients >= WBL_MAX_CONNECTIONS)
+		maxClients = WBL_MAX_CONNECTIONS;
 
 	*server = (webster_server_t) calloc(1, sizeof(struct webster_server_t_));
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
@@ -248,7 +248,7 @@ int WebsterCreate(
 	(*server)->channel = NULL;
 	(*server)->port = -1;
 	(*server)->host = NULL;
-	(*server)->bufferSize = WEBSTER_MAX_HEADER;
+	(*server)->bufferSize = WBL_DEF_BUFFER_SIZE;
 
 	return WBERR_OK;
 }
@@ -331,7 +331,7 @@ int WebsterSetOption(
 
 	if (option == WBO_BUFFER_SIZE)
 	{
-		if (value < 1024 || value > 1024 * 1024 * 10) value = WEBSTER_MAX_HEADER;
+		if (value < WBL_MIN_BUFFER_SIZE || value > WBL_MAX_BUFFER_SIZE) value = WBL_DEF_BUFFER_SIZE;
 		(*server)->bufferSize = (uint32_t) (value & 0x7FFFFFFF);
 	}
 	else
@@ -510,7 +510,7 @@ static int webster_writeInteger(
 static int webster_receiveHeader(
 	webster_message_t *input )
 {
-	int result = webster_receive(input, WEBSTER_READ_TIMEOUT, 1);
+	int result = webster_receive(input, WBL_READ_TIMEOUT, 1);
 	if (result != WBERR_OK) return result;
 
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
@@ -556,7 +556,7 @@ int WebsterWaitEvent(
 		if (input->body.expected == 0) return WBERR_COMPLETE;
 
 		// TODO: should not receive more data than expected
-		result = webster_receive(input, WEBSTER_READ_TIMEOUT, 0);
+		result = webster_receive(input, WBL_READ_TIMEOUT, 0);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra bytes beyond content length
@@ -854,7 +854,7 @@ int WebsterWriteData(
 			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
-			char host[255 + 1 + 5 + 1]; // host + ':' + port + '\0'
+			char host[WBL_MAX_HOST_NAME + 1 + 5 + 1]; // host + ':' + port + '\0'
 			snprintf(host, sizeof(host) -1, "%s:%d", output->client->host, output->client->port);
 			WebsterSetStringField(output, "host", host);
 		}
@@ -894,6 +894,7 @@ int WebsterFlush(
 	webster_message_t *output )
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	if (output->state == WBS_COMPLETE) return WBERR_INVALID_STATE;
 
 	// ensure we are done with the HTTP header
 	if (output->state != WBS_BODY)
@@ -913,6 +914,7 @@ int WebsterFinish(
 	webster_message_t *output )
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	if (output->state == WBS_COMPLETE) return WBERR_INVALID_STATE;
 
 	WebsterFlush(output);
 

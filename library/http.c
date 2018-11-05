@@ -387,7 +387,10 @@ int http_addFieldById(
 	int id,
     const char *value )
 {
-    if (header == NULL || value == NULL) return WBERR_INVALID_ARGUMENT;
+    if (header == NULL || value == NULL)
+        return WBERR_INVALID_ARGUMENT;
+    if (header->fieldCount >= WBL_MAX_FIELDS)
+        return WBERR_TOO_MANY_FIELDS;
 
     webster_field_info_t *finfo = http_getFieldName(id);
     if (finfo == NULL) return WBERR_INVALID_ARGUMENT;
@@ -424,9 +427,12 @@ int http_addFieldByName(
 {
     if (name == NULL || value == NULL || header == NULL)
         return WBERR_INVALID_ARGUMENT;
+    if (header->fieldCount >= WBL_MAX_FIELDS)
+        return WBERR_TOO_MANY_FIELDS;
+
     size_t nameLen  = strlen(name);
     size_t valueLen = strlen(value);
-    if (nameLen > WB_MAX_HEADER_FIELD_NAME)
+    if (nameLen > WBL_MAX_FIELD_NAME)
         return WBERR_INVALID_ARGUMENT;
 
     // allocate memory for the field

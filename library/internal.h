@@ -11,10 +11,6 @@
 #endif
 
 
-#define WEBSTER_MAX_CONNECTIONS     1000
-#define WEBSTER_MAX_HEADER          (1024 * 4) // 4KB
-#define WEBSTER_READ_TIMEOUT        10000
-
 #define WBMT_UNKNOWN    0x00
 #define WBMT_REQUEST    0x01
 #define WBMT_RESPONSE   0x02
