@@ -24,7 +24,7 @@
 	"</td><td><strong><a href='%s/%s'>%s/</a></strong></div></td><td></td></tr>"
 
 #define FIL_FORMAT "<tr><td><img src='https://svn.apache.org/icons/unknown.gif'>" \
-	"</td><td><a href='%s/%s'>%s</a></td><td>%s</td></tr>"
+	"</td><td><a href='%s/%s'>%s</a></td><td>%.1f %c</td></tr>"
 
 struct mime_t
 {
@@ -251,7 +251,7 @@ static void enumerateFiles(
 
 static void main_listDirectory(
 	webster_message_t *response,
-	const char *fileName )
+	const char *path )
 {
 	char temp[1024];
 
@@ -259,13 +259,13 @@ static void main_listDirectory(
 
 	WebsterWriteString(response, HTML_BEGIN);
 	WebsterWriteString(response, "<h1>");
-	WebsterWriteString(response, fileName);
+	WebsterWriteString(response, path);
 	WebsterWriteString(response, "</h1><table>");
 
 	size_t length = strlen(rootDirectory);
 	struct dir_entry *entries;
 	int total;
-	enumerateFiles(fileName, &entries, &total);
+	enumerateFiles(path, &entries, &total);
 	if (total > 0)
 	{
 		int i = 0;
@@ -274,14 +274,43 @@ static void main_listDirectory(
 			if (entries[i].fileName == NULL) continue;
 
 			if (entries[i].type == DT_DIR)
-				snprintf(temp, sizeof(temp) - 1, DIR_FORMAT, fileName + length, entries[i].fileName,
+				snprintf(temp, sizeof(temp) - 1, DIR_FORMAT,
+					path + length,
+					entries[i].fileName,
 					entries[i].fileName);
 			else
 			if (entries[i].type == DT_REG)
 			{
+				// build the absolute file name
+				strncpy(temp, path, sizeof(temp) - 1);
+				strncat(temp, "/", sizeof(temp) - 1);
+				strncat(temp, entries[i].fileName, sizeof(temp) - 1);
+				temp[sizeof(temp) - 1] = 0;
+				// get the file information
+				struct stat info;
+				memset(&info, 0, sizeof(struct stat));
+				stat(temp, &info);
+				// make the file size human-readable
+				char unit = 'b';
+				float size = info.st_size;
+				if (info.st_size > 1024 * 1024)
+				{
+					unit = 'M';
+					size = (float) info.st_size / (1024.0 * 1024.0);
+				}
+				else
+				if (info.st_size > 1024)
+				{
+					unit = 'K';
+					size = (float) info.st_size / 1024.0;
+				}
 
-				snprintf(temp, sizeof(temp) - 1, FIL_FORMAT, fileName + length, entries[i].fileName,
-					entries[i].fileName, "0 bytes");
+				snprintf(temp, sizeof(temp) - 1, FIL_FORMAT,
+					path + length,
+					entries[i].fileName,
+					entries[i].fileName,
+					size,
+					unit);
 			}
 			else
 				continue;

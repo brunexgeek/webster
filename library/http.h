@@ -38,9 +38,14 @@ const webster_field_t *http_getFieldByName(
     const char *name );
 
 WEBSTER_PRIVATE
-int http_addField(
+int http_addFieldById(
     webster_header_t *header,
 	int id,
+    const char *value );
+
+WEBSTER_PRIVATE
+int http_addFieldByName(
+    webster_header_t *header,
     const char *name,
     const char *value );
 

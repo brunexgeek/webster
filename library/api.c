@@ -202,6 +202,9 @@ int WebsterCommunicateURL(
 
 	callback(&request, &response, data);
 
+	if (request.header.target != url) http_freeTarget(request.header.target);
+	if (response.header.target != url) http_freeTarget(response.header.target);
+
 	webster_releaseMessage(&request);
 	webster_releaseMessage(&response);
 	memory.free(buffers);
@@ -781,16 +784,6 @@ int WebsterSetStringField(
 		if (result != WBERR_OK) return result;
 	}
 
-	char temp[128] = { 0 };
-	strncpy(temp, name, sizeof(temp) - 1);
-	// change the field name to lowercase
-    for (char *p = temp; *p; ++p) *p = (char) tolower(*p);
-	// remove trailing whitespaces
-	name = http_removeTrailing(temp);
-	// check if we have any whitespace
-	for (const char *p = name; *p != 0; ++p)
-		if (*p == ' ') return WBERR_INVALID_HEADER_FIELD;
-
 	// TODO: evaluate field value
 
 	webster_field_info_t *finfo = http_getFieldID(name);
@@ -798,9 +791,9 @@ int WebsterSetStringField(
 		output->body.expected = atoi(value);
 
 	if (finfo != NULL)
-		return http_addField(&output->header, finfo->id, finfo->name, value);
+		return http_addFieldById(&output->header, finfo->id, value);
 	else
-		return http_addField(&output->header, WBFI_NON_STANDARD, temp, value);
+		return http_addFieldByName(&output->header, name, value);
 }
 
 
@@ -821,14 +814,10 @@ static void webster_commitHeaderFields(
 	webster_field_t *field = output->header.fields;
 	while (field != NULL)
 	{
-		const char *name = field->name;
-		const char *value = field->value;
-
-		webster_writeString(output, name);
+		webster_writeString(output, field->name);
 		webster_writeString(output, ": ");
-		webster_writeString(output, value);
+		webster_writeString(output, field->value);
 		webster_writeString(output, "\r\n");
-
 		field = field->next;
 	}
 	webster_writeBuffer(output, (const uint8_t*)"\r\n", 2);

@@ -7,6 +7,22 @@
 #include <stdio.h>
 
 
+// is a header field name character?
+#define IS_HFNC(x) \
+    ((x) == '!'  \
+    || ((x) >= '#' && (x) <= '\'')  \
+    || (x) == '*'  \
+    || (x) == '+'  \
+    || (x) == '-'  \
+    || (x) == '^'  \
+    || (x) == '_'  \
+    || (x) == '|'  \
+    || (x) == '~'  \
+    || ((x) >= 'A' && (x) <= 'Z')  \
+    || ((x) >= 'a' && (x) <= 'z')  \
+    || ((x) >= '0' && (x) <= '9'))
+
+
 extern webster_memory_t memory;
 
 
@@ -366,34 +382,74 @@ const webster_field_t *http_getFieldById(
 }
 
 
-// TODO: ensure the field does not exists
-int http_addField(
+int http_addFieldById(
     webster_header_t *header,
 	int id,
-    const char *name,
     const char *value )
 {
-    if (value == NULL || header == NULL) return WBERR_INVALID_ARGUMENT;
-    if (id == WBFI_NON_STANDARD && name == NULL) return WBERR_INVALID_ARGUMENT;
+    if (header == NULL || value == NULL) return WBERR_INVALID_ARGUMENT;
 
-    size_t nameLen  = (name != NULL) ? strlen(name) : 0;
-    size_t valueLen = strlen(value);
+    webster_field_info_t *finfo = http_getFieldName(id);
+    if (finfo == NULL) return WBERR_INVALID_ARGUMENT;
 
-	size_t size = sizeof(webster_field_t) + valueLen + 1;
-    if (id == WBFI_NON_STANDARD) size += nameLen + 1;
-
+    // allocate memory for the field
+	size_t size = sizeof(webster_field_t) + strlen(value) + 1;
 	webster_field_t *field = (webster_field_t*) memory.calloc(1, size);
 	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
     field->value = (char*) field + sizeof(webster_field_t);
-    if (id == WBFI_NON_STANDARD)
-        field->name = field->value + valueLen + 1;
-    else
-        field->name = name;
-
+    // fill field information
 	field->id = id;
-	strncpy((char*)field->value, value, valueLen);
-    if (id == WBFI_NON_STANDARD) strncpy((char*)field->name, name, nameLen);
-	field->next = NULL;
+    field->name = finfo->name;
+    field->next = NULL;
+	strcpy((char*)field->value, value);
+
+	if (header->fields == NULL)
+		header->fields = field;
+	else
+	{
+		webster_field_t *tail = header->fields;
+		while (tail->next != NULL) tail = tail->next;
+		tail->next = field;
+	}
+	++header->fieldCount;
+
+	return WBERR_OK;
+}
+
+// TODO: ensure the field does not exists
+int http_addFieldByName(
+    webster_header_t *header,
+    const char *name,
+    const char *value )
+{
+    if (name == NULL || value == NULL || header == NULL)
+        return WBERR_INVALID_ARGUMENT;
+    size_t nameLen  = strlen(name);
+    size_t valueLen = strlen(value);
+    if (nameLen > WB_MAX_HEADER_FIELD_NAME)
+        return WBERR_INVALID_ARGUMENT;
+
+    // allocate memory for the field
+	webster_field_t *field = (webster_field_t*) memory.calloc(1,
+        nameLen + 1 + valueLen + 1 + sizeof(webster_header_t));
+	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
+    field->value = (char*) field + sizeof(webster_field_t);
+    field->name  = field->value + valueLen + 1;
+
+    // fill field information
+    field->id = WBFI_NON_STANDARD;
+    field->next = NULL;
+    strncpy((char*) field->value, value, valueLen);
+    strncpy((char*) field->name, name, nameLen);
+    for (char *p = (char*) field->name; *p; ++p)
+    {
+        if (!IS_HFNC(*p))
+        {
+            memory.free(field);
+            return WBERR_INVALID_ARGUMENT;
+        }
+        *p = (char) tolower(*p);
+    }
 
 	if (header->fields == NULL)
 		header->fields = field;
@@ -524,6 +580,9 @@ int http_parseTarget(
         {
             target->origin.path = cloneString(url);
         }
+
+        http_decodeUrl(target->origin.path);
+        http_decodeUrl(target->origin.query);
     }
     else
     // handle absolute form
@@ -601,7 +660,8 @@ int http_parseTarget(
 		else
 			target->absolute.path = cloneString("/");
 
-		return WBERR_OK;
+		http_decodeUrl(target->absolute.path);
+        http_decodeUrl(target->absolute.query);
 	}
     else
     // handle authority form
@@ -687,24 +747,10 @@ int http_freeTarget(
             return WBERR_INVALID_URL;
     }
 
+    memory.free(target);
+
     return WBERR_OK;
 }
-
-
-// is a header field name character?
-#define IS_HFNC(x) \
-    ((x) == '!'  \
-    || ((x) >= '#' && (x) <= '\'')  \
-    || (x) == '*'  \
-    || (x) == '+'  \
-    || (x) == '-'  \
-    || (x) == '^'  \
-    || (x) == '_'  \
-    || (x) == '|'  \
-    || (x) == '~'  \
-    || ((x) >= 'A' && (x) <= 'Z')  \
-    || ((x) >= 'a' && (x) <= 'z')  \
-    || ((x) >= '0' && (x) <= '9'))
 
 
 int http_parse(
@@ -831,7 +877,7 @@ int http_parse(
             webster_field_info_t *finfo = http_getFieldID(name);
             if (finfo != NULL)
             {
-                http_addField(header, finfo->id, finfo->name, value);
+                http_addFieldById(header, finfo->id, value);
 
                 // if is 'content-length' field, get the value
                 if (finfo->id == WBFI_CONTENT_LENGTH)
@@ -841,7 +887,7 @@ int http_parse(
                     isChunked = 1;
             }
             else
-                http_addField(header, WBFI_NON_STANDARD, name, value);
+                http_addFieldByName(header, name, value);
 
             header->fieldCount++;
         }

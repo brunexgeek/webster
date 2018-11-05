@@ -152,6 +152,7 @@
 #define WB_IS_VALID_SCHEME(x)  ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
 #define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
 
+#define WB_MAX_HEADER_FIELD_NAME    128
 
 struct webster_server_t_;
 typedef struct webster_server_t_ *webster_server_t;
