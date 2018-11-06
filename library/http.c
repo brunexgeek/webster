@@ -471,6 +471,27 @@ int http_addFieldByName(
 }
 
 
+void http_removeField(
+    webster_header_t *header,
+    const char *name )
+{
+    webster_field_t *prev = NULL;
+    webster_field_t *field = header->fields;
+    while (field != NULL)
+    {
+        if (strcmp(field->name, name) == 0) break;
+        prev = field;
+        field = field->next;
+    }
+
+    if (field == NULL) return;
+    if (prev == NULL)
+        header->fields = field->next;
+    else
+        prev->next = field->next;
+}
+
+
 void http_releaseFields(
     webster_header_t *header )
 {

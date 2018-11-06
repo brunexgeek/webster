@@ -444,6 +444,10 @@ WEBSTER_EXPORTED int WebsterSetIntegerField(
     const char *name,
     int value );
 
+WEBSTER_EXPORTED int WebsterRemoveField(
+    webster_message_t *output,
+    const char *name );
+
 // TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteData(
     webster_message_t *output,

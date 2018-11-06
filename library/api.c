@@ -220,7 +220,6 @@ int WebsterDisconnect(
 
 	WBNET_CLOSE((*client)->channel);
 	memory.free((*client)->host);
-	//memory.free((*client)->resource);
 	memory.free(*client);
 	*client = NULL;
 	return WBERR_OK;
@@ -369,8 +368,6 @@ static int webster_releaseMessage(
 	if (message == NULL) return WBERR_INVALID_ARGUMENT;
 	http_releaseFields(&message->header);
 
-	// 'resource' and 'query' uses the same memory allocation
-	//memory.free(message->header.resource);
 	return WBERR_OK;
 }
 
@@ -805,6 +802,18 @@ int WebsterSetIntegerField(
 	char temp[12];
 	snprintf(temp, sizeof(temp) - 1, "%d", value);
 	return WebsterSetStringField(output, name, temp);
+}
+
+
+int WebsterRemoveField(
+    webster_message_t *output,
+    const char *name )
+{
+	if (output == NULL) return WBERR_INVALID_MESSAGE;
+	if (name == NULL) return WBERR_INVALID_ARGUMENT;
+
+	http_removeField(&output->header, name);
+	return WBERR_OK;
 }
 
 

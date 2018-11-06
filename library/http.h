@@ -50,6 +50,11 @@ int http_addFieldByName(
     const char *value );
 
 WEBSTER_PRIVATE
+void http_removeField(
+    webster_header_t *header,
+    const char *name );
+
+WEBSTER_PRIVATE
 void http_releaseFields(
     webster_header_t *header );
 
