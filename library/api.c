@@ -63,7 +63,7 @@ int WebsterInitialize(
 		memory.free = free;
 	}
 
-	int result = WebsterSetNetworkImpl(net);
+	int result = network_setImpl(net);
 	if (result != WBERR_OK) goto ESCAPE;
 	result = WBNET_INITIALIZE(&memory);
 	if (result != WBERR_OK) goto ESCAPE;
@@ -78,7 +78,7 @@ ESCAPE:
 int WebsterTerminate()
 {
 	if (WBNET_TERMINATE != NULL) WBNET_TERMINATE();
-	WebsterResetNetworkImpl();
+	network_resetImpl();
 	memory.malloc = NULL;
 	memory.calloc = NULL;
 	memory.free = NULL;

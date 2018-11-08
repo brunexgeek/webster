@@ -363,7 +363,7 @@ WEBSTER_PRIVATE webster_network_t networkImpl = { NULL, NULL, NULL, NULL, NULL, 
 	NULL, NULL, NULL };
 
 
-int WebsterSetNetworkImpl(
+int network_setImpl(
 	webster_network_t *impl )
 {
 	if (impl == NULL) impl = &DEFAULT_IMPL;
@@ -392,7 +392,7 @@ int WebsterSetNetworkImpl(
 }
 
 
-int WebsterResetNetworkImpl()
+int network_resetImpl()
 {
 	networkImpl.initialize = NULL;
 	networkImpl.terminate  = NULL;

@@ -16,9 +16,9 @@
 
 extern webster_network_t networkImpl;
 
-WEBSTER_PRIVATE int WebsterSetNetworkImpl(
+WEBSTER_PRIVATE int network_setImpl(
 	webster_network_t *impl );
 
-WEBSTER_PRIVATE int WebsterResetNetworkImpl();
+WEBSTER_PRIVATE int network_resetImpl();
 
 #endif // WEBSTER_NETWORK_HH
