@@ -15,6 +15,7 @@
 #define WBMT_REQUEST    0x01
 #define WBMT_RESPONSE   0x02
 
+#define WBMF_CHUNKED    0x01
 
 struct webster_client_t_
 {
@@ -54,6 +55,8 @@ struct webster_message_t_
      */
     int type;
 
+    int flags;
+
     struct
     {
         /**
@@ -62,6 +65,11 @@ struct webster_message_t_
          * This value is less than zero if using chunked transfer encoding.
          */
         int expected;
+
+        /**
+         * @brief Amount of bytes until the end of the current chunk.
+         */
+        int chunkSize;
     } body;
 
     struct

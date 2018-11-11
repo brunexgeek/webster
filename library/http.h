@@ -82,4 +82,8 @@ WEBSTER_PRIVATE
 int http_freeTarget(
     webster_target_t *target );
 
+WEBSTER_PRIVATE
+int http_parseChunk(
+    webster_message_t *input );
+
 #endif // #ifndef WEBSTER_HTTP_H

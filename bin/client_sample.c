@@ -81,54 +81,6 @@ int main( int argc, char **argv )
 {
     (void) argc;
     (void) argv;
-/*
-    webster_header_t header;
-    header.status = 0;
-    char buffer[256];
-    int type = 1;
-    strcpy(buffer, "GET bruno@paparapa.com:999 HTTP/1.1\r\nHost: www.example.com\r\n\r\n");
-    int result = http_parse(buffer, type, &header);
-    if (result != WBERR_OK)
-    {
-        printf("ERROR %d\n", result);
-        return 1;
-    }
-
-    if (type == 2)
-    {
-        printf("HTTP/1.1 %d\n", header.status);
-    }
-    else
-    {
-        if (header.target.type == WBRT_ABSOLUTE)
-        {
-            printf("Method: %d\n  Host: %s\n  Port: %d\n  Path: %s\n Query: %s\n",
-                header.method,
-                header.target.absolute.host,
-                header.target.absolute.port,
-                header.target.absolute.path,
-                header.target.absolute.query);
-        }
-        else
-        if (header.target.type == WBRT_ORIGIN)
-        {
-            printf("Method: %d\n  Path: %s\n Query: %s\n",
-                header.method,
-                header.target.origin.path,
-                header.target.origin.query);
-        }
-        else
-        if (header.target.type == WBRT_AUTHORITY)
-        {
-            printf("Method: %d\n  User: %s\n  Host: %s\n  Port: %d\n",
-                header.method,
-                header.target.authority.user,
-                header.target.authority.host,
-                header.target.authority.port);
-        }
-    }
-
-    return 0;*/
 
     WebsterInitialize(NULL, NULL);
 

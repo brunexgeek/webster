@@ -233,6 +233,7 @@ static int network_receive(
 		return WBERR_SOCKET;
 	}
 	*size = (uint32_t) bytes;
+	if (bytes == 0) return WBERR_TIMEOUT;
 
 	return WBERR_OK;
 }

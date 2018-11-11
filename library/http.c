@@ -789,11 +789,11 @@ int http_parse(
     char *ptr = data;
     char *token = ptr;
     int result;
-    int isChunked = 0;
 
     webster_header_t *header = &message->header;
     header->fieldCount = 0;
     message->body.expected = 0;
+    message->body.chunkSize = 0;
 
     while (state != STATE_COMPLETE || *ptr == 0)
     {
@@ -911,7 +911,7 @@ int http_parse(
                     message->body.expected = atoi(value);
                 else
                 if (finfo->id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
-                    isChunked = 1;
+                    message->flags |= WBMF_CHUNKED;
             }
             else
                 http_addFieldByName(header, name, value);
@@ -922,9 +922,29 @@ int http_parse(
             break;
     }
 
-    // check whether chunked transfer encoding is enabled
-    if (isChunked && message->body.expected == 0)
-        message->body.expected = -1;
+    return WBERR_OK;
+}
+
+#if 0
+int http_parseChunk(
+    webster_message_t *input )
+{
+    uint8_t *ptr = input->buffer.current;
+    if (ptr[0] == '\r' && ptr[1] == '\n') ptr += 2;
+
+    char *token = (char*) ptr;
+    while (isxdigit(*ptr)) ++ptr;
+    if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_CHUNK;
+    *ptr = 0;
+    ptr += 2;
+    uint32_t temp = 0;
+    sscanf(token, "%x", &temp);
+    input->body.chunkSize = (int) temp;
+    input->buffer.current = ptr;
+    input->buffer.pending += (int) (ptr - input->buffer.current);
+printf("Chunk size is %d\n", (int) temp);
+    if (temp == 0) return WBERR_COMPLETE;
 
     return WBERR_OK;
 }
+#endif

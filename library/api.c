@@ -181,7 +181,6 @@ int WebsterCommunicateURL(
 	memset(&request, 0, sizeof(struct webster_message_t_));
 	request.type = WBMT_REQUEST;
 	request.channel = (*client)->channel;
-	request.body.expected = -1;
 	request.buffer.data = buffers;
 	request.buffer.data[0] = 0;
 	request.buffer.size = (int) (*client)->bufferSize;
@@ -192,7 +191,6 @@ int WebsterCommunicateURL(
 	memset(&response, 0, sizeof(struct webster_message_t_));
 	response.type = WBMT_RESPONSE;
 	response.channel = (*client)->channel;
-	response.body.expected = -1;
 	response.buffer.data = buffers + (*client)->bufferSize;
 	response.buffer.data[0] = 0;
 	response.buffer.size = (int) (*client)->bufferSize;
@@ -550,22 +548,25 @@ int WebsterWaitEvent(
 	else
 	if (input->state == WBS_HEADER || input->state == WBS_BODY)
 	{
-		if (input->body.expected == 0) return WBERR_COMPLETE;
+		if (input->body.expected == 0)
+		{
+			input->state = WBS_COMPLETE;
+			return WBERR_COMPLETE;
+		}
 
 		// TODO: should not receive more data than expected
 		result = webster_receive(input, WBL_READ_TIMEOUT, 0);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra bytes beyond content length
-			if (input->buffer.pending > input->body.expected)
+			if (input->body.expected >= 0 && input->buffer.pending > input->body.expected)
 			{
 				input->buffer.pending = input->body.expected;
 				input->buffer.data[input->buffer.pending] = 0;
 				// we still have some data to return?
-				if (input->buffer.pending <= 0)
+				if (input->buffer.pending == 0)
 				{
 					input->state = WBS_COMPLETE;
-					input->buffer.pending = 0;
 					return WBERR_COMPLETE;
 				}
 			}
@@ -856,9 +857,13 @@ int WebsterWriteData(
 
 	if (output->state == WBS_HEADER)
 	{
-		// if 'content-length' is not specified, we set 'tranfer-encoding' to chunked
-		if (output->body.expected < 0)
+		// set 'tranfer-encoding' to chunked if required
+		if (http_getFieldById(&output->header, WBFI_CONTENT_LENGTH) == NULL)
+		{
+			output->flags |= WBMF_CHUNKED;
+			// TODO: merge with previously set value, if any
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
+		}
 		if (output->type == WBMT_REQUEST &&
 			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
@@ -874,7 +879,7 @@ int WebsterWriteData(
 	if (size <= 0) return WBERR_OK;
 
 	// check whether we're using chuncked transfer encoding
-	if (output->body.expected < 0)
+	if (output->flags & WBMF_CHUNKED)
 	{
 		char temp[16];
 		snprintf(temp, sizeof(temp) - 1, "%X\r\n", size);
@@ -884,7 +889,7 @@ int WebsterWriteData(
 	// write data
 	webster_writeBuffer(output, buffer, size);
 	// append the block terminator, if using chuncked transfer encoding
-	if (output->body.expected < 0)
+	if (output->flags & WBMF_CHUNKED)
 		webster_writeBuffer(output, (const uint8_t*) "\r\n", 2);
 
 	return WBERR_OK;
@@ -928,7 +933,7 @@ int WebsterFinish(
 	WebsterFlush(output);
 
 	// send the last marker if using chunked transfer encoding
-	if (output->body.expected < 0)
+	if (output->flags & WBMF_CHUNKED)
 		WBNET_SEND(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	output->state = WBS_COMPLETE;
