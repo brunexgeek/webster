@@ -745,6 +745,23 @@ static int webster_writeResourceLine(
 
 	switch (output->header.target->type)
 	{
+		case WBRT_ABSOLUTE:
+			if (output->header.target->absolute.scheme == WBP_HTTPS)
+				webster_writeString(output, "https://");
+			else
+				webster_writeString(output, "http://");
+			webster_writeString(output, output->header.target->absolute.host);
+			webster_writeChar(output, ':');
+			webster_writeInteger(output, output->header.target->absolute.port);
+			if (output->header.target->absolute.path[0] != '/')
+				webster_writeChar(output, '/');
+			webster_writeString(output, output->header.target->absolute.path);
+			if (output->header.target->absolute.query != NULL)
+			{
+				webster_writeChar(output, '&');
+				webster_writeString(output, output->header.target->absolute.query);
+			}
+			break;
 		case WBRT_ORIGIN:
 			webster_writeString(output, output->header.target->origin.path);
 			if (output->header.target->origin.query != NULL)
@@ -752,6 +769,14 @@ static int webster_writeResourceLine(
 				webster_writeChar(output, '&');
 				webster_writeString(output, output->header.target->origin.query);
 			}
+			break;
+		case WBRT_ASTERISK:
+			webster_writeChar(output, '*');
+			break;
+		case WBRT_AUTHORITY:
+			webster_writeString(output, output->header.target->authority.host);
+			webster_writeChar(output, ':');
+			webster_writeInteger(output, output->header.target->absolute.port);
 			break;
 		default:
 			return WBERR_INVALID_RESOURCE;

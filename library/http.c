@@ -122,6 +122,7 @@ static char *subString(
     char *output = memory.malloc(length + 1);
     if (output == NULL) return NULL;
     memcpy(output, text + offset, length);
+    output[length] = 0;
     return output;
 }
 
