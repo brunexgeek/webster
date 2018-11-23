@@ -49,6 +49,7 @@ static void main_signalHandler(
 	int handle )
 {
 	(void) handle;
+	if (serverState == SERVER_STOPPING) exit(1);
 	serverState = SERVER_STOPPING;
 }
 
@@ -82,7 +83,7 @@ static int main_serverHandler(
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->target->origin.path);
+					printf("%s %s\n", HTTP_METHODS[header->method], header->target->path);
 					// print all HTTP header fields
 					webster_field_t *field = header->fields;
 					while (field != NULL)
@@ -121,8 +122,15 @@ static int main_serverHandler(
     WebsterWriteString(response, "<p>Received <strong>");
     WebsterWriteString(response, HTTP_METHODS[header->method]);
     WebsterWriteString(response, "</strong> request to <tt style='color: blue'>");
-    WebsterWriteString(response, header->target->origin.path);
-    WebsterWriteString(response, "</tt>!</p>");
+    WebsterWriteString(response, header->target->path);
+    WebsterWriteString(response, "</tt>");
+	if (header->target->query != NULL)
+	{
+		WebsterWriteString(response, " with query <tt style='color: blue'>");
+		WebsterWriteString(response, header->target->query);
+		WebsterWriteString(response, "</tt>");
+	}
+	WebsterWriteString(response, "</p>");
 
     WebsterWriteString(response, "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
     WebsterWriteString(response, "<table><tr><th>Header field</th><th>Value</th></tr>");
@@ -164,24 +172,24 @@ int main(int argc, char* argv[])
 
 	#endif
 
-	webster_server_t server;
+	webster_server_t *server = NULL;
 
 	printf(PROGRAM_TITLE "\n");
 
 	WebsterInitialize(NULL, NULL);
 	if (WebsterCreate(&server, 100) == WBERR_OK)
 	{
-		if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
+		if (WebsterStart(server, "0.0.0.0", 7000) == WBERR_OK)
 		{
 			while (serverState == SERVER_RUNNING)
 			{
-				webster_client_t remote;
-				if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
-				WebsterCommunicateURL(&remote, NULL, main_serverHandler, NULL);
-				WebsterDisconnect(&remote);
+				webster_client_t *remote = NULL;
+				if (WebsterAccept(server, &remote) != WBERR_OK) continue;
+				WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+				WebsterDisconnect(remote);
 			}
 		}
-		WebsterDestroy(&server);
+		WebsterDestroy(server);
 	}
 	WebsterTerminate();
 	printf("Server terminated!\n");

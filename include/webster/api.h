@@ -165,10 +165,10 @@
 #define WBL_READ_TIMEOUT       10000
 
 struct webster_server_t_;
-typedef struct webster_server_t_ *webster_server_t;
+typedef struct webster_server_t_ webster_server_t;
 
 struct webster_client_t_;
-typedef struct webster_client_t_ *webster_client_t;
+typedef struct webster_client_t_ webster_client_t;
 
 struct webster_message_t_;
 typedef struct webster_message_t_ webster_message_t;
@@ -194,14 +194,6 @@ typedef struct
     int size;
 } webster_event_t;
 
-
-typedef struct
-{
-    int type;
-    char *path;
-    char *query;
-} webster_origin_form_t;
-
 typedef struct
 {
     int type;
@@ -211,28 +203,6 @@ typedef struct
     int port;
     char *path;
     char *query;
-} webster_absolute_form_t;
-
-typedef struct
-{
-    int type;
-    char *user;
-    char *host;
-    int port;
-} webster_authority_form_t;
-
-typedef struct
-{
-    int type;
-} webster_asterisk_form_t;
-
-typedef union
-{
-    int type;
-    webster_origin_form_t origin;
-    webster_absolute_form_t absolute;
-    webster_authority_form_t authority;
-    webster_asterisk_form_t asterisk;
 } webster_target_t;
 
 typedef struct
@@ -334,7 +304,7 @@ WEBSTER_EXPORTED int WebsterFreeURL(
  */
 
 WEBSTER_EXPORTED int WebsterConnect(
-    webster_client_t *client,
+    webster_client_t **client,
     int scheme,
     const char *host,
     int port );
@@ -361,7 +331,7 @@ WEBSTER_EXPORTED int WebsterDisconnect(
  */
 
 WEBSTER_EXPORTED int WebsterCreate(
-    webster_server_t *server,
+    webster_server_t **server,
     int maxClients );
 
 WEBSTER_EXPORTED int WebsterDestroy(
@@ -377,7 +347,7 @@ WEBSTER_EXPORTED int WebsterStop(
 
 WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
-	webster_client_t *remote );
+	webster_client_t **remote );
 
 WEBSTER_EXPORTED int WebsterSetOption(
 	webster_server_t *server,

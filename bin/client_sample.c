@@ -87,11 +87,11 @@ int main( int argc, char **argv )
     webster_target_t *url;
     WebsterParseURL("/", &url);
 
-    webster_client_t client;
+    webster_client_t *client = NULL;
     if (WebsterConnect(&client, WBP_HTTP, "duckduckgo.com", 80) == WBERR_OK)
     {
-        WebsterCommunicateURL(&client, url, main_clientHandler, NULL);
-        WebsterDisconnect(&client);
+        WebsterCommunicateURL(client, url, main_clientHandler, NULL);
+        WebsterDisconnect(client);
     }
     else
         printf("Failed!\n");

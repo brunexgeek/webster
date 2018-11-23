@@ -601,16 +601,16 @@ int http_parseTarget(
         if (*ptr == '?')
         {
             size_t pos = (size_t) (ptr - url);
-            target->origin.path = subString(url, 0, pos);
-            target->origin.query = subString(url, pos + 1, strlen(url) - pos - 1);
+            target->path = subString(url, 0, pos);
+            target->query = subString(url, pos + 1, strlen(url) - pos - 1);
         }
         else
         {
-            target->origin.path = cloneString(url);
+            target->path = cloneString(url);
         }
 
-        http_decodeUrl(target->origin.path);
-        http_decodeUrl(target->origin.query);
+        http_decodeUrl(target->path);
+        http_decodeUrl(target->query);
     }
     else
     // handle absolute form
@@ -654,42 +654,42 @@ int http_parseTarget(
 
 		// return the scheme
 		if (url[4] == ':')
-			target->absolute.scheme = WBP_HTTP;
+			target->scheme = WBP_HTTP;
 		else
-			target->absolute.scheme = WBP_HTTPS;
+			target->scheme = WBP_HTTPS;
 
 		// return the port number, if any
 		if (pe != NULL)
 		{
-			target->absolute.port = 0;
+			target->port = 0;
 			int mult = 1;
 			while (--pe >= pb)
 			{
-				target->absolute.port += (int) (*pe - '0') * mult;
+				target->port += (int) (*pe - '0') * mult;
 				mult *= 10;
 			}
-			if (target->absolute.port > 65535 || target->authority.port < 0)
+			if (target->port > 65535 || target->port < 0)
                 return WBERR_INVALID_URL;
 		}
 		else
 		{
-			if (target->absolute.scheme == WBP_HTTP)
-				target->absolute.port = 80;
+			if (target->scheme == WBP_HTTP)
+				target->port = 80;
 			else
-				target->absolute.port = 443;
+				target->port = 443;
 		}
 
 		// return the host
-        target->absolute.host = subString(hb, 0, (size_t) (he - hb));
+        target->host = subString(hb, 0, (size_t) (he - hb));
 
 		// return the resource, if any
 		if (re != NULL)
-			target->absolute.path = subString(rb, 0, (size_t) (re - rb));
+			target->path = subString(rb, 0, (size_t) (re - rb));
 		else
-			target->absolute.path = cloneString("/");
+			target->path = cloneString("/");
 
-		http_decodeUrl(target->absolute.path);
-        http_decodeUrl(target->absolute.query);
+		http_decodeUrl(target->path);
+        http_decodeUrl(target->query);
 	}
     else
     // handle authority form
@@ -699,7 +699,7 @@ int http_parseTarget(
         const char *hb = strchr(url, '@');
         if (hb != NULL)
         {
-            target->authority.user = subString(url, 0, (size_t) (hb - url));
+            target->user = subString(url, 0, (size_t) (hb - url));
             hb++;
         }
         else
@@ -708,8 +708,8 @@ int http_parseTarget(
         const char *he = strchr(hb, ':');
         if (he != NULL)
         {
-            target->authority.host = subString(hb, 0, (size_t) (he - hb));
-            target->authority.port = 0;
+            target->host = subString(hb, 0, (size_t) (he - hb));
+            target->port = 0;
 
             const char *pb = he + 1;
             const char *pe = pb;
@@ -719,16 +719,16 @@ int http_parseTarget(
 			int mult = 1;
 			while (--pe >= pb)
 			{
-				target->authority.port += (int) (*pe - '0') * mult;
+				target->port += (int) (*pe - '0') * mult;
 				mult *= 10;
 			}
-			if (target->authority.port > 65535 || target->authority.port < 0)
+			if (target->port > 65535 || target->port < 0)
                 return WBERR_INVALID_URL;
         }
         else
         {
-            target->authority.host = cloneString(hb);
-            target->authority.port = 80;
+            target->host = cloneString(hb);
+            target->port = 80;
         }
     }
 
@@ -744,28 +744,28 @@ int http_freeTarget(
     switch (target->type)
     {
         case WBRT_ORIGIN:
-            if (target->origin.path != NULL)
-                memory.free(target->origin.path);
-            if (target->origin.query != NULL)
-                memory.free(target->origin.query);
+            if (target->path != NULL)
+                memory.free(target->path);
+            if (target->query != NULL)
+                memory.free(target->query);
             break;
 
         case WBRT_ABSOLUTE:
-            if (target->absolute.user != NULL)
-                memory.free(target->absolute.user);
-            if (target->absolute.host != NULL)
-                memory.free(target->absolute.host);
-            if (target->absolute.path != NULL)
-                memory.free(target->absolute.path);
-            if (target->absolute.query != NULL)
-                memory.free(target->absolute.query);
+            if (target->user != NULL)
+                memory.free(target->user);
+            if (target->host != NULL)
+                memory.free(target->host);
+            if (target->path != NULL)
+                memory.free(target->path);
+            if (target->query != NULL)
+                memory.free(target->query);
             break;
 
         case WBRT_AUTHORITY:
-            if (target->authority.user != NULL)
-                memory.free(target->authority.user);
-            if (target->authority.host != NULL)
-                memory.free(target->authority.host);
+            if (target->user != NULL)
+                memory.free(target->user);
+            if (target->host != NULL)
+                memory.free(target->host);
             break;
 
         case WBRT_ASTERISK:

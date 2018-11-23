@@ -108,7 +108,7 @@ int WebsterFreeURL(
 
 
 int WebsterConnect(
-    webster_client_t *client,
+    webster_client_t **client,
     int scheme,
 	const char *host,
     int port )
@@ -156,11 +156,11 @@ int WebsterCommunicate(
     webster_handler_t *callback,
     void *data )
 {
-	webster_origin_form_t url;
+	webster_target_t url;
 	url.type = WBRT_ORIGIN;
 	url.path = path;
 	url.query = query;
-	return WebsterCommunicateURL(client, (webster_target_t*) &url, callback, data);
+	return WebsterCommunicateURL(client, &url, callback, data);
 }
 
 
@@ -175,27 +175,27 @@ int WebsterCommunicateURL(
 	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
 	struct webster_message_t_ request, response;
-	uint8_t *buffers = (uint8_t*) memory.malloc((*client)->bufferSize * 2);
+	uint8_t *buffers = (uint8_t*) memory.malloc(client->bufferSize * 2);
 	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	memset(&request, 0, sizeof(struct webster_message_t_));
 	request.type = WBMT_REQUEST;
-	request.channel = (*client)->channel;
+	request.channel = client->channel;
 	request.buffer.data = buffers;
 	request.buffer.data[0] = 0;
-	request.buffer.size = (int) (*client)->bufferSize;
+	request.buffer.size = (int) client->bufferSize;
 	request.header.method = WBM_GET;
-	request.client = *client;
+	request.client = client;
 	request.header.target = url;
 
 	memset(&response, 0, sizeof(struct webster_message_t_));
 	response.type = WBMT_RESPONSE;
-	response.channel = (*client)->channel;
-	response.buffer.data = buffers + (*client)->bufferSize;
+	response.channel = client->channel;
+	response.buffer.data = buffers + client->bufferSize;
 	response.buffer.data[0] = 0;
-	response.buffer.size = (int) (*client)->bufferSize;
+	response.buffer.size = (int) client->bufferSize;
 	response.header.method = WBM_NONE;
-	response.client = *client;
+	response.client = client;
 	response.header.target = url;
 
 	callback(&request, &response, data);
@@ -216,10 +216,9 @@ int WebsterDisconnect(
 {
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 
-	WBNET_CLOSE((*client)->channel);
-	memory.free((*client)->host);
-	memory.free(*client);
-	*client = NULL;
+	WBNET_CLOSE(client->channel);
+	memory.free(client->host);
+	memory.free(client);
 	return WBERR_OK;
 }
 
@@ -231,7 +230,7 @@ int WebsterDisconnect(
 
 
 int WebsterCreate(
-    webster_server_t *server,
+    webster_server_t **server,
 	int maxClients )
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
@@ -239,7 +238,7 @@ int WebsterCreate(
 	if (maxClients <= 0 || maxClients >= WBL_MAX_CONNECTIONS)
 		maxClients = WBL_MAX_CONNECTIONS;
 
-	*server = (webster_server_t) calloc(1, sizeof(struct webster_server_t_));
+	*server = (webster_server_t*) calloc(1, sizeof(struct webster_server_t_));
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	(*server)->channel = NULL;
@@ -254,13 +253,12 @@ int WebsterCreate(
 int WebsterDestroy(
     webster_server_t *server )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 
 	WebsterStop(server);
 
-	if ((*server)->host != NULL) memory.free((*server)->host);
-	memory.free(*server);
-	*server = NULL;
+	if (server->host != NULL) memory.free(server->host);
+	memory.free(server);
 
 	return WBERR_OK;
 }
@@ -271,22 +269,22 @@ int WebsterStart(
     const char *host,
     int port )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 
-	int result = WBNET_OPEN(&(*server)->channel);
+	int result = WBNET_OPEN(&server->channel);
 	if (result != WBERR_OK) return result;
 
-	return WBNET_LISTEN((*server)->channel, host, port, (*server)->maxClients);
+	return WBNET_LISTEN(server->channel, host, port, server->maxClients);
 }
 
 
 int WebsterStop(
     webster_server_t *server )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 
-	WBNET_CLOSE((*server)->channel);
-	(*server)->channel = NULL;
+	WBNET_CLOSE(server->channel);
+	server->channel = NULL;
 
 	return WBERR_OK;
 }
@@ -294,13 +292,13 @@ int WebsterStop(
 
 int WebsterAccept(
     webster_server_t *server,
-	webster_client_t *remote )
+	webster_client_t **remote )
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
 	if (remote == NULL) return WBERR_INVALID_CLIENT;
 
 	void *client = NULL;
-	int result = WBNET_ACCEPT((*server)->channel, &client);
+	int result = WBNET_ACCEPT(server->channel, &client);
 	if (result != WBERR_OK) return result;
 
 	*remote = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_));
@@ -313,7 +311,7 @@ int WebsterAccept(
 	(*remote)->channel = client;
 	(*remote)->port = 0;
 	(*remote)->host = NULL;
-	(*remote)->bufferSize = (*server)->bufferSize;
+	(*remote)->bufferSize = server->bufferSize;
 
 	return WBERR_OK;
 }
@@ -324,12 +322,12 @@ int WebsterSetOption(
     int option,
     int value )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 
 	if (option == WBO_BUFFER_SIZE)
 	{
 		if (value < WBL_MIN_BUFFER_SIZE || value > WBL_MAX_BUFFER_SIZE) value = WBL_DEF_BUFFER_SIZE;
-		(*server)->bufferSize = (uint32_t) (value & 0x7FFFFFFF);
+		server->bufferSize = (uint32_t) (value & 0x7FFFFFFF);
 	}
 	else
 		return WBERR_INVALID_ARGUMENT;
@@ -343,11 +341,11 @@ int WebsterGetOption(
     int option,
     int *value )
 {
-	if (server == NULL || *server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL) return WBERR_INVALID_SERVER;
 	if (value == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (option == WBO_BUFFER_SIZE)
-		*value = (int) (*server)->bufferSize;
+		*value = (int) server->bufferSize;
 	else
 		return WBERR_INVALID_ARGUMENT;
 
@@ -746,37 +744,37 @@ static int webster_writeResourceLine(
 	switch (output->header.target->type)
 	{
 		case WBRT_ABSOLUTE:
-			if (output->header.target->absolute.scheme == WBP_HTTPS)
+			if (output->header.target->scheme == WBP_HTTPS)
 				webster_writeString(output, "https://");
 			else
 				webster_writeString(output, "http://");
-			webster_writeString(output, output->header.target->absolute.host);
+			webster_writeString(output, output->header.target->host);
 			webster_writeChar(output, ':');
-			webster_writeInteger(output, output->header.target->absolute.port);
-			if (output->header.target->absolute.path[0] != '/')
+			webster_writeInteger(output, output->header.target->port);
+			if (output->header.target->path[0] != '/')
 				webster_writeChar(output, '/');
-			webster_writeString(output, output->header.target->absolute.path);
-			if (output->header.target->absolute.query != NULL)
+			webster_writeString(output, output->header.target->path);
+			if (output->header.target->query != NULL)
 			{
 				webster_writeChar(output, '&');
-				webster_writeString(output, output->header.target->absolute.query);
+				webster_writeString(output, output->header.target->query);
 			}
 			break;
 		case WBRT_ORIGIN:
-			webster_writeString(output, output->header.target->origin.path);
-			if (output->header.target->origin.query != NULL)
+			webster_writeString(output, output->header.target->path);
+			if (output->header.target->query != NULL)
 			{
 				webster_writeChar(output, '&');
-				webster_writeString(output, output->header.target->origin.query);
+				webster_writeString(output, output->header.target->query);
 			}
 			break;
 		case WBRT_ASTERISK:
 			webster_writeChar(output, '*');
 			break;
 		case WBRT_AUTHORITY:
-			webster_writeString(output, output->header.target->authority.host);
+			webster_writeString(output, output->header.target->host);
 			webster_writeChar(output, ':');
-			webster_writeInteger(output, output->header.target->absolute.port);
+			webster_writeInteger(output, output->header.target->port);
 			break;
 		default:
 			return WBERR_INVALID_RESOURCE;

@@ -351,7 +351,7 @@ static int main_serverHandler(
 			{
 				if (WebsterGetHeader(request, &header) == WBERR_OK)
 				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->target->origin.path);
+					printf("%s %s\n", HTTP_METHODS[header->method], header->target->path);
 					// print all HTTP header fields
 					webster_field_t *field = header->fields;
 					while (field != NULL)
@@ -371,7 +371,7 @@ static int main_serverHandler(
 	char *fileName = NULL;
 	char temp[512];
 	strncpy(temp, rootDirectory, sizeof(temp) - 1);
-	strncat(temp, header->target->origin.path, sizeof(temp) - 1);
+	strncat(temp, header->target->path, sizeof(temp) - 1);
 	fileName = realpath(temp, NULL);
 
 	result = WBERR_OK;
@@ -447,7 +447,7 @@ int main(int argc, char* argv[])
 	else
 		realpath(".", rootDirectory);
 
-	webster_server_t server;
+	webster_server_t *server = NULL;
 
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
@@ -456,18 +456,18 @@ int main(int argc, char* argv[])
 	{
 		if (WebsterCreate(&server, 100) == WBERR_OK)
 		{
-			if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
+			if (WebsterStart(server, "0.0.0.0", 7000) == WBERR_OK)
 			{
 				while (serverState == SERVER_RUNNING)
 				{
-					webster_client_t remote;
-					if (WebsterAccept(&server, &remote) != WBERR_OK) continue;
+					webster_client_t *remote = NULL;
+					if (WebsterAccept(server, &remote) != WBERR_OK) continue;
 					// you problably should handle the client request in another thread
-					WebsterCommunicateURL(&remote, NULL, main_serverHandler, NULL);
-					WebsterDisconnect(&remote);
+					WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+					WebsterDisconnect(remote);
 				}
 			}
-			WebsterDestroy(&server);
+			WebsterDestroy(server);
 		}
 		WebsterTerminate();
 	}
