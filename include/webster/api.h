@@ -393,10 +393,6 @@ WEBSTER_EXPORTED int WebsterReadString(
     webster_message_t *input,
     const char **buffer );
 
-WEBSTER_EXPORTED int WebsterGetInputState(
-	webster_message_t *input,
-    int *state );
-
 WEBSTER_EXPORTED int WebsterSetStatus(
     webster_message_t *output,
     int status );

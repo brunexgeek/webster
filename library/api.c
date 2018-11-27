@@ -786,6 +786,22 @@ static int webster_writeResourceLine(
 }
 
 
+static int webster_commitFirstLine(
+	webster_message_t *output )
+{
+	int result;
+
+	if (output->type == WBMT_RESPONSE)
+		result = webster_writeStatusLine(output);
+	else
+		result = webster_writeResourceLine(output);
+	if (result != WBERR_OK) return result;
+	output->state = WBS_HEADER;
+
+	return WBERR_OK;
+}
+
+
 int WebsterSetStringField(
     webster_message_t *output,
     const char *name,
@@ -798,10 +814,7 @@ int WebsterSetStringField(
 	int result = WBERR_OK;
 	if (output->state == WBS_IDLE)
 	{
-		if (output->type == WBMT_RESPONSE)
-			result = webster_writeStatusLine(output);
-		else
-			result = webster_writeResourceLine(output);
+		result = webster_commitFirstLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
@@ -871,10 +884,7 @@ int WebsterWriteData(
 
 	if (output->state == WBS_IDLE)
 	{
-		if (output->type == WBMT_RESPONSE)
-			result = webster_writeStatusLine(output);
-		else
-			result = webster_writeResourceLine(output);
+		result = webster_commitFirstLine(output);
 		if (result != WBERR_OK) return result;
 	}
 
@@ -891,8 +901,10 @@ int WebsterWriteData(
 			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
-			char host[WBL_MAX_HOST_NAME + 1 + 5 + 1]; // host + ':' + port + '\0'
-			snprintf(host, sizeof(host) -1, "%s:%d", output->client->host, output->client->port);
+			static const HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
+			char host[HOST_LEN + 1];
+			snprintf(host, HOST_LEN, "%s:%d", output->client->host, output->client->port);
+			host[HOST_LEN] = 0;
 			WebsterSetStringField(output, "host", host);
 		}
 		webster_commitHeaderFields(output);
