@@ -226,6 +226,9 @@ static int network_receive(
 	if (result < 0) return WBERR_SOCKET;
 
 	ssize_t bytes = recv(chann->socket, buffer, (size_t) bufferSize, 0);
+	if (bytes == ECONNRESET || bytes == EPIPE || bytes == ENOTCONN)
+		return WBERR_NOT_CONNECTED;
+	else
 	if (bytes < 0)
 	{
 		*size = 0;
@@ -254,7 +257,11 @@ static int network_send(
 	#else
 	int flags = MSG_NOSIGNAL;
 	#endif
-	if (send(chann->socket, buffer, (size_t) size, flags) < 0)
+	ssize_t result = send(chann->socket, buffer, (size_t) size, flags);
+	if (result == ECONNRESET || result == EPIPE || result == ENOTCONN)
+		return WBERR_NOT_CONNECTED;
+	else
+	if (result < 0)
 		return WBERR_SOCKET;
 
 	return WBERR_OK;

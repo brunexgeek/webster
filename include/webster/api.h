@@ -50,6 +50,7 @@
 #define WBERR_INVALID_MESSAGE            -26
 #define WBERR_TOO_MANY_FIELDS            -27
 #define WBERR_INVALID_CHUNK              -28
+#define WBERR_NOT_CONNECTED              -29
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
