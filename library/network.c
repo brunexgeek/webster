@@ -194,10 +194,7 @@ static int network_connect(
 
 	address.sin_port = htons( (uint16_t) port );
 	if (connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
-	{
-		network_close(channel);
 		return WBERR_SOCKET;
-	}
 
 	return WBERR_OK;
 }
@@ -338,17 +335,11 @@ static int network_listen(
 
 	address.sin_port = htons( (uint16_t) port );
 	if (bind(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
-	{
-		network_close(channel);
 		return WBERR_SOCKET;
-	}
 
 	// listen for incoming connections
 	if ( listen(chann->socket, maxClients) != 0 )
-	{
-		network_close(channel);
 		return WBERR_SOCKET;
-	}
 
 	return WBERR_OK;
 }
