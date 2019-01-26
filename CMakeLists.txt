@@ -76,6 +76,8 @@ add_library(libwebster SHARED ${SOURCES})
 target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster
     PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+target_compile_definitions(libwebster
+    PRIVATE DBUILDING_DYNAMIC)
 set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"

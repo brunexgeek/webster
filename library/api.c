@@ -686,9 +686,7 @@ int WebsterSetStatus(
     int status )
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
-
 	output->header.status = status;
-
 	return WBERR_OK;
 }
 
@@ -698,10 +696,8 @@ int WebsterSetMethod(
     int method )
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
-
-	if (WB_IS_VALID_METHOD(method))
-		output->header.method = method;
-
+	if (!WB_IS_VALID_METHOD(method)) return WBERR_INVALID_HTTP_METHOD;
+	output->header.method = method;
 	return WBERR_OK;
 }
 
@@ -901,7 +897,7 @@ int WebsterWriteData(
 			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
-			static const HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
+			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
 			char host[HOST_LEN + 1];
 			snprintf(host, HOST_LEN, "%s:%d", output->client->host, output->client->port);
 			host[HOST_LEN] = 0;
