@@ -6,12 +6,12 @@ Webster enables you to communicate with HTTP servers and implement your own HTTP
 
 However, Webster do not:
 * Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231).
-* Communicate through SSL/TLS natively. You have to integrate with some 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
+* Communicate through SSL/TLS natively. You need to use some 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
 
 The library also includes three sample programs in the ``bin`` directory:
 
 * ``client_sample.c``: simple client program that send a request and print the response;
-* ``server_sample.c``: simple server program that echo to clients some information about its request;
+* ``server_sample.c``: simple server program that echoes information about the request;
 * ``server.c``: more elaborated server program that implements directory indexing.
 
 ## Client implementation
@@ -38,7 +38,6 @@ int clientHandler(
     void *data )
 {
     // send a HTTP request
-    WebsterSetStringField(request, "host", "duckduckgo.com");
     WebsterSetIntegerField(request, "content-length", 0);
     WebsterFinish(request);
 
@@ -90,7 +89,7 @@ The server keeps listening for connections and handle each one of them. To start
 webster_server_t server;
 if (WebsterCreate(&server, 100) == WBERR_OK)
 {
-    if (WebsterStart(&server, "0.0.0.0", 7000) == WBERR_OK)
+    if (WebsterStart(&server, "127.0.0.1", 7000) == WBERR_OK)
     {
         while (serverState == SERVER_RUNNING)
         {
@@ -113,9 +112,9 @@ Note that the server also uses ``WebsterCommunicate`` since remote connections a
 The following list contains some of the features of HTTP 1.1 specified in RFC-7230. The marked ones are currently implemented.
 
 - [x] Request target in origin form ([RFC-7230 5.3.1](https://tools.ietf.org/html/rfc7230#section-5.3.1))
-- [ ] Request target in absolute form ([RFC-7230 5.3.2](https://tools.ietf.org/html/rfc7230#section-5.3.2))
-- [ ] Request target in authority form ([RFC-7230 5.3.3](https://tools.ietf.org/html/rfc7230#section-5.3.3))
-- [ ] Request target in arterisk form ([RFC-7230 5.3.4](https://tools.ietf.org/html/rfc7230#section-5.3.4))
+- [x] Request target in absolute form ([RFC-7230 5.3.2](https://tools.ietf.org/html/rfc7230#section-5.3.2))
+- [x] Request target in authority form ([RFC-7230 5.3.3](https://tools.ietf.org/html/rfc7230#section-5.3.3))
+- [x] Request target in arterisk form ([RFC-7230 5.3.4](https://tools.ietf.org/html/rfc7230#section-5.3.4))
 - [x] Receive messages without transfer encoding ([RFC-7230 3.2.2](https://tools.ietf.org/html/rfc7230#section-3.2.2))
 - [x] Send messages without transfer encoding
 - [ ] Receive chunked messages ([RFC-7230 4.1](https://tools.ietf.org/html/rfc7230#section-4.1))
@@ -124,7 +123,7 @@ The following list contains some of the features of HTTP 1.1 specified in RFC-72
 
 ## Limitations
 
-* You cannot have multiples header fields with the same name ([RFC-7230 3.2.2 Field order](https://tools.ietf.org/html/rfc7230#section-3.2.2))
+* You cannot have multiple header fields with the same name ([RFC-7230 3.2.2 Field order](https://tools.ietf.org/html/rfc7230#section-3.2.2))
 
 ## Roadmap
 
