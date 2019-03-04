@@ -98,6 +98,131 @@ webster_field_info_t HTTP_HEADER_FIELDS[] =
 };
 
 
+/*
+ * webster_header_t
+ */
+
+webster_header_t::webster_header_t() : target(NULL), status(0), method(WBM_NONE)
+{
+}
+
+
+webster_header_t::~webster_header_t()
+{
+
+}
+
+
+const std::string *webster_header_t::field( const std::string &name ) const
+{
+    custom_field_map::const_iterator it = c_fields.find(name);
+    if (it != c_fields.end()) return &(it->second);
+    return NULL;
+}
+
+
+const std::string *webster_header_t::field( const int id ) const
+{
+    standard_field_map::const_iterator it = s_fields.find(id);
+    if (it != s_fields.end()) return &(it->second);
+    return NULL;
+}
+
+
+int webster_header_t::field(
+    const int id,
+    const std::string &value )
+{
+    if (c_fields.size() + s_fields.size() >= WBL_MAX_FIELDS)
+        return WBERR_TOO_MANY_FIELDS;
+
+    s_fields[id] = value;
+	return WBERR_OK;
+}
+
+int webster_header_t::field(
+    const std::string &name,
+    const std::string &value )
+{
+    if (c_fields.size() + s_fields.size() >= WBL_MAX_FIELDS)
+        return WBERR_TOO_MANY_FIELDS;
+
+    std::string temp = name;
+    for (size_t i = 0, t = temp.size(); i < t; ++i)
+    {
+        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
+        temp[i] = (char) tolower(temp[i]);
+    }
+
+std::cout << "--- '" << temp  << "' = " << "'" << value << "'" << std::endl;
+    webster_field_info_t *fi = http_getFieldID(temp.c_str());
+    if (fi != NULL)
+        return field(fi->id, value);
+
+    c_fields[temp] = value;
+	return WBERR_OK;
+}
+
+
+int webster_header_t::remove(
+    const std::string &name )
+{
+    std::string temp = name;
+    for (size_t i = 0, t = temp.size(); i < t; ++i)
+    {
+        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
+        temp[i] = (char) tolower(temp[i]);
+    }
+
+    webster_field_info_t *fi = http_getFieldID(temp.c_str());
+    if (fi != NULL)
+    {
+        standard_field_map::iterator it = s_fields.find(fi->id);
+        if (it != s_fields.end()) s_fields.erase(it);
+    }
+    else
+    {
+        custom_field_map::iterator it = c_fields.find(name);
+        if (it != c_fields.end()) c_fields.erase(it);
+    }
+
+    return WBERR_OK;
+}
+
+
+/*
+ * webster_message_t_
+ */
+
+webster_message_t_::webster_message_t_( int size ) : state(WBS_IDLE), channel(NULL),
+    type(WBMT_UNKNOWN), flags(0), client(NULL)
+{
+    size = (size + 3) & (~3);
+    if (size < WBL_MIN_BUFFER_SIZE)
+        size = WBL_MIN_BUFFER_SIZE;
+    else
+    if (size > WBL_MAX_BUFFER_SIZE)
+        size = WBL_MAX_BUFFER_SIZE;
+
+    body.expected = body.chunkSize = 0;
+    // FIXME: can be NULL
+    buffer.data = buffer.current = new(std::nothrow) uint8_t[size];
+    buffer.data[0] = 0;
+    buffer.size = size;
+    buffer.pending = 0;
+}
+
+
+webster_message_t_::~webster_message_t_()
+{
+    delete[] buffer.data;
+}
+
+
+/*
+ * HTTP parser
+ */
+
 static char *cloneString(
     const char *text )
 {
@@ -357,93 +482,6 @@ int http_getFieldID(
     return 0;
 }
 #endif
-
-const std::string *http_getField(
-    const webster_header_t *header,
-    const std::string &name )
-{
-    custom_field_map::const_iterator it = header->c_fields.find(name);
-    if (it != header->c_fields.end()) return &(it->second);
-    return NULL;
-}
-
-
-const std::string *http_getField(
-    const webster_header_t *header,
-    int id )
-{
-    standard_field_map::const_iterator it = header->s_fields.find(id);
-    if (it != header->s_fields.end()) return &(it->second);
-    return NULL;
-}
-
-
-int http_addField(
-    webster_header_t *header,
-	int id,
-    const std::string &value )
-{
-    if (header == NULL)
-        return WBERR_INVALID_ARGUMENT;
-    if (header->c_fields.size() + header->s_fields.size() >= WBL_MAX_FIELDS)
-        return WBERR_TOO_MANY_FIELDS;
-
-    header->s_fields[id] = value;
-	return WBERR_OK;
-}
-
-int http_addField(
-    webster_header_t *header,
-	const std::string &name,
-    const std::string &value )
-{
-    if (header == NULL)
-        return WBERR_INVALID_ARGUMENT;
-    if (header->c_fields.size() + header->s_fields.size() >= WBL_MAX_FIELDS)
-        return WBERR_TOO_MANY_FIELDS;
-
-    std::string temp = name;
-    for (size_t i = 0, t = temp.size(); i < t; ++i)
-    {
-        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
-        temp[i] = (char) tolower(temp[i]);
-    }
-
-std::cout << "--- '" << temp  << "' = " << "'" << value << "'" << std::endl;
-    webster_field_info_t *fi = http_getFieldID(temp.c_str());
-    if (fi != NULL)
-        return http_addField(header, fi->id, value);
-
-    header->c_fields[temp] = value;
-	return WBERR_OK;
-}
-
-
-int http_removeField(
-    webster_header_t *header,
-    const std::string &name )
-{
-    std::string temp = name;
-    for (size_t i = 0, t = temp.size(); i < t; ++i)
-    {
-        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
-        temp[i] = (char) tolower(temp[i]);
-    }
-
-    webster_field_info_t *fi = http_getFieldID(temp.c_str());
-    if (fi != NULL)
-    {
-        standard_field_map::iterator it = header->s_fields.find(fi->id);
-        if (it != header->s_fields.end()) header->s_fields.erase(it);
-    }
-    else
-    {
-        custom_field_map::iterator it = header->c_fields.find(name);
-        if (it != header->c_fields.end()) header->c_fields.erase(it);
-    }
-
-    return WBERR_OK;
-}
 
 
 char *http_removeTrailing(
@@ -840,7 +878,7 @@ int http_parse(
             webster_field_info_t *finfo = http_getFieldID(name);
             if (finfo != NULL)
             {
-                http_addField(header, finfo->id, value);
+                header->field(finfo->id, value);
 
                 // if is 'content-length' field, get the value
                 if (finfo->id == WBFI_CONTENT_LENGTH)
@@ -850,7 +888,7 @@ int http_parse(
                     message->flags |= WBMF_CHUNKED;
             }
             else
-                http_addField(header, name, value);
+                header->field(name, value);
         }
         else
             break;

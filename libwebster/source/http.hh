@@ -15,6 +15,109 @@ typedef struct
 } webster_field_info_t;
 
 
+typedef std::map<int, std::string> standard_field_map;
+typedef std::map<std::string, std::string> custom_field_map;
+
+struct webster_header_t
+{
+    webster_target_t *target;
+    int status;
+    int method;
+    int content_length;
+    standard_field_map s_fields;
+    custom_field_map c_fields;
+
+    webster_header_t();
+    ~webster_header_t();
+
+    const std::string *field( const int id ) const;
+
+    const std::string *field( const std::string &name ) const;
+
+    int field(
+        const int id,
+        const std::string &value );
+
+    int field(
+        const std::string &name,
+        const std::string &value );
+
+    int remove( const std::string &name );
+};
+
+
+
+struct webster_message_t_
+{
+    /**
+     * @brief Current state of the message.
+     *
+     * The machine state if defined by @c WBS_* macros.
+     */
+    int state;
+
+    /**
+     * Pointer to the opaque entity representing the network channel.
+     */
+    void *channel;
+
+    /**
+     * @brief Message type (WBMT_REQUEST or WBMT_RESPONSE).
+     */
+    int type;
+
+    int flags;
+
+    struct
+    {
+        /**
+         * @brief Message expected size.
+         *
+         * This value is less than zero if using chunked transfer encoding.
+         */
+        int expected;
+
+        /**
+         * @brief Amount of bytes until the end of the current chunk.
+         */
+        int chunkSize;
+    } body;
+
+    struct
+    {
+        /**
+         *  Pointer to the buffer content.
+         */
+        uint8_t *data;
+
+        /**
+         * Size of the buffer in bytes.
+         */
+        int size;
+
+        /**
+         * Pointer to the buffer position in the buffer content.
+         */
+        uint8_t *current;
+
+        /**
+         * Amount of useful data from the current position.
+         */
+        int pending;
+    } buffer;
+
+    /**
+     * HTTP header
+     */
+    webster_header_t header;
+
+    struct webster_client_t_ *client;
+
+    webster_message_t_( int size );
+    ~webster_message_t_();
+};
+
+
 WEBSTER_PRIVATE
 const char *http_statusMessage(
     int status );
@@ -28,44 +131,8 @@ webster_field_info_t *http_getFieldName(
     int id );
 
 WEBSTER_PRIVATE
-const std::string *http_getField(
-    const webster_header_t *header,
-    const int id );
-
-WEBSTER_PRIVATE
-const std::string *http_getField(
-    const webster_header_t *header,
-    const std::string &name );
-
-WEBSTER_PRIVATE
-int http_addField(
-    webster_header_t *header,
-	int id,
-    const std::string &value );
-
-WEBSTER_PRIVATE
-int http_addField(
-    webster_header_t *header,
-	const std::string &name,
-    const std::string &value );
-
-WEBSTER_PRIVATE
-int http_removeField(
-    webster_header_t *header,
-    const std::string &name );
-
-WEBSTER_PRIVATE
-void http_releaseFields(
-    webster_header_t *header );
-
-WEBSTER_PRIVATE
 char *http_removeTrailing(
     char *text );
-
-WEBSTER_PRIVATE
-int http_parseHeader(
-    char *data,
-    struct webster_message_t_ *message );
 
 WEBSTER_PRIVATE
 int http_parseTarget(

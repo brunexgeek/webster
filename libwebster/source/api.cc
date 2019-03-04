@@ -29,17 +29,6 @@ static const char *HTTP_METHODS[] =
 WEBSTER_PRIVATE webster_memory_t memory = { NULL, NULL, NULL };
 
 
-static char *cloneString(
-    const char *text )
-{
-    if (text == NULL) return NULL;
-    size_t len = strlen(text);
-    char *clone = (char*) malloc(len + 1);
-    strcpy(clone, text);
-    return clone;
-}
-
-
 int WebsterInitialize(
     webster_memory_t *mem,
 	webster_network_t *net )
@@ -120,7 +109,7 @@ int WebsterConnect(
 		return WBERR_INVALID_SCHEME;
 
 	// allocate memory for everything
-	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
+	*client = new(std::nothrow) webster_client_t_();
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
 	// try to connect with the remote host
@@ -129,9 +118,8 @@ int WebsterConnect(
 	result = WBNET_CONNECT((*client)->channel, scheme, host, port);
 	if (result != WBERR_OK) goto ESCAPE;
 
-	(*client)->host       = cloneString(host);
-	(*client)->port       = port;
-	(*client)->bufferSize = WBL_DEF_BUFFER_SIZE;
+	(*client)->host = host;
+	(*client)->port = port;
 
 	return WBERR_OK;
 
@@ -139,7 +127,7 @@ ESCAPE:
 	if (*client != NULL)
 	{
 		if ((*client)->channel != NULL) WBNET_CLOSE((*client)->channel);
-		memory.free(*client);
+		delete *client;
 		*client = NULL;
 	}
 	return result;
@@ -202,8 +190,7 @@ int WebsterDisconnect(
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 
 	WBNET_CLOSE(client->channel);
-	memory.free(client->host);
-	memory.free(client);
+	delete client;
 	return WBERR_OK;
 }
 
@@ -223,13 +210,8 @@ int WebsterCreate(
 	if (maxClients <= 0 || maxClients >= WBL_MAX_CONNECTIONS)
 		maxClients = WBL_MAX_CONNECTIONS;
 
-	*server = (webster_server_t*) calloc(1, sizeof(struct webster_server_t_));
+	*server = new(std::nothrow) webster_server_t_();
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
-
-	(*server)->channel = NULL;
-	(*server)->port = -1;
-	(*server)->host = NULL;
-	(*server)->bufferSize = WBL_DEF_BUFFER_SIZE;
 
 	return WBERR_OK;
 }
@@ -241,9 +223,7 @@ int WebsterDestroy(
 	if (server == NULL) return WBERR_INVALID_SERVER;
 
 	WebsterStop(server);
-
-	if (server->host != NULL) memory.free(server->host);
-	memory.free(server);
+	delete server;
 
 	return WBERR_OK;
 }
@@ -286,7 +266,7 @@ int WebsterAccept(
 	int result = WBNET_ACCEPT(server->channel, &client);
 	if (result != WBERR_OK) return result;
 
-	*remote = (struct webster_client_t_*) calloc(1, sizeof(struct webster_client_t_));
+	*remote = new(std::nothrow) webster_client_t_();
 	if (*remote == NULL)
 	{
 		WBNET_CLOSE(client);
@@ -294,8 +274,6 @@ int WebsterAccept(
 	}
 
 	(*remote)->channel = client;
-	(*remote)->port = 0;
-	(*remote)->host = NULL;
 	(*remote)->bufferSize = server->bufferSize;
 
 	return WBERR_OK;
@@ -577,9 +555,9 @@ int WebsterGetStringField(
 
 	const std::string *result = NULL;
 	if (id == WBFI_NON_STANDARD)
-		result = http_getField(&input->header, name);
+		result = input->header.field(name);
 	else
-		result = http_getField(&input->header, id);
+		result = input->header.field(id);
 
 	if (result == NULL) return WBERR_NO_DATA;
 	*value = strdup(result->c_str());
@@ -812,9 +790,9 @@ int WebsterSetStringField(
 		output->body.expected = atoi(value);
 
 	if (finfo != NULL)
-		return http_addField(&output->header, finfo->id, value);
+		return output->header.field(finfo->id, value);
 	else
-		return http_addField(&output->header, name, value);
+		return output->header.field(name, value);
 }
 
 
@@ -836,7 +814,7 @@ int WebsterRemoveField(
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (name == NULL) return WBERR_INVALID_ARGUMENT;
 
-	http_removeField(&output->header, name);
+	output->header.remove(name);
 	return WBERR_OK;
 }
 
@@ -891,19 +869,19 @@ int WebsterWriteData(
 	if (output->state == WBS_HEADER)
 	{
 		// set 'tranfer-encoding' to chunked if required
-		if (http_getField(&output->header, WBFI_CONTENT_LENGTH) == NULL)
+		if (output->header.field(WBFI_CONTENT_LENGTH) == NULL)
 		{
 			output->flags |= WBMF_CHUNKED;
 			// TODO: merge with previously set value, if any
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
 		}
 		if (output->type == WBMT_REQUEST &&
-			http_getField(&output->header, WBFI_HOST) == NULL &&
+			output->header.field(WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
 			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
 			char host[HOST_LEN + 1];
-			snprintf(host, HOST_LEN, "%s:%d", output->client->host, output->client->port);
+			snprintf(host, HOST_LEN, "%s:%d", output->client->host.c_str(), output->client->port);
 			host[HOST_LEN] = 0;
 			WebsterSetStringField(output, "host", host);
 		}

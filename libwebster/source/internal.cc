@@ -2,29 +2,23 @@
 
 
 
-webster_header_t::webster_header_t() : target(NULL), status(0), method(WBM_NONE)
+webster_client_t_::webster_client_t_() : channel(NULL), port(-1),
+    bufferSize(WBL_DEF_BUFFER_SIZE)
 {
 }
 
 
-webster_header_t::~webster_header_t()
+webster_client_t_::~webster_client_t_()
 {
-
 }
 
 
-webster_message_t_::webster_message_t_( size_t size ) : state(WBS_IDLE), channel(NULL),
-    type(WBMT_UNKNOWN), flags(0), client(NULL)
+webster_server_t_::webster_server_t_() : channel(NULL), port(-1),
+    maxClients(WBL_MAX_CONNECTIONS/3), bufferSize(WBL_DEF_BUFFER_SIZE)
 {
-    body.expected = body.chunkSize = 0;
-    buffer.data = buffer.current = new(std::nothrow) uint8_t[size];
-    buffer.data[0] = 0;
-    buffer.size = size;
-    buffer.pending = 0;
 }
 
 
-webster_message_t_::~webster_message_t_()
+webster_server_t_::~webster_server_t_()
 {
-    delete[] buffer.data;
 }

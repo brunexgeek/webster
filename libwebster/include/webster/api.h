@@ -159,9 +159,9 @@
 #define WBL_MAX_FIELD_VALUE    4096
 #define WBL_MAX_FIELDS         128
 #define WBL_MAX_HOST_NAME      255
-#define WBL_DEF_BUFFER_SIZE    (1024 * 4) // 4KB
-#define WBL_MIN_BUFFER_SIZE    1024
+#define WBL_MIN_BUFFER_SIZE    128
 #define WBL_MAX_BUFFER_SIZE    (10 * 1024 * 1024)
+#define WBL_DEF_BUFFER_SIZE    (1024 * 4) // 4KB
 #define WBL_MAX_CONNECTIONS    1000
 #define WBL_READ_TIMEOUT       10000
 
