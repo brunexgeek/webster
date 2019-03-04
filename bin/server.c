@@ -357,12 +357,11 @@ static int main_serverHandler(
 				WebsterGetTarget(request, &target);
 				printf("%s %s\n", HTTP_METHODS[method], target->path);
 				// print all HTTP header fields
-				/*webster_field_t *field = header->fields;
-				while (field != NULL)
-				{
-					printf("  %s: '%s'\n", field->name, field->value);
-					field = field->next;
-				}*/
+				const char *name;
+				const char *value;
+				int index = 0;
+				while (WebsterIterateField(request, index++, NULL, &name, &value) == WBERR_OK)
+					printf("  %s: '%s'\n", name, value);
 			}
 		}
 	} while (1);
@@ -465,10 +464,15 @@ int main(int argc, char* argv[])
 				while (serverState == SERVER_RUNNING)
 				{
 					webster_client_t *remote = NULL;
-					if (WebsterAccept(server, &remote) != WBERR_OK) continue;
-					// you problably should handle the client request in another thread
-					WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
-					WebsterDisconnect(remote);
+					int result = WebsterAccept(server, &remote);
+					if (result == WBERR_OK)
+					{
+						// you problably should handle the client request in another thread
+						WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+						WebsterDisconnect(remote);
+					}
+					else
+					if (result != WBERR_TIMEOUT) break;
 				}
 			}
 			WebsterDestroy(server);

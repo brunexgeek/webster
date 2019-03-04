@@ -549,8 +549,8 @@ int WebsterGetStringField(
 	if (name != NULL)
 	{
 		id = WBFI_NON_STANDARD;
-		webster_field_info_t *finfo = http_getFieldID(name);
-		if (finfo != NULL) id = finfo->id;
+		int fid = http_getFieldID(name);
+		if (fid != WBFI_NON_STANDARD) id = fid;
 	}
 
 	const std::string *result = NULL;
@@ -560,7 +560,7 @@ int WebsterGetStringField(
 		result = input->header.field(id);
 
 	if (result == NULL) return WBERR_NO_DATA;
-	*value = strdup(result->c_str());
+	*value = result->c_str();
 	return WBERR_OK;
 }
 
@@ -577,6 +577,44 @@ int WebsterGetIntegerField(
 
 	*value = atoi(temp);
 	return WBERR_OK;
+}
+
+
+int WebsterIterateField(
+    webster_message_t *input,
+    int index,
+    int *id,
+    const char **name,
+    const char **value )
+{
+	if (index < 0) return WBERR_INVALID_ARGUMENT;
+	if (index >= input->header.count()) return WBERR_INVALID_ARGUMENT;
+	if (id == NULL && name == NULL && value == NULL) return WBERR_OK;
+
+	if (index < (int) input->header.s_fields.size())
+	{
+		int i = 0;
+		standard_field_map::const_iterator it = input->header.s_fields.begin();
+		for (; i < index && it != input->header.s_fields.end(); ++it, ++i);
+		if (i != index) return WBERR_INVALID_ARGUMENT;
+
+		if (id != NULL) *id = it->first;
+		if (name != NULL) *name = http_getFieldName(it->first);
+		if (value != NULL) *value = it->second.c_str();
+		return WBERR_OK;
+	}
+	else
+	{
+		int i = (int) input->header.s_fields.size();
+		custom_field_map::const_iterator it = input->header.c_fields.begin();
+		for (; i < index && it != input->header.c_fields.end(); ++it, ++i);
+		if (i != index) return WBERR_INVALID_ARGUMENT;
+
+		if (name != NULL) *name = it->first.c_str();
+		if (id != NULL) *id = http_getFieldID(it->first.c_str());
+		if (value != NULL) *value = it->second.c_str();
+		return WBERR_OK;
+	}
 }
 
 
@@ -785,12 +823,12 @@ int WebsterSetStringField(
 
 	// TODO: evaluate field value
 
-	webster_field_info_t *finfo = http_getFieldID(name);
-	if (finfo != NULL && finfo->id == WBFI_CONTENT_LENGTH)
+	int id = http_getFieldID(name);
+	if (id == WBFI_CONTENT_LENGTH)
 		output->body.expected = atoi(value);
 
-	if (finfo != NULL)
-		return output->header.field(finfo->id, value);
+	if (id != WBFI_NON_STANDARD)
+		return output->header.field(id, value);
 	else
 		return output->header.field(name, value);
 }
@@ -826,10 +864,10 @@ static void webster_commitHeaderFields(
 	for (standard_field_map::const_iterator it = output->header.s_fields.begin();
 		 it != output->header.s_fields.end(); ++it)
 	{
-		webster_field_info_t *fi = http_getFieldName(it->first);
-		if (fi == NULL) continue;
+		const char *name = http_getFieldName(it->first);
+		if (name == NULL) continue;
 
-		webster_writeString(output, fi->name);
+		webster_writeString(output, name);
 		webster_writeString(output, ": ");
 		webster_writeString(output, it->second.c_str());
 		webster_writeString(output, "\r\n");

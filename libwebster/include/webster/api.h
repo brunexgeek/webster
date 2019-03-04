@@ -363,6 +363,13 @@ WEBSTER_EXPORTED int WebsterGetIntegerField(
     const char *name,
     int *value );
 
+WEBSTER_EXPORTED int WebsterIterateField(
+    webster_message_t *input,
+    int index,
+    int *id,
+    const char **name,
+    const char **value );
+
 WEBSTER_EXPORTED int WebsterReadData(
     webster_message_t *input,
     const uint8_t **buffer,

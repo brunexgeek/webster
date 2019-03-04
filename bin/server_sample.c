@@ -184,9 +184,14 @@ int main(int argc, char* argv[])
 			while (serverState == SERVER_RUNNING)
 			{
 				webster_client_t *remote = NULL;
-				if (WebsterAccept(server, &remote) != WBERR_OK) continue;
-				WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
-				WebsterDisconnect(remote);
+				int result = WebsterAccept(server, &remote);
+				if (result == WBERR_OK)
+				{
+					WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+					WebsterDisconnect(remote);
+				}
+				else
+				if (result != WBERR_TIMEOUT) break;
 			}
 		}
 		WebsterDestroy(server);

@@ -43,6 +43,8 @@ struct webster_header_t
         const std::string &value );
 
     int remove( const std::string &name );
+
+    int count() const;
 };
 
 
@@ -123,11 +125,11 @@ const char *http_statusMessage(
     int status );
 
 WEBSTER_PRIVATE
-webster_field_info_t *http_getFieldID(
+int http_getFieldID(
     const char *name );
 
 WEBSTER_PRIVATE
-webster_field_info_t *http_getFieldName(
+const char *http_getFieldName(
     int id );
 
 WEBSTER_PRIVATE

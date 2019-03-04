@@ -154,10 +154,9 @@ int webster_header_t::field(
         temp[i] = (char) tolower(temp[i]);
     }
 
-std::cout << "--- '" << temp  << "' = " << "'" << value << "'" << std::endl;
-    webster_field_info_t *fi = http_getFieldID(temp.c_str());
-    if (fi != NULL)
-        return field(fi->id, value);
+    int id = http_getFieldID(temp.c_str());
+    if (id != WBFI_NON_STANDARD)
+        return field(id, value);
 
     c_fields[temp] = value;
 	return WBERR_OK;
@@ -174,10 +173,10 @@ int webster_header_t::remove(
         temp[i] = (char) tolower(temp[i]);
     }
 
-    webster_field_info_t *fi = http_getFieldID(temp.c_str());
-    if (fi != NULL)
+    int id = http_getFieldID(temp.c_str());
+    if (id != WBFI_NON_STANDARD)
     {
-        standard_field_map::iterator it = s_fields.find(fi->id);
+        standard_field_map::iterator it = s_fields.find(id);
         if (it != s_fields.end()) s_fields.erase(it);
     }
     else
@@ -187,6 +186,11 @@ int webster_header_t::remove(
     }
 
     return WBERR_OK;
+}
+
+int webster_header_t::count() const
+{
+    return (int) s_fields.size() + (int) c_fields.size();
 }
 
 
@@ -312,10 +316,10 @@ const char *http_statusMessage(
 
 #if 1
 
-webster_field_info_t *http_getFieldID(
+int http_getFieldID(
     const char *name )
 {
-	if (name == NULL || name[0] == 0) return NULL;
+	if (name == NULL || name[0] == 0) return WBFI_NON_STANDARD;
 
     char temp[WBL_MAX_FIELD_NAME + 1];
     for (size_t i = 0, t = strlen(name); i < t; ++i)
@@ -329,18 +333,18 @@ webster_field_info_t *http_getFieldID(
 	{
 		int current = (first + last) / 2;
 		int dir = strcmp(temp, HTTP_HEADER_FIELDS[current].name);
-		if (dir == 0) return &HTTP_HEADER_FIELDS[current];
+		if (dir == 0) return HTTP_HEADER_FIELDS[current].id;
 		if (dir < 0)
 			last = current - 1;
 		else
 			first = current + 1;
 	}
 
-	return NULL;
+	return WBFI_NON_STANDARD;
 }
 
 
-webster_field_info_t *http_getFieldName(
+const char *http_getFieldName(
     int id )
 {
 	if (id == WBFI_NON_STANDARD) return NULL;
@@ -352,14 +356,14 @@ webster_field_info_t *http_getFieldName(
 	{
 		int current = (first + last) / 2;
 		if (id == HTTP_HEADER_FIELDS[current].id)
-            return &HTTP_HEADER_FIELDS[current];
+            return HTTP_HEADER_FIELDS[current].name;
 		if (id < HTTP_HEADER_FIELDS[current].id)
 			last = current - 1;
 		else
 			first = current + 1;
 	}
 
-	return WBFI_NON_STANDARD;
+	return NULL;
 }
 
 
@@ -875,16 +879,16 @@ int http_parse(
             // ignore trailing whitespces in the value
             value = http_removeTrailing(value);
             // get the field ID, if any
-            webster_field_info_t *finfo = http_getFieldID(name);
-            if (finfo != NULL)
+            int id = http_getFieldID(name);
+            if (id != WBFI_NON_STANDARD)
             {
-                header->field(finfo->id, value);
+                header->field(id, value);
 
                 // if is 'content-length' field, get the value
-                if (finfo->id == WBFI_CONTENT_LENGTH)
+                if (id == WBFI_CONTENT_LENGTH)
                     message->body.expected = atoi(value);
                 else
-                if (finfo->id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
+                if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
                     message->flags |= WBMF_CHUNKED;
             }
             else
