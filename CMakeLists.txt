@@ -78,31 +78,31 @@ add_subdirectory(libwebster)
 
 find_package(Threads REQUIRED)
 
-add_executable(server_test "${CMAKE_CURRENT_LIST_DIR}/bin/server_sample.c")
-target_link_libraries(server_test libwebster_static)
-target_compile_definitions(server_test PRIVATE _DEFAULT_SOURCE)
-set_target_properties(server_test PROPERTIES
-    OUTPUT_NAME "server_test"
+add_executable(example_echo "examples/echo.c")
+target_link_libraries(example_echo libwebster_static)
+target_compile_definitions(example_echo PRIVATE _DEFAULT_SOURCE)
+set_target_properties(example_echo PROPERTIES
+    OUTPUT_NAME "example_echo"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
 
-add_executable(client_test "${CMAKE_CURRENT_LIST_DIR}/bin/client_sample.c")
-target_link_libraries(client_test libwebster_static)
-target_compile_definitions(client_test PRIVATE _DEFAULT_SOURCE)
-set_target_properties(client_test PROPERTIES
-    OUTPUT_NAME "client_test"
+add_executable(example_client "examples/client.c")
+target_link_libraries(example_client libwebster_static)
+target_compile_definitions(example_client PRIVATE _DEFAULT_SOURCE)
+set_target_properties(example_client PROPERTIES
+    OUTPUT_NAME "example_client"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
 
-add_executable(server "${CMAKE_CURRENT_LIST_DIR}/bin/server.c")
-target_link_libraries(server libwebster)
-target_compile_definitions(server PRIVATE _DEFAULT_SOURCE)
-set_target_properties(server PROPERTIES
-    OUTPUT_NAME "server"
+add_executable(example_indexing "examples/indexing.c")
+target_link_libraries(example_indexing libwebster)
+target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
+set_target_properties(example_indexing PROPERTIES
+    OUTPUT_NAME "example_indexing"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
