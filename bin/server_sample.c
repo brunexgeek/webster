@@ -64,8 +64,9 @@ static int main_serverHandler(
 	(void) data;
 
 	webster_event_t event;
-	const webster_header_t *header;
+	const webster_target_t *target = NULL;
 	int result = 0;
+	int method = 0;
 
 	do
 	{
@@ -81,17 +82,15 @@ static int main_serverHandler(
 			// check if received the HTTP header
 			if (event.type ==  WBT_HEADER)
 			{
-				if (WebsterGetHeader(request, &header) == WBERR_OK)
-				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->target->path);
-					// print all HTTP header fields
-					webster_field_t *field = header->fields;
-					while (field != NULL)
-					{
-						printf("  %s: '%s'\n", field->name, field->value);
-						field = field->next;
-					}
-				}
+				WebsterGetMethod(request, &method);
+				WebsterGetTarget(request, &target);
+				printf("%s %s\n", HTTP_METHODS[method], target->path);
+				// print all HTTP header fields
+				const char *name;
+				const char *value;
+				int index = 0;
+				while (WebsterIterateField(request, index++, NULL, &name, &value) == WBERR_OK)
+					printf("  %s: '%s'\n", name, value);
 			}
 			else
 			// check if we received the HTTP body (or part of it)
@@ -110,7 +109,9 @@ static int main_serverHandler(
 	} while (1);
 
 	// doing it again, but not necessary if the first call succeed
-	result = WebsterGetHeader(request, &header);
+	result = WebsterGetTarget(request, &target);
+	if (result != WBERR_OK) return result;
+	result = WebsterGetMethod(request, &method);
 	if (result != WBERR_OK) return result;
 
     WebsterWriteString(response, "<html><head><title>");
@@ -120,31 +121,32 @@ static int main_serverHandler(
     WebsterSetStatus(response, 200);
     WebsterSetStringField(response, "Content-Type", "text/html");
     WebsterWriteString(response, "<p>Received <strong>");
-    WebsterWriteString(response, HTTP_METHODS[header->method]);
+    WebsterWriteString(response, HTTP_METHODS[method]);
     WebsterWriteString(response, "</strong> request to <tt style='color: blue'>");
-    WebsterWriteString(response, header->target->path);
+    WebsterWriteString(response, target->path);
     WebsterWriteString(response, "</tt>");
-	if (header->target->query != NULL)
+	if (target->query != NULL)
 	{
 		WebsterWriteString(response, " with query <tt style='color: blue'>");
-		WebsterWriteString(response, header->target->query);
+		WebsterWriteString(response, target->query);
 		WebsterWriteString(response, "</tt>");
 	}
 	WebsterWriteString(response, "</p>");
 
     WebsterWriteString(response, "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
     WebsterWriteString(response, "<table><tr><th>Header field</th><th>Value</th></tr>");
-    webster_field_t *field = header->fields;
-    while (field != NULL)
-    {
+	const char *name;
+	const char *value;
+	int index = 0;
+	while (WebsterIterateField(request, index++, NULL, &name, &value) == WBERR_OK)
+	{
         WebsterWriteString(response, "<tr><td>");
-        WebsterWriteString(response, field->name);
+        WebsterWriteString(response, name);
         WebsterWriteString(response, "</td><td>");
-        WebsterWriteString(response, field->value);
+        WebsterWriteString(response, value);
         WebsterWriteString(response, "</td></tr>");
-        field = field->next;
-    }
-    WebsterWriteString(response, "</body></table></html>");
+	}
+	WebsterWriteString(response, "</body></table></html>");
 
 	WebsterFinish(response);
 	return WBERR_OK;

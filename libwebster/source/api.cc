@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "http.hh"
 #include "network.hh"
+#include <iostream>
 
 #ifndef WB_WINDOWS
 #include <sys/time.h>

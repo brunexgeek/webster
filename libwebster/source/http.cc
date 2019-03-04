@@ -322,9 +322,13 @@ int http_getFieldID(
 	if (name == NULL || name[0] == 0) return WBFI_NON_STANDARD;
 
     char temp[WBL_MAX_FIELD_NAME + 1];
-    for (size_t i = 0, t = strlen(name); i < t; ++i)
-        temp[i] = (char) tolower(name[i]);
-    temp[ strlen(name) - 1 ] = 0;
+    size_t i = 0;
+    for (size_t t = strlen(name); i < t; ++i)
+    {
+        temp[i] = name[i];
+        if (temp[i] >= 'A' && temp[i] <= 'Z') temp[i] = (char) (temp[i] + 32);
+    }
+    temp[i] = 0;
 
     int first = 0;
     int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;

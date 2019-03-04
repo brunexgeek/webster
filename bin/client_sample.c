@@ -20,7 +20,6 @@ static int main_clientHandler(
     int result = 0;
     int j = 0;
     webster_event_t event;
-    const webster_header_t *header;
     do
     {
         // wait for response data
@@ -34,17 +33,15 @@ static int main_clientHandler(
             // check if received the HTTP header
             if (event.type ==  WBT_HEADER)
             {
-                if (WebsterGetHeader(response, &header) == WBERR_OK)
-                {
-                    printf("HTTP/1.1 %d\n", header->status);
-                    // print all HTTP header fields
-                    webster_field_t *field = header->fields;
-                    while (field != NULL)
-                    {
-                        printf("  %s: '%s'\n", field->name, field->value);
-                        field = field->next;
-                    }
-                }
+				int status = 0;
+				WebsterGetStatus(response, &status);
+				printf("HTTP/1.1 %d\n", status);
+				// print all HTTP header fields
+				const char *name;
+				const char *value;
+				int index = 0;
+				while (WebsterIterateField(response, index++, NULL, &name, &value) == WBERR_OK)
+					printf("  %s: '%s'\n", name, value);
                 printf("Waiting for body\n");
             }
             else
@@ -71,10 +68,6 @@ static int main_clientHandler(
     return WBERR_OK;
 }
 
-int http_parse(
-    char *data,
-    int type,
-    webster_header_t *message );
 
 #include <string.h>
 int main( int argc, char **argv )
