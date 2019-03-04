@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include "http.hh"
 #include "network.hh"
 
 #ifndef WB_WINDOWS
@@ -26,10 +27,6 @@ static const char *HTTP_METHODS[] =
 
 
 WEBSTER_PRIVATE webster_memory_t memory = { NULL, NULL, NULL };
-
-
-static int webster_releaseMessage(
-	webster_message_t *message );
 
 
 static char *cloneString(
@@ -174,27 +171,19 @@ int WebsterCommunicateURL(
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
 	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
-	struct webster_message_t_ request, response;
-	uint8_t *buffers = (uint8_t*) memory.malloc(client->bufferSize * 2);
-	if (buffers == NULL) return WBERR_MEMORY_EXHAUSTED;
+	webster_message_t_ request(client->bufferSize);
+	webster_message_t_ response(client->bufferSize);
 
-	memset(&request, 0, sizeof(struct webster_message_t_));
+	//memset(&request, 0, sizeof(struct webster_message_t_));
 	request.type = WBMT_REQUEST;
 	request.channel = client->channel;
-	request.buffer.data = buffers;
-	request.buffer.data[0] = 0;
-	request.buffer.size = (int) client->bufferSize;
 	request.header.method = WBM_GET;
 	request.client = client;
 	request.header.target = url;
 
-	memset(&response, 0, sizeof(struct webster_message_t_));
+	//memset(&response, 0, sizeof(struct webster_message_t_));
 	response.type = WBMT_RESPONSE;
 	response.channel = client->channel;
-	response.buffer.data = buffers + client->bufferSize;
-	response.buffer.data[0] = 0;
-	response.buffer.size = (int) client->bufferSize;
-	response.header.method = WBM_NONE;
 	response.client = client;
 	response.header.target = url;
 
@@ -202,10 +191,6 @@ int WebsterCommunicateURL(
 
 	if (request.header.target != url) http_freeTarget(request.header.target);
 	if (response.header.target != url) http_freeTarget(response.header.target);
-
-	webster_releaseMessage(&request);
-	webster_releaseMessage(&response);
-	memory.free(buffers);
 
 	return WBERR_OK;
 }
@@ -358,16 +343,6 @@ int WebsterGetOption(
 //
 
 
-static int webster_releaseMessage(
-	webster_message_t *message )
-{
-	if (message == NULL) return WBERR_INVALID_ARGUMENT;
-	http_releaseFields(&message->header);
-
-	return WBERR_OK;
-}
-
-
 static size_t webster_getTime()
 {
 	struct timeval info;
@@ -516,7 +491,7 @@ static int webster_receiveHeader(
 
 	// parse HTTP header fields and retrieve the content length
 	result = http_parse((char*)input->buffer.data, input->type, input);
-	input->header.contentLength = input->body.expected;
+	input->header.content_length = input->body.expected;
 	return result;
 }
 
@@ -581,19 +556,6 @@ int WebsterWaitEvent(
 }
 
 
-int WebsterGetHeader(
-    webster_message_t *input,
-    const webster_header_t **header )
-{
-	if (input == NULL) return WBERR_INVALID_MESSAGE;
-	if (header == NULL) return WBERR_INVALID_ARGUMENT;
-
-	*header = &input->header;
-
-	return WBERR_OK;
-}
-
-
 int WebsterGetStringField(
     webster_message_t *input,
 	int id,
@@ -613,14 +575,14 @@ int WebsterGetStringField(
 		if (finfo != NULL) id = finfo->id;
 	}
 
-	const webster_field_t *field = NULL;
+	const std::string *result = NULL;
 	if (id == WBFI_NON_STANDARD)
-		field = http_getFieldByName(&input->header, name);
+		result = http_getField(&input->header, name);
 	else
-		field = http_getFieldById(&input->header, id);
+		result = http_getField(&input->header, id);
 
-	if (field == NULL) return WBERR_NO_DATA;
-	*value = field->value;
+	if (result == NULL) return WBERR_NO_DATA;
+	*value = strdup(result->c_str());
 	return WBERR_OK;
 }
 
@@ -698,6 +660,35 @@ int WebsterSetMethod(
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (!WB_IS_VALID_METHOD(method)) return WBERR_INVALID_HTTP_METHOD;
 	output->header.method = method;
+	return WBERR_OK;
+}
+
+
+int WebsterGetStatus(
+    webster_message_t *output,
+    int *status )
+{
+	if (output == NULL || status == NULL) return WBERR_INVALID_MESSAGE;
+	*status = output->header.status;
+	return WBERR_OK;
+}
+
+
+int WebsterGetMethod(
+    webster_message_t *output,
+    int *method )
+{
+	if (output == NULL || method == NULL) return WBERR_INVALID_MESSAGE;
+	*method = output->header.method;
+	return WBERR_OK;
+}
+
+int WebsterGetTarget(
+    webster_message_t *output,
+    const webster_target_t **target )
+{
+	if (output == NULL || target == NULL) return WBERR_INVALID_MESSAGE;
+	*target = output->header.target;
 	return WBERR_OK;
 }
 
@@ -821,9 +812,9 @@ int WebsterSetStringField(
 		output->body.expected = atoi(value);
 
 	if (finfo != NULL)
-		return http_addFieldById(&output->header, finfo->id, value);
+		return http_addField(&output->header, finfo->id, value);
 	else
-		return http_addFieldByName(&output->header, name, value);
+		return http_addField(&output->header, name, value);
 }
 
 
@@ -853,15 +844,28 @@ int WebsterRemoveField(
 static void webster_commitHeaderFields(
     webster_message_t *output )
 {
-	webster_field_t *field = output->header.fields;
-	while (field != NULL)
+	// write standard fields
+	for (standard_field_map::const_iterator it = output->header.s_fields.begin();
+		 it != output->header.s_fields.end(); ++it)
 	{
-		webster_writeString(output, field->name);
+		webster_field_info_t *fi = http_getFieldName(it->first);
+		if (fi == NULL) continue;
+
+		webster_writeString(output, fi->name);
 		webster_writeString(output, ": ");
-		webster_writeString(output, field->value);
+		webster_writeString(output, it->second.c_str());
 		webster_writeString(output, "\r\n");
-		field = field->next;
 	}
+	// write standard fields
+	for (custom_field_map::const_iterator it = output->header.c_fields.begin();
+		 it != output->header.c_fields.end(); ++it)
+	{
+		webster_writeString(output, it->first.c_str());
+		webster_writeString(output, ": ");
+		webster_writeString(output, it->second.c_str());
+		webster_writeString(output, "\r\n");
+	}
+
 	webster_writeBuffer(output, (const uint8_t*)"\r\n", 2);
 	output->state = WBS_BODY;
 }
@@ -887,14 +891,14 @@ int WebsterWriteData(
 	if (output->state == WBS_HEADER)
 	{
 		// set 'tranfer-encoding' to chunked if required
-		if (http_getFieldById(&output->header, WBFI_CONTENT_LENGTH) == NULL)
+		if (http_getField(&output->header, WBFI_CONTENT_LENGTH) == NULL)
 		{
 			output->flags |= WBMF_CHUNKED;
 			// TODO: merge with previously set value, if any
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
 		}
 		if (output->type == WBMT_REQUEST &&
-			http_getFieldById(&output->header, WBFI_HOST) == NULL &&
+			http_getField(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
 			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port

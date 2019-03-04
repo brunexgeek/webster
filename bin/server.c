@@ -313,7 +313,10 @@ static void main_listDirectory(
 					unit);
 			}
 			else
+			{
+				free(entries[i].fileName);
 				continue;
+			}
 			temp[sizeof(temp) - 1] = 0;
 			WebsterWriteString(response, temp);
 			free(entries[i].fileName);
@@ -333,7 +336,7 @@ static int main_serverHandler(
 	(void) data;
 
 	webster_event_t event;
-	const webster_header_t *header;
+	const webster_target_t *target = NULL;
 	int result = 0;
 
 	do
@@ -349,29 +352,30 @@ static int main_serverHandler(
 			// check if received the HTTP header
 			if (event.type ==  WBT_HEADER)
 			{
-				if (WebsterGetHeader(request, &header) == WBERR_OK)
+				int method = 0;
+				WebsterGetMethod(request, &method);
+				WebsterGetTarget(request, &target);
+				printf("%s %s\n", HTTP_METHODS[method], target->path);
+				// print all HTTP header fields
+				/*webster_field_t *field = header->fields;
+				while (field != NULL)
 				{
-					printf("%s %s\n", HTTP_METHODS[header->method], header->target->path);
-					// print all HTTP header fields
-					webster_field_t *field = header->fields;
-					while (field != NULL)
-					{
-						printf("  %s: '%s'\n", field->name, field->value);
-						field = field->next;
-					}
-				}
+					printf("  %s: '%s'\n", field->name, field->value);
+					field = field->next;
+				}*/
 			}
 		}
 	} while (1);
 
 	// doing it again, but not necessary if the first call succeed
-	result = WebsterGetHeader(request, &header);
+
+	result = WebsterGetTarget(request, &target);
 	if (result != WBERR_OK) return result;
 	// build the local file name
 	char *fileName = NULL;
 	char temp[512];
 	strncpy(temp, rootDirectory, sizeof(temp) - 1);
-	strncat(temp, header->target->path, sizeof(temp) - 1);
+	strncat(temp, target->path, sizeof(temp) - 1);
 	fileName = realpath(temp, NULL);
 
 	result = WBERR_OK;

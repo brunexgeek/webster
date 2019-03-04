@@ -2,8 +2,10 @@
 #define WEBSTER_INTERNAL_HH
 
 
-#include "http.hh"
+//#include "http.hh"
 #include <webster/api.h>
+#include <map>
+#include <string>
 
 
 #if defined(_WIN32) || defined(WIN32)
@@ -16,6 +18,41 @@
 #define WBMT_RESPONSE   0x02
 
 #define WBMF_CHUNKED    0x01
+
+
+struct webster_custom_field_t
+{
+    std::string name;
+    std::string value;
+};
+
+//typedef std::map<std::string, webster_custom_field_t> custom_field_map;
+typedef std::map<std::string, std::string> custom_field_map;
+
+
+struct webster_standard_field_t
+{
+    int id;
+    std::string value;
+};
+
+//typedef std::map<int, webster_standard_field_t> standard_field_map;
+typedef std::map<int, std::string> standard_field_map;
+
+
+struct webster_header_t
+{
+    webster_target_t *target;
+    int status;
+    int method;
+    int content_length;
+    standard_field_map s_fields;
+    custom_field_map c_fields;
+
+    webster_header_t();
+    ~webster_header_t();
+};
+
 
 struct webster_client_t_
 {
@@ -101,6 +138,9 @@ struct webster_message_t_
     webster_header_t header;
 
     struct webster_client_t_ *client;
+
+    webster_message_t_( size_t size );
+    ~webster_message_t_();
 };
 
 

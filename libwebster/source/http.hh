@@ -28,31 +28,31 @@ webster_field_info_t *http_getFieldName(
     int id );
 
 WEBSTER_PRIVATE
-const webster_field_t *http_getFieldById(
+const std::string *http_getField(
     const webster_header_t *header,
-    int id );
+    const int id );
 
 WEBSTER_PRIVATE
-const webster_field_t *http_getFieldByName(
+const std::string *http_getField(
     const webster_header_t *header,
-    const char *name );
+    const std::string &name );
 
 WEBSTER_PRIVATE
-int http_addFieldById(
+int http_addField(
     webster_header_t *header,
 	int id,
-    const char *value );
+    const std::string &value );
 
 WEBSTER_PRIVATE
-int http_addFieldByName(
+int http_addField(
     webster_header_t *header,
-    const char *name,
-    const char *value );
+	const std::string &name,
+    const std::string &value );
 
 WEBSTER_PRIVATE
-void http_removeField(
+int http_removeField(
     webster_header_t *header,
-    const char *name );
+    const std::string &name );
 
 WEBSTER_PRIVATE
 void http_releaseFields(

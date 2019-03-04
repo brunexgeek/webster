@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <iostream>
 
 // is a header field name character?
 #define IS_HFNC(x) \
@@ -195,6 +195,7 @@ webster_field_info_t *http_getFieldID(
     char temp[WBL_MAX_FIELD_NAME + 1];
     for (size_t i = 0, t = strlen(name); i < t; ++i)
         temp[i] = (char) tolower(name[i]);
+    temp[ strlen(name) - 1 ] = 0;
 
     int first = 0;
     int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;
@@ -357,159 +358,91 @@ int http_getFieldID(
 }
 #endif
 
-const webster_field_t *http_getFieldByName(
+const std::string *http_getField(
     const webster_header_t *header,
-    const char *name )
+    const std::string &name )
 {
-    webster_field_t *field = header->fields;
-    while (field != NULL)
-    {
-        if (strcmp(field->name, name) == 0) return field;
-        field = field->next;
-    }
-
+    custom_field_map::const_iterator it = header->c_fields.find(name);
+    if (it != header->c_fields.end()) return &(it->second);
     return NULL;
 }
 
 
-const webster_field_t *http_getFieldById(
+const std::string *http_getField(
     const webster_header_t *header,
     int id )
 {
-    webster_field_t *field = header->fields;
-    while (field != NULL)
-    {
-        if (field->id == id) return field;
-        field = field->next;
-    }
-
+    standard_field_map::const_iterator it = header->s_fields.find(id);
+    if (it != header->s_fields.end()) return &(it->second);
     return NULL;
 }
 
 
-int http_addFieldById(
+int http_addField(
     webster_header_t *header,
 	int id,
-    const char *value )
+    const std::string &value )
 {
-    if (header == NULL || value == NULL)
+    if (header == NULL)
         return WBERR_INVALID_ARGUMENT;
-    if (header->fieldCount >= WBL_MAX_FIELDS)
+    if (header->c_fields.size() + header->s_fields.size() >= WBL_MAX_FIELDS)
         return WBERR_TOO_MANY_FIELDS;
 
-    webster_field_info_t *finfo = http_getFieldName(id);
-    if (finfo == NULL) return WBERR_INVALID_ARGUMENT;
-
-    // allocate memory for the field
-	size_t size = sizeof(webster_field_t) + strlen(value) + 1;
-	webster_field_t *field = (webster_field_t*) memory.calloc(1, size);
-	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
-    field->value = (char*) field + sizeof(webster_field_t);
-    // fill field information
-	field->id = id;
-    field->name = finfo->name;
-    field->next = NULL;
-	strcpy((char*)field->value, value);
-
-	if (header->fields == NULL)
-		header->fields = field;
-	else
-	{
-		webster_field_t *tail = header->fields;
-		while (tail->next != NULL) tail = tail->next;
-		tail->next = field;
-	}
-	++header->fieldCount;
-
+    header->s_fields[id] = value;
 	return WBERR_OK;
 }
 
-// TODO: ensure the field does not exists
-int http_addFieldByName(
+int http_addField(
     webster_header_t *header,
-    const char *name,
-    const char *value )
+	const std::string &name,
+    const std::string &value )
 {
-    if (name == NULL || value == NULL || header == NULL)
+    if (header == NULL)
         return WBERR_INVALID_ARGUMENT;
-    if (header->fieldCount >= WBL_MAX_FIELDS)
+    if (header->c_fields.size() + header->s_fields.size() >= WBL_MAX_FIELDS)
         return WBERR_TOO_MANY_FIELDS;
 
-    size_t nameLen  = strlen(name);
-    size_t valueLen = strlen(value);
-    if (nameLen > WBL_MAX_FIELD_NAME)
-        return WBERR_INVALID_ARGUMENT;
-
-    // allocate memory for the field
-	webster_field_t *field = (webster_field_t*) memory.calloc(1,
-        nameLen + 1 + valueLen + 1 + sizeof(webster_header_t));
-	if (field == NULL) return WBERR_MEMORY_EXHAUSTED;
-    field->value = (char*) field + sizeof(webster_field_t);
-    field->name  = field->value + valueLen + 1;
-
-    // fill field information
-    field->id = WBFI_NON_STANDARD;
-    field->next = NULL;
-    strncpy((char*) field->value, value, valueLen);
-    strncpy((char*) field->name, name, nameLen);
-    for (char *p = (char*) field->name; *p; ++p)
+    std::string temp = name;
+    for (size_t i = 0, t = temp.size(); i < t; ++i)
     {
-        if (!IS_HFNC(*p))
-        {
-            memory.free(field);
-            return WBERR_INVALID_ARGUMENT;
-        }
-        *p = (char) tolower(*p);
+        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
+        temp[i] = (char) tolower(temp[i]);
     }
 
-	if (header->fields == NULL)
-		header->fields = field;
-	else
-	{
-		webster_field_t *tail = header->fields;
-		while (tail->next != NULL) tail = tail->next;
-		tail->next = field;
-	}
-	++header->fieldCount;
+std::cout << "--- '" << temp  << "' = " << "'" << value << "'" << std::endl;
+    webster_field_info_t *fi = http_getFieldID(temp.c_str());
+    if (fi != NULL)
+        return http_addField(header, fi->id, value);
 
+    header->c_fields[temp] = value;
 	return WBERR_OK;
 }
 
 
-void http_removeField(
+int http_removeField(
     webster_header_t *header,
-    const char *name )
+    const std::string &name )
 {
-    webster_field_t *prev = NULL;
-    webster_field_t *field = header->fields;
-    while (field != NULL)
+    std::string temp = name;
+    for (size_t i = 0, t = temp.size(); i < t; ++i)
     {
-        if (strcmp(field->name, name) == 0) break;
-        prev = field;
-        field = field->next;
+        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
+        temp[i] = (char) tolower(temp[i]);
     }
 
-    if (field == NULL) return;
-    if (prev == NULL)
-        header->fields = field->next;
+    webster_field_info_t *fi = http_getFieldID(temp.c_str());
+    if (fi != NULL)
+    {
+        standard_field_map::iterator it = header->s_fields.find(fi->id);
+        if (it != header->s_fields.end()) header->s_fields.erase(it);
+    }
     else
-        prev->next = field->next;
-}
-
-
-void http_releaseFields(
-    webster_header_t *header )
-{
-    webster_field_t *ptr = NULL;
-    webster_field_t *field = header->fields;
-	while (field != NULL)
     {
-        ptr = field;
-        field = field->next;
-        memory.free(ptr);
+        custom_field_map::iterator it = header->c_fields.find(name);
+        if (it != header->c_fields.end()) header->c_fields.erase(it);
     }
-    header->fields = NULL;
-    header->fieldCount = 0;
+
+    return WBERR_OK;
 }
 
 
@@ -572,11 +505,6 @@ struct webster_context_t
     size_t length;
     const char *current;
 };
-
-
-#define STATE_FIRST_LINE     1
-#define STATE_HEADER_FIELD   2
-#define STATE_COMPLETE       3
 
 
 int http_parseTarget(
@@ -790,13 +718,16 @@ int http_parse(
     int type,
     webster_message_t *message )
 {
+    static const int STATE_FIRST_LINE = 1;
+    static const int STATE_HEADER_FIELD = 2;
+    static const int STATE_COMPLETE = 3;
+
     int state = STATE_FIRST_LINE;
     char *ptr = data;
     char *token = ptr;
     int result;
 
     webster_header_t *header = &message->header;
-    header->fieldCount = 0;
     message->body.expected = 0;
     message->body.chunkSize = 0;
 
@@ -909,7 +840,7 @@ int http_parse(
             webster_field_info_t *finfo = http_getFieldID(name);
             if (finfo != NULL)
             {
-                http_addFieldById(header, finfo->id, value);
+                http_addField(header, finfo->id, value);
 
                 // if is 'content-length' field, get the value
                 if (finfo->id == WBFI_CONTENT_LENGTH)
@@ -919,9 +850,7 @@ int http_parse(
                     message->flags |= WBMF_CHUNKED;
             }
             else
-                http_addFieldByName(header, name, value);
-
-            header->fieldCount++;
+                http_addField(header, name, value);
         }
         else
             break;

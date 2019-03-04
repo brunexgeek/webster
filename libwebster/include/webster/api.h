@@ -165,6 +165,7 @@
 #define WBL_MAX_CONNECTIONS    1000
 #define WBL_READ_TIMEOUT       10000
 
+
 struct webster_server_t_;
 typedef struct webster_server_t_ webster_server_t;
 
@@ -173,14 +174,6 @@ typedef struct webster_client_t_ webster_client_t;
 
 struct webster_message_t_;
 typedef struct webster_message_t_ webster_message_t;
-
-typedef struct webster_field_t_
-{
-    int id;
-    const char *name;
-    const char *value;
-    struct webster_field_t_ *next;
-} webster_field_t;
 
 typedef struct
 {
@@ -206,21 +199,10 @@ typedef struct
     char *query;
 } webster_target_t;
 
-typedef struct
-{
-    webster_target_t *target;
-    int status;
-    int method;
-    int contentLength;
-    webster_field_t *fields;
-    int fieldCount;
-} webster_header_t;
-
 typedef int (webster_handler_t)(
     webster_message_t *request,
     webster_message_t *response,
     void *data );
-
 
 typedef struct
 {
@@ -369,10 +351,6 @@ WEBSTER_EXPORTED int WebsterWaitEvent(
     webster_message_t *input,
     webster_event_t *event );
 
-WEBSTER_EXPORTED int WebsterGetHeader(
-    webster_message_t *input,
-    const webster_header_t **header );
-
 WEBSTER_EXPORTED int WebsterGetStringField(
     webster_message_t *input,
     int id,
@@ -402,6 +380,18 @@ WEBSTER_EXPORTED int WebsterSetMethod(
     webster_message_t *output,
     int method );
 
+WEBSTER_EXPORTED int WebsterGetStatus(
+    webster_message_t *output,
+    int *status );
+
+WEBSTER_EXPORTED int WebsterGetMethod(
+    webster_message_t *output,
+    int *method );
+
+WEBSTER_EXPORTED int WebsterGetTarget(
+    webster_message_t *output,
+    const webster_target_t **target );
+
 WEBSTER_EXPORTED int WebsterSetStringField(
     webster_message_t *output,
     const char *name,
@@ -421,6 +411,7 @@ WEBSTER_EXPORTED int WebsterWriteData(
     webster_message_t *output,
     const uint8_t *buffer,
     int size );
+
 // TODO: must fail if writing more data it's supposed to (content-length)
 WEBSTER_EXPORTED int WebsterWriteString(
     webster_message_t *output,

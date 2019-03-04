@@ -99,7 +99,7 @@ set_target_properties(client_test PROPERTIES
 
 
 add_executable(server "${CMAKE_CURRENT_LIST_DIR}/bin/server.c")
-target_link_libraries(server libwebster_static)
+target_link_libraries(server libwebster)
 target_compile_definitions(server PRIVATE _DEFAULT_SOURCE)
 set_target_properties(server PROPERTIES
     OUTPUT_NAME "server"
