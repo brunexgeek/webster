@@ -3,7 +3,7 @@ project(webster)
 cmake_minimum_required(VERSION 2.8)
 
 set(WEBSTER_MAJOR_VERSION 0)
-set(WEBSTER_MINOR_VERSION 2)
+set(WEBSTER_MINOR_VERSION 3)
 set(WEBSTER_PATCH_VERSION 0)
 
 set(LIBRARY_TYPE "SHARED" CACHE STRING "Specify the type of binary to be generated")
@@ -50,9 +50,15 @@ if(MSVC)
 endif()
 
 if (UNIX)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -std=c99 -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=discarded-qualifiers")
-    set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} -s -O3")
-    set(CMAKE_C_FLAGS_DEBUG  "${CMAKE_C_FLAGS_DEBUG} -g -O0")
+    set(COMMON_FLAGS "-Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=discarded-qualifiers")
+
+    set(CMAKE_C_FLAGS           "${CMAKE_C_FLAGS} -std=c99 ${COMMON_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} -s -O3")
+    set(CMAKE_C_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
+
+    set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -std=c++98  ${COMMON_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s -O3")
+    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
     if(CMAKE_BUILD_PLATFORM STREQUAL "x86")
         set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32" )
@@ -67,40 +73,10 @@ if (UNIX)
     endif()
 endif()
 
+add_subdirectory(libwebster)
+
 
 find_package(Threads REQUIRED)
-
-file(GLOB SOURCES "${CMAKE_CURRENT_LIST_DIR}/library/*.c")
-
-add_library(libwebster SHARED ${SOURCES})
-target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
-target_include_directories(libwebster
-    PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
-target_compile_definitions(libwebster
-    PRIVATE DBUILDING_DYNAMIC)
-set_target_properties(libwebster PROPERTIES
-    OUTPUT_NAME "webster"
-    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    PREFIX "lib" )
-
-
-add_library(libwebster_static STATIC ${SOURCES})
-target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
-target_include_directories(libwebster_static
-    PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
-set_target_properties(libwebster_static PROPERTIES
-    OUTPUT_NAME "webster"
-    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    PREFIX "lib" )
-
 
 add_executable(server_test "${CMAKE_CURRENT_LIST_DIR}/bin/server_sample.c")
 target_link_libraries(server_test libwebster_static)

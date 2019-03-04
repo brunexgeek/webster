@@ -1,9 +1,9 @@
-#include "internal.h"
+#include "internal.hh"
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include "network.h"
+#include "network.hh"
 
 #ifndef WB_WINDOWS
 #include <sys/time.h>

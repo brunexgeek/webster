@@ -2,7 +2,7 @@
 #define WEBSTER_INTERNAL_HH
 
 
-#include "http.h"
+#include "http.hh"
 #include <webster/api.h>
 
 

@@ -1,6 +1,6 @@
 # Webster
 
-Lightweight HTTP server and client API. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API. You can change the communication channel reimplementing some internal functions.
+Lightweight HTTP server and client API compatible with C99. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API. You can change the communication channel reimplementing some internal functions.
 
 Webster enables you to communicate with HTTP servers and implement your own HTTP server. It automatically parses request headers and also simplify creating response headers. The input/output body data is handled as a stream (with chunked transfer encoding or not): to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amount of data using less memory.
 

@@ -5,7 +5,7 @@
 #include <webster/api.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "internal.h"
+#include "internal.hh"
 
 
 typedef struct

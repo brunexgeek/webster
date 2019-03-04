@@ -1,5 +1,5 @@
-#include "http.h"
-#include "internal.h"
+#include "http.hh"
+#include "internal.hh"
 #include <string.h>
 #include <webster/api.h>
 #include <ctype.h>
@@ -103,7 +103,7 @@ static char *cloneString(
 {
     if (text == NULL) return NULL;
     size_t len = strlen(text);
-    char *output = memory.malloc(len + 1);
+    char *output = (char*) memory.malloc(len + 1);
     strcpy(output, text);
     return output;
 }
@@ -119,7 +119,7 @@ static char *subString(
     size_t len = strlen(text);
     if (offset + length > len) return NULL;
 
-    char *output = memory.malloc(length + 1);
+    char *output = (char*) memory.malloc(length + 1);
     if (output == NULL) return NULL;
     memcpy(output, text + offset, length);
     output[length] = 0;
@@ -196,7 +196,7 @@ webster_field_info_t *http_getFieldID(
     for (size_t i = 0, t = strlen(name); i < t; ++i)
         temp[i] = (char) tolower(name[i]);
 
-	int first = 0;
+    int first = 0;
     int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;
 
     while (first <= last)
@@ -586,7 +586,7 @@ int http_parseTarget(
     if (url == NULL || url[0] == 0 || output == NULL) return WBERR_INVALID_URL;
 
     // TODO: change to make an allocation for all fields
-    *output = memory.calloc(1, sizeof(webster_target_t));
+    *output = (webster_target_t*) memory.calloc(1, sizeof(webster_target_t));
     if (*output == NULL) return WBERR_MEMORY_EXHAUSTED;
     webster_target_t *target = *output;
 
@@ -627,19 +627,19 @@ int http_parseTarget(
         target->type = WBRT_ABSOLUTE;
 
 		// extract the host name
-		char *hb = strstr(url, "://");
+		const char *hb = strstr(url, "://");
 		if (hb == NULL) return WBERR_INVALID_URL;
 		hb += 3;
-		char *he = hb;
+		const char *he = hb;
 		while (*he != ':' && *he != '/' && *he != 0) ++he;
 		if (hb == he) return WBERR_INVALID_URL;
 
-		char *rb = he;
-		char *re = NULL;
+		const char *rb = he;
+		const char *re = NULL;
 
 		// extract the port number, if any
-		char *pb = he;
-		char *pe = NULL;
+		const char *pb = he;
+		const char *pe = NULL;
 		if (*pb == ':')
 		{
 			pe = ++pb;

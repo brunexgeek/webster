@@ -2,7 +2,7 @@
 #define WEBSTER_NETWORK_HH
 
 
-#include "internal.h"
+#include "internal.hh"
 
 #define WBNET_INITIALIZE  networkImpl.initialize
 #define WBNET_TERMINATE   networkImpl.terminate

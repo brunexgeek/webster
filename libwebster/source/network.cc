@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include <sys/types.h>
-#include "network.h"
+#include "network.hh"
 
 #ifdef WB_WINDOWS
 #include <winsock2.h>
