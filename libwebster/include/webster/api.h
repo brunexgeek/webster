@@ -51,6 +51,7 @@
 #define WBERR_TOO_MANY_FIELDS            -27
 #define WBERR_INVALID_CHUNK              -28
 #define WBERR_NOT_CONNECTED              -29
+#define WBERR_SIGNAL                     -30
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2

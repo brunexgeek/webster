@@ -24,16 +24,14 @@ typedef SSIZE_T ssize_t;
 
 
 #if defined(WB_WINDOWS) && (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
-HINSTANCE winSocketLib;
-
 // Note: on Windows XP or older, the functions 'getaddrinfo' and 'freeaddrinfo'
 //       should be loaded manually.
 
+HINSTANCE winSocketLib;
 getaddrinfo_f getaddrinfo;
-
 freeaddrinfo_f freeaddrinfo;
-
 #endif
+
 
 static webster_memory_t memory = { NULL, NULL, NULL };
 
@@ -112,7 +110,7 @@ static int network_initialize(
 static int network_terminate()
 {
 	memory.malloc = NULL;
-	memory.malloc = NULL;
+	memory.calloc = NULL;
 	memory.free   = NULL;
 
 	#ifdef WB_WINDOWS
@@ -208,6 +206,7 @@ static int network_receive(
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
+	if (timeout < 0) timeout = -1;
 
 	webster_channel_t *chann = (webster_channel_t*) channel;
 	uint32_t bufferSize = *size;
@@ -220,6 +219,7 @@ static int network_receive(
 	int result = poll(&chann->poll, 1, timeout);
 	#endif
 	if (result == 0) return WBERR_TIMEOUT;
+	if (result == EINTR) return WBERR_SIGNAL;
 	if (result < 0) return WBERR_SOCKET;
 
 	ssize_t bytes = recv(chann->socket, buffer, (size_t) bufferSize, 0);
@@ -279,11 +279,9 @@ static int network_accept(
 	#else
 	int result = poll(&chann->poll, 1, 1000);
 	#endif
-	if (result == 0)
-		return WBERR_TIMEOUT;
-	else
-	if (result < 0)
-		return WBERR_SOCKET;
+	if (result == 0) return WBERR_TIMEOUT;
+	if (result == EINTR) return WBERR_SIGNAL;
+	if (result < 0) return WBERR_SOCKET;
 
 	*client = memory.calloc(1, sizeof(webster_channel_t));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;

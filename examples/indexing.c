@@ -16,14 +16,32 @@
 
 #define PROGRAM_TITLE     "Webster HTTP Server"
 
-#define HTML_BEGIN "<html><head><meta charset='UTF-8'><title>" PROGRAM_TITLE "</title></head>" \
-	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px;} " \
-	"a{text-decoration: none}</style><body>"
+/*
+ * Public domain icons from <https://svn.apache.org/icons/>.
+ */
 
-#define DIR_FORMAT "<tr><td><img src='https://svn.apache.org/icons/folder.gif'>" \
+#define DIR_CSS ".icon-folder{width:20px;height:22px;background-image: url(data:image/gif;base64," \
+	"R0lGODlhFAAWAMIAAP/////Mmcz//5lmMzMzMwAAAAAAAAAAACH+TlRoaXMgYXJ0IGlzIGluIHRo" \
+	"ZSBwdWJsaWMgZG9tYWluLiBLZXZpbiBIdWdoZXMsIGtldmluaEBlaXQuY29tLCBTZXB0ZW1iZXIg" \
+	"MTk5NQAh+QQBAAACACwAAAAAFAAWAAADVCi63P4wyklZufjOErrvRcR9ZKYpxUB6aokGQyzHKxyO" \
+	"9RoTV54PPJyPBewNSUXhcWc8soJOIjTaSVJhVphWxd3CeILUbDwmgMPmtHrNIyxM8Iw7AQA7);}"
+
+#define FIL_CSS ".icon-file{width:20px;height:22px;background-image: url(data:image/gif;base64," \
+	"R0lGODlhFAAWAMIAAP///8z//5mZmTMzMwAAAAAAAAAAAAAAACH+TlRoaXMgYXJ0IGlzIGluIHRo" \
+	"ZSBwdWJsaWMgZG9tYWluLiBLZXZpbiBIdWdoZXMsIGtldmluaEBlaXQuY29tLCBTZXB0ZW1iZXIg" \
+	"MTk5NQAh+QQBAAABACwAAAAAFAAWAAADUDi6vPEwDECrnSO+aTvPEddVIriN1wWJKDG48IlSRG0T" \
+	"8kwJvIBLOkvvxwoCfDnjkaisIIHNZdL4LAarUSm0iY12uUwvcdArm3mvyG3N/iUAADs=);}"
+
+#define HTML_BEGIN "<html><head><meta charset='UTF-8'><title>" PROGRAM_TITLE "</title></head>" \
+	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px;}" \
+	"a{text-decoration: none}" DIR_CSS FIL_CSS "</style><body>"
+
+#define HTML_END "</body></html>"
+
+#define DIR_FORMAT "<tr><td><div class='icon-folder'></div>" \
 	"</td><td><strong><a href='%s/%s'>%s/</a></strong></div></td><td></td></tr>"
 
-#define FIL_FORMAT "<tr><td><img src='https://svn.apache.org/icons/unknown.gif'>" \
+#define FIL_FORMAT "<tr><td><div class='icon-file'></div>" \
 	"</td><td><a href='%s/%s'>%s</a></td><td>%.1f %c</td></tr>"
 
 struct mime_t
@@ -325,6 +343,7 @@ static void main_listDirectory(
 	}
 
 	WebsterWriteString(response, "</table><hr/>");
+	WebsterWriteString(response, HTML_END);
 }
 
 
