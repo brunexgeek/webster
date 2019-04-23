@@ -37,7 +37,11 @@ static webster_memory_t memory = { NULL, NULL, NULL };
 
 typedef struct
 {
+	#ifdef WB_WINDOWS
+	SOCKET socket;
+	#else
 	int socket;
+	#endif
 	struct pollfd poll;
 } webster_channel_t;
 
@@ -222,7 +226,7 @@ static int network_receive(
 	if (result == EINTR) return WBERR_SIGNAL;
 	if (result < 0) return WBERR_SOCKET;
 
-	ssize_t bytes = recv(chann->socket, buffer, (size_t) bufferSize, 0);
+	ssize_t bytes = recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
 	if (bytes == ECONNRESET || bytes == EPIPE || bytes == ENOTCONN)
 		return WBERR_NOT_CONNECTED;
 	else
@@ -254,7 +258,7 @@ static int network_send(
 	#else
 	int flags = MSG_NOSIGNAL;
 	#endif
-	ssize_t result = send(chann->socket, buffer, (size_t) size, flags);
+	ssize_t result = send(chann->socket, (const char *) buffer, (size_t) size, flags);
 	if (result == ECONNRESET || result == EPIPE || result == ENOTCONN)
 		return WBERR_NOT_CONNECTED;
 	else
@@ -288,12 +292,14 @@ static int network_accept(
 
 	struct sockaddr_in address;
 	#ifdef WB_WINDOWS
-	size_t addressLength;
+	int addressLength;
+	SOCKET socket;
 	#else
 	socklen_t addressLength;
+	int socket;
 	#endif
 	addressLength = sizeof(address);
-	int socket = accept(chann->socket, (struct sockaddr *) &address, &addressLength);
+	socket = accept(chann->socket, (struct sockaddr *) &address, &addressLength);
 
 	if (socket < 0)
 	{

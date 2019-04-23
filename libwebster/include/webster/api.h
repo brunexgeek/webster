@@ -7,7 +7,7 @@
 #elif BUILDING_WEBSTER && BUILDING_DYNAMIC
 #define WEBSTER_EXPORTED __attribute__((__visibility__("default")))
 #elif defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
-#define WEBSTER_EXPORTED __declspec(dllimport)
+#define WEBSTER_EXPORTED
 #else
 #define WEBSTER_EXPORTED
 #endif

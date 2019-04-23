@@ -7,8 +7,13 @@
 #include "network.hh"
 #include <iostream>
 
-#ifndef WB_WINDOWS
+
+#ifdef WB_WINDOWS
+#include <windows.h>
+#define SNPRINTF _snprintf
+#else
 #include <sys/time.h>
+#define SNPRINTF snprintf
 #endif
 
 
@@ -322,11 +327,15 @@ int WebsterGetOption(
 //
 
 
-static size_t webster_getTime()
+static uint64_t webster_getTime()
 {
+	#ifdef WB_WINDOWS
+	return GetTickCount64();
+	#else
 	struct timeval info;
-	gettimeofday(&info, NULL);
-	return (size_t) (info.tv_usec / 1000 + info.tv_sec * 1000);
+    gettimeofday(&info, NULL);
+    return (uint64_t) (info.tv_usec / 1000) + (uint64_t) (info.tv_sec * 1000);
+	#endif
 }
 
 
@@ -351,7 +360,7 @@ static int webster_receive(
 	int recvTimeout = (timeout >= 0) ? timeout : 0;
 	if (isHeader) recvTimeout = 50;
 
-	size_t startTime = webster_getTime();
+	uint64_t startTime = webster_getTime();
 
 	while (input->buffer.pending < input->buffer.size)
 	{
@@ -449,7 +458,7 @@ static int webster_writeInteger(
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	char temp[16] = { 0 };
-	snprintf(temp, sizeof(temp) - 1, "%d", value);
+	SNPRINTF(temp, sizeof(temp)-1, "%d", value);
 	return webster_writeBuffer(output, (uint8_t*) temp, (int) strlen(temp));
 }
 
@@ -841,7 +850,7 @@ int WebsterSetIntegerField(
     int value )
 {
 	char temp[12];
-	snprintf(temp, sizeof(temp) - 1, "%d", value);
+	SNPRINTF(temp, sizeof(temp)-1, "%d", value);
 	return WebsterSetStringField(output, name, temp);
 }
 
@@ -920,7 +929,7 @@ int WebsterWriteData(
 		{
 			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
 			char host[HOST_LEN + 1];
-			snprintf(host, HOST_LEN, "%s:%d", output->client->host.c_str(), output->client->port);
+			SNPRINTF(host, HOST_LEN, "%s:%d", output->client->host.c_str(), output->client->port);
 			host[HOST_LEN] = 0;
 			WebsterSetStringField(output, "host", host);
 		}
@@ -934,7 +943,7 @@ int WebsterWriteData(
 	if (output->flags & WBMF_CHUNKED)
 	{
 		char temp[16];
-		snprintf(temp, sizeof(temp) - 1, "%X\r\n", size);
+		SNPRINTF(temp, sizeof(temp)-1, "%X\r\n", size);
 		temp[15] = 0;
 		webster_writeBuffer(output, (const uint8_t*) temp, (int) strlen(temp));
 	}
