@@ -133,10 +133,6 @@ const char *http_getFieldName(
     int id );
 
 WEBSTER_PRIVATE
-char *http_removeTrailing(
-    char *text );
-
-WEBSTER_PRIVATE
 int http_parseTarget(
     const char *url,
     webster_target_t **target );
@@ -151,8 +147,5 @@ WEBSTER_PRIVATE
 int http_freeTarget(
     webster_target_t *target );
 
-WEBSTER_PRIVATE
-int http_parseChunk(
-    webster_message_t *input );
 
 #endif // #ifndef WEBSTER_HTTP_H

@@ -367,26 +367,25 @@ static int webster_receive(
 		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
 		// receive new data and adjust pending information
 		int result = WBNET_RECEIVE(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
-		// only keep trying if receiving header data
-		if (result == WBERR_TIMEOUT && isHeader) continue;
 
-		if (result == WBERR_OK)
+		// only keep trying if expecting header data
+		if (result == WBERR_TIMEOUT)
 		{
-			input->buffer.pending += (int) bytes;
-			input->buffer.current = input->buffer.data;
-			// ensure we have a null-terminator at the end
-			*(input->buffer.current + input->buffer.pending) = 0;
-
-			if (isHeader)
-			{
-				if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
-				if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
-			}
-			else
-				return WBERR_OK;
+			if (isHeader && webster_getTime() - startTime < (size_t)timeout)
+				continue;
+			return WBERR_TIMEOUT;
 		}
 		else
-			return result;
+		if (result != WBERR_OK) return result;
+
+		input->buffer.pending += (int) bytes;
+		input->buffer.current = input->buffer.data;
+		// ensure we have a null-terminator at the end
+		*(input->buffer.current + input->buffer.pending) = 0;
+
+		if (isHeader == 0) return WBERR_OK;
+		if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
+		if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
 	}
 
 	return WBERR_OK;
@@ -476,7 +475,6 @@ static int webster_receiveHeader(
 	// remember the last position
 	input->buffer.current = (uint8_t*) ptr + 4;
 	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
-
 	// parse HTTP header fields and retrieve the content length
 	result = http_parse((char*)input->buffer.data, input->type, input);
 	input->header.content_length = input->body.expected;

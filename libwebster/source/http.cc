@@ -314,7 +314,6 @@ const char *http_statusMessage(
     return "";
 }
 
-#if 1
 
 int http_getFieldID(
     const char *name )
@@ -369,127 +368,6 @@ const char *http_getFieldName(
 
 	return NULL;
 }
-
-
-#else
-int http_getFieldID(
-    const char *name )
-{
-    if (name == NULL || name[0] == 0 || name[0] < 'a' || name[0] > 'z') return 0;
-
-    switch (name[0])
-    {
-        case 'a':
-            if (name[1] == 'c')
-            {
-                if (name[2] == 'c' && name[3] == 'e')
-                {
-                    if (strcmp(name, "accept") == 0)                            return WBFI_ACCEPT;
-                    if (strcmp(name, "accept-charset") == 0)                    return WBFI_ACCEPT_CHARSET;
-                    if (strcmp(name, "accept-encoding") == 0)                   return WBFI_ACCEPT_ENCODING;
-                    if (strcmp(name, "accept-language") == 0)                   return WBFI_ACCEPT_LANGUAGE;
-                    if (strcmp(name, "accept-patch") == 0)                      return WBFI_ACCEPT_PATCH;
-                    if (strcmp(name, "accept-ranges") == 0)                     return WBFI_ACCEPT_RANGES;
-                }
-                if (strcmp(name, "access-control-allow-credentials") == 0)  return WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS;
-                if (strcmp(name, "access-control-allow-headers") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_HEADERS;
-                if (strcmp(name, "access-control-allow-methods") == 0)      return WBFI_ACCESS_CONTROL_ALLOW_METHODS;
-                if (strcmp(name, "access-control-allow-origin") == 0)       return WBFI_ACCESS_CONTROL_ALLOW_ORIGIN;
-                if (strcmp(name, "access-control-max-age") == 0)            return WBFI_ACCESS_CONTROL_MAX_AGE;
-                if (strcmp(name, "access-control-expose-headers") == 0)     return WBFI_ACCESS_CONTROL_EXPOSE_HEADERS;
-                if (strcmp(name, "access-control-request-headers") == 0)    return WBFI_ACCESS_CONTROL_REQUEST_HEADERS;
-                if (strcmp(name, "access-control-request-method") == 0)     return WBFI_ACCESS_CONTROL_REQUEST_METHOD;
-            }
-            if (strcmp(name, "authorization") == 0)                     return WBFI_AUTHORIZATION;
-            if (strcmp(name, "age") == 0)                               return WBFI_AGE;
-            if (strcmp(name, "allow") == 0)                             return WBFI_ALLOW;
-            if (strcmp(name, "alt-svc") == 0)                           return WBFI_ALT_SVC;
-            break;
-        case 'c':
-            if (strcmp(name, "content-length") == 0)                    return WBFI_CONTENT_LENGTH;
-            if (strcmp(name, "content-type") == 0)                      return WBFI_CONTENT_TYPE;
-            if (strcmp(name, "cookie") == 0)                            return WBFI_COOKIE;
-            if (strcmp(name, "cache-control") == 0)                     return WBFI_CACHE_CONTROL;
-            if (strcmp(name, "connection") == 0)                        return WBFI_CONNECTION;
-            if (strcmp(name, "content-disposition") == 0)               return WBFI_CONTENT_DISPOSITION;
-            if (strcmp(name, "content-encoding") == 0)                  return WBFI_CONTENT_ENCODING;
-            if (strcmp(name, "content-language") == 0)                  return WBFI_CONTENT_LANGUAGE;
-            if (strcmp(name, "content-location") == 0)                  return WBFI_CONTENT_LOCATION;
-            if (strcmp(name, "content-range") == 0)                     return WBFI_CONTENT_RANGE;
-            break;
-        case 'd':
-            if (strcmp(name, "date") == 0)                              return WBFI_DATE;
-            if (strcmp(name, "dnt") == 0)                               return WBFI_DNT;
-            break;
-        case 'e':
-            if (strcmp(name, "etag") == 0)                              return WBFI_ETAG;
-            if (strcmp(name, "expires") == 0)                           return WBFI_EXPIRES;
-            if (strcmp(name, "expect") == 0)                            return WBFI_EXPECT;
-            break;
-        case 'f':
-            if (strcmp(name, "forwarded") == 0)                         return WBFI_FORWARDED;
-            if (strcmp(name, "from") == 0)                              return WBFI_FROM;
-            break;
-        case 'h':
-            if (strcmp(name, "host") == 0)                              return WBFI_HOST;
-            break;
-        case 'i':
-            if (strcmp(name, "if-match") == 0)                          return WBFI_IF_MATCH;
-            if (strcmp(name, "if-modified-since") == 0)                 return WBFI_IF_MODIFIED_SINCE;
-            if (strcmp(name, "if-none-match") == 0)                     return WBFI_IF_NONE_MATCH;
-            if (strcmp(name, "if-range") == 0)                          return WBFI_IF_RANGE;
-            if (strcmp(name, "if-unmodified-since") == 0)               return WBFI_IF_UNMODIFIED_SINCE;
-            break;
-        case 'l':
-            if (strcmp(name, "last-modified") == 0)                     return WBFI_LAST_MODIFIED;
-            if (strcmp(name, "link") == 0)                              return WBFI_LINK;
-            if (strcmp(name, "location") == 0)                          return WBFI_LOCATION;
-            break;
-        case 'm':
-            if (strcmp(name, "max-forwards") == 0)                      return WBFI_MAX_FORWARDS;
-            break;
-        case 'o':
-            if (strcmp(name, "origin") == 0)                            return WBFI_ORIGIN;
-            break;
-        case 'p':
-            if (strcmp(name, "pragma") == 0)                            return WBFI_PRAGMA;
-            if (strcmp(name, "proxy-authenticate") == 0)                return WBFI_PROXY_AUTHENTICATE;
-            if (strcmp(name, "proxy-authorization") == 0)               return WBFI_PROXY_AUTHORIZATION;
-            if (strcmp(name, "public-key-pins") == 0)                   return WBFI_PUBLIC_KEY_PINS;
-            break;
-        case 'r':
-            if (strcmp(name, "referer") == 0)                           return WBFI_REFERER;
-            if (strcmp(name, "range") == 0)                             return WBFI_RANGE;
-            if (strcmp(name, "retry-after") == 0)                       return WBFI_RETRY_AFTER;
-            break;
-        case 's':
-            if (strcmp(name, "server") == 0)                            return WBFI_SERVER;
-            if (strcmp(name, "set-cookie") == 0)                        return WBFI_SET_COOKIE;
-            if (strcmp(name, "strict-transport-security") == 0)         return WBFI_STRICT_TRANSPORT_SECURITY;
-            break;
-        case 't':
-            if (strcmp(name, "transfer-encoding") == 0)                 return WBFI_TRANSFER_ENCODING;
-            if (strcmp(name, "te") == 0)                                return WBFI_TE;
-            if (strcmp(name, "tk") == 0)                                return WBFI_TK;
-            if (strcmp(name, "trailer") == 0)                           return WBFI_TRAILER;
-            break;
-        case 'u':
-            if (strcmp(name, "user-agent") == 0)                        return WBFI_USER_AGENT;
-            if (strcmp(name, "upgrade") == 0)                           return WBFI_UPGRADE;
-            if (strcmp(name, "upgrade-insecure-requests") == 0)         return WBFI_UPGRADE_INSECURE_REQUESTS;
-            break;
-        case 'v':
-            if (strcmp(name, "vary") == 0)                              return WBFI_VARY;
-            if (strcmp(name, "via") == 0)                               return WBFI_VIA;
-            break;
-        case 'w':
-            if (strcmp(name, "www-authenticate") == 0)                  return WBFI_WWW_AUTHENTICATE;
-            if (strcmp(name, "warning") == 0)                           return WBFI_WARNING;
-    }
-
-    return 0;
-}
-#endif
 
 
 char *http_removeTrailing(
@@ -904,27 +782,3 @@ int http_parse(
 
     return WBERR_OK;
 }
-
-#if 0
-int http_parseChunk(
-    webster_message_t *input )
-{
-    uint8_t *ptr = input->buffer.current;
-    if (ptr[0] == '\r' && ptr[1] == '\n') ptr += 2;
-
-    char *token = (char*) ptr;
-    while (isxdigit(*ptr)) ++ptr;
-    if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_CHUNK;
-    *ptr = 0;
-    ptr += 2;
-    uint32_t temp = 0;
-    sscanf(token, "%x", &temp);
-    input->body.chunkSize = (int) temp;
-    input->buffer.current = ptr;
-    input->buffer.pending += (int) (ptr - input->buffer.current);
-printf("Chunk size is %d\n", (int) temp);
-    if (temp == 0) return WBERR_COMPLETE;
-
-    return WBERR_OK;
-}
-#endif
