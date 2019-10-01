@@ -2,8 +2,8 @@ project(webster)
 
 cmake_minimum_required(VERSION 2.8)
 
-set(WEBSTER_MAJOR_VERSION 0)
-set(WEBSTER_MINOR_VERSION 3)
+set(WEBSTER_MAJOR_VERSION 1)
+set(WEBSTER_MINOR_VERSION 0)
 set(WEBSTER_PATCH_VERSION 0)
 
 set(LIBRARY_TYPE "SHARED" CACHE STRING "Specify the type of binary to be generated")
@@ -73,7 +73,32 @@ if (UNIX)
     endif()
 endif()
 
-add_subdirectory(libwebster)
+
+add_library(libwebster SHARED "webster.cc")
+target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
+target_include_directories(libwebster PUBLIC "./")
+target_compile_definitions(libwebster PRIVATE BUILDING_DYNAMIC=1)
+set_target_properties(libwebster PROPERTIES
+    OUTPUT_NAME "webster"
+    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    PREFIX "lib" )
+
+
+add_library(libwebster_static STATIC "webster.cc")
+target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
+target_include_directories(libwebster_static PUBLIC "./")
+set_target_properties(libwebster_static PROPERTIES
+    OUTPUT_NAME "webster"
+    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    PREFIX "lib" )
 
 
 find_package(Threads REQUIRED)

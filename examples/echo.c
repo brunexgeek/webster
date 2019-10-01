@@ -1,4 +1,4 @@
-#include <webster/api.h>
+#include <webster.h>
 #include <limits.h>
 #include <stdio.h>
 #include <signal.h>
