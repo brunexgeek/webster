@@ -299,7 +299,11 @@ webster_header_t::~webster_header_t()
 
 const std::string *webster_header_t::field( const std::string &name ) const
 {
-    custom_field_map::const_iterator it = c_fields.find(name);
+	std::string tmp = name;
+	for (size_t i = 0, t = tmp.length(); i < t; ++i)
+		tmp[i] = (char) tolower(tmp[i]);
+
+    custom_field_map::const_iterator it = c_fields.find(tmp);
     if (it != c_fields.end()) return &(it->second);
     return NULL;
 }
