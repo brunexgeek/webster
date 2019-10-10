@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200112L
 
-#include <webster.h>
+#include "webster.h"
 #include <string>
 
 #if defined(_WIN32) || defined(WIN32)
@@ -1001,7 +1001,7 @@ WEBSTER_PRIVATE int network_resetImpl();
 #ifdef WB_WINDOWS
 #include <winsock2.h>
 #if (_WIN32_WINNT > 0x0501 || WINVER > 0x0501)
-#include <WS2tcpip.h>
+#include <ws2tcpip.h>
 #endif
 #pragma comment(lib, "ws2_32.lib")
 typedef SSIZE_T ssize_t;
@@ -1547,15 +1547,15 @@ ESCAPE:
 
 int WebsterCommunicate(
     webster_client_t *client,
-    char *path,
-    char *query,
+    const char *path,
+    const char *query,
     webster_handler_t *callback,
     void *data )
 {
 	webster_target_t url;
 	url.type = WBRT_ORIGIN;
-	url.path = path;
-	url.query = query;
+	url.path = (char*) path;
+	url.query = (char*) query;
 	return WebsterCommunicateURL(client, &url, callback, data);
 }
 
@@ -1732,7 +1732,7 @@ int WebsterGetOption(
 //
 
 
-static uint64_t webster_getTime()
+static uint64_t webster_tick()
 {
 	#ifdef WB_WINDOWS
 	return GetTickCount64();
@@ -1765,7 +1765,7 @@ static int webster_receive(
 	int recvTimeout = (timeout >= 0) ? timeout : 0;
 	if (isHeader) recvTimeout = 50;
 
-	uint64_t startTime = webster_getTime();
+	uint64_t startTime = webster_tick();
 
 	while (input->buffer.pending < input->buffer.size)
 	{
@@ -1776,7 +1776,7 @@ static int webster_receive(
 		// only keep trying if expecting header data
 		if (result == WBERR_TIMEOUT)
 		{
-			if (isHeader && webster_getTime() - startTime < (size_t)timeout)
+			if (isHeader && webster_tick() - startTime < (size_t)timeout)
 				continue;
 			return WBERR_TIMEOUT;
 		}
@@ -1790,7 +1790,7 @@ static int webster_receive(
 
 		if (isHeader == 0) return WBERR_OK;
 		if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
-		if (webster_getTime() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
+		if (webster_tick() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
 	}
 
 	return WBERR_OK;
