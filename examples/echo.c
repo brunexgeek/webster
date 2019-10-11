@@ -178,10 +178,12 @@ int main(int argc, char* argv[])
 
 	printf(PROGRAM_TITLE "\n");
 
-	WebsterInitialize(NULL, NULL);
-	if (WebsterCreate(&server, 100) == WBERR_OK)
+	WebsterInitialize(NULL);
+	if (WebsterCreate(&server, NULL) == WBERR_OK)
 	{
-		if (WebsterStart(server, "0.0.0.0", 7000) == WBERR_OK)
+		webster_target_t *target;
+		WebsterParseURL("0.0.0.0:7000", &target);
+		if (WebsterStart(server, target) == WBERR_OK)
 		{
 			while (serverState == SERVER_RUNNING)
 			{
@@ -189,7 +191,7 @@ int main(int argc, char* argv[])
 				int result = WebsterAccept(server, &remote);
 				if (result == WBERR_OK)
 				{
-					WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+					WebsterCommunicate(remote, NULL, main_serverHandler, NULL);
 					WebsterDisconnect(remote);
 				}
 				else

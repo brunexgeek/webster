@@ -2,6 +2,7 @@
 
 #include "webster.h"
 #include <string>
+#include <stdlib.h>
 
 #if defined(_WIN32) || defined(WIN32)
 #define WB_WINDOWS
@@ -15,31 +16,22 @@
 #define WBMF_CHUNKED    0x01
 
 
-static webster_memory_t memory = { NULL, NULL, NULL };
+static webster_memory_t memory = { malloc, calloc, free };
 
 
 struct webster_client_t_
 {
 	void *channel;
-	std::string host;
-	int port;
-    uint32_t bufferSize;
-
-    webster_client_t_() : channel(NULL), port(-1), bufferSize(WBL_DEF_BUFFER_SIZE) {}
-    ~webster_client_t_() { }
+	const webster_target_t *target;
+    webster_config_t config;
 };
 
 
 struct webster_server_t_
 {
     void *channel;
-    std::string host;
-    int port;
-    int maxClients;
-    uint32_t bufferSize;
-
-    webster_server_t_() : channel(NULL), port(-1), maxClients(WBL_DEF_CONNECTIONS), bufferSize(WBL_DEF_BUFFER_SIZE) {}
-    ~webster_server_t_() {}
+    //webster_target_t target;
+    webster_config_t config;
 };
 
 
@@ -398,7 +390,7 @@ webster_message_t_::webster_message_t_( int size ) : state(WBS_IDLE), channel(NU
 
     body.expected = body.chunkSize = 0;
     // FIXME: can be NULL
-    buffer.data = buffer.current = new(std::nothrow) uint8_t[size];
+    buffer.data = buffer.current = (uint8_t*) memory.malloc(size);
     buffer.data[0] = 0;
     buffer.size = size;
     buffer.pending = 0;
@@ -407,7 +399,7 @@ webster_message_t_::webster_message_t_( int size ) : state(WBS_IDLE), channel(NU
 
 webster_message_t_::~webster_message_t_()
 {
-    delete[] buffer.data;
+    memory.free(buffer.data);
 }
 
 
@@ -977,24 +969,6 @@ int http_parse(
  * Network stack
  *************/
 
-
-#define WBNET_INITIALIZE  networkImpl.initialize
-#define WBNET_TERMINATE   networkImpl.terminate
-#define WBNET_OPEN        networkImpl.open
-#define WBNET_CLOSE       networkImpl.close
-#define WBNET_CONNECT     networkImpl.connect
-#define WBNET_RECEIVE     networkImpl.receive
-#define WBNET_SEND        networkImpl.send
-#define WBNET_ACCEPT      networkImpl.accept
-#define WBNET_LISTEN      networkImpl.listen
-
-extern webster_network_t networkImpl;
-
-WEBSTER_PRIVATE int network_setImpl(
-	webster_network_t *impl );
-
-WEBSTER_PRIVATE int network_resetImpl();
-
 #include <sys/types.h>
 
 
@@ -1005,6 +979,7 @@ WEBSTER_PRIVATE int network_resetImpl();
 #endif
 #pragma comment(lib, "ws2_32.lib")
 typedef SSIZE_T ssize_t;
+CRITICAL_SECTION network_mutex;
 #else
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -1068,54 +1043,43 @@ static int network_lookupIPv4(
 }
 
 
-static int network_initialize(
-	webster_memory_t *mem )
+static int network_initialize()
 {
-	memory.malloc = mem->malloc;
-	memory.calloc = mem->calloc;
-	memory.free   = mem->free;
+	int result = WBERR_OK;
 
 	#ifdef WB_WINDOWS
 	int err = 0;
-
+	static int initialized = 0;
 	WORD wVersionRequested;
 	WSADATA wsaData;
-	wVersionRequested = MAKEWORD( 2, 0 );
-	err = WSAStartup( wVersionRequested, &wsaData );
-	if(err != 0) return WBERR_SOCKET;
+	wVersionRequested = MAKEWORD( 2, 2 );
 
-	#if (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
-	winSocketLib = LoadLibrary( "WS2_32.dll" );
-	if (winSocketLib == NULL) return WBERR_SOCKET;
+	EnterCriticalSection(&network_mutex);
 
-	getaddrinfo = NULL;
-	freeaddrinfo = NULL
+	if (!initialized)
+	{
+		err = WSAStartup( wVersionRequested, &wsaData );
+		if (err != 0 || LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+		{
+			if (err == 0) WSACleanup();
+			result = WBERR_SOCKET;
+		}
+		else
+			initialized = 1;
+	}
 
-	getaddrinfo = (getaddrinfo_f)GetProcAddress(winSocketLib, "getaddrinfo");
-	if (getaddrinfo == NULL) return;
-
-	freeaddrinfo = (freeaddrinfo_f)GetProcAddress(winSocketLib, "freeaddrinfo");
-	if (freeaddrinfo == NULL) return;
-	#endif
+	LeaveCriticalSection(&network_mutex);
 
 	#endif // __WINDOWS__
 
-	return WBERR_OK;
+	return result;
 }
 
 
 static int network_terminate()
 {
-	memory.malloc = NULL;
-	memory.calloc = NULL;
-	memory.free   = NULL;
-
 	#ifdef WB_WINDOWS
-	#if (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
-	getaddrinfo = NULL;
-	freeaddrinfo = NULL;
-	#endif
-	WSACleanup();
+	//WSACleanup();
 	#endif
 
 	return WBERR_OK;
@@ -1126,6 +1090,9 @@ static int network_open(
 	void **channel )
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
+
+	int result = network_initialize();
+	if (result != WBERR_OK) return result;
 
 	*channel = memory.calloc(1, sizeof(webster_channel_t));
 	if (*channel == NULL) return WBERR_MEMORY_EXHAUSTED;
@@ -1209,7 +1176,7 @@ static int network_receive(
 	uint32_t bufferSize = *size;
 	*size = 0;
 
-	// wait for data arrive
+	// wait for data
 	#ifdef WB_WINDOWS
 	int result = WSAPoll(&chann->poll, 1, timeout);
 	#else
@@ -1342,10 +1309,8 @@ static int network_listen(
 }
 
 
-static webster_network_t DEFAULT_IMPL =
+static webster_network_t DEFAULT_NETWORK =
 {
-	network_initialize,
-	network_terminate,
 	network_open,
 	network_close,
 	network_connect,
@@ -1354,54 +1319,6 @@ static webster_network_t DEFAULT_IMPL =
 	network_accept,
 	network_listen
 };
-
-WEBSTER_PRIVATE webster_network_t networkImpl = { NULL, NULL, NULL, NULL, NULL, NULL,
-	NULL, NULL, NULL };
-
-
-int network_setImpl(
-	webster_network_t *impl )
-{
-	if (impl == NULL) impl = &DEFAULT_IMPL;
-
-	if (impl->initialize == NULL ||
-		impl->terminate == NULL ||
-		impl->open == NULL ||
-		impl->close == NULL ||
-		impl->connect == NULL ||
-		impl->receive == NULL ||
-		impl->send == NULL ||
-		impl->accept == NULL ||
-		impl->listen == NULL)
-		return WBERR_INVALID_ARGUMENT;
-
-	networkImpl.initialize = impl->initialize;
-	networkImpl.terminate  = impl->terminate;
-	networkImpl.open       = impl->open;
-	networkImpl.close      = impl->close;
-	networkImpl.connect    = impl->connect;
-	networkImpl.receive    = impl->receive;
-	networkImpl.send       = impl->send;
-	networkImpl.accept     = impl->accept;
-	networkImpl.listen     = impl->listen;
-	return WBERR_OK;
-}
-
-
-int network_resetImpl()
-{
-	networkImpl.initialize = NULL;
-	networkImpl.terminate  = NULL;
-	networkImpl.open       = NULL;
-	networkImpl.close      = NULL;
-	networkImpl.connect    = NULL;
-	networkImpl.receive    = NULL;
-	networkImpl.send       = NULL;
-	networkImpl.accept     = NULL;
-	networkImpl.listen     = NULL;
-	return WBERR_OK;
-}
-
 
 
 /*************
@@ -1441,8 +1358,7 @@ static const char *HTTP_METHODS[] =
 
 
 int WebsterInitialize(
-    webster_memory_t *mem,
-	webster_network_t *net )
+    const webster_memory_t *mem )
 {
 	if (mem != NULL && (mem->malloc == NULL || mem->free == NULL))
 		return WBERR_INVALID_ARGUMENT;
@@ -1460,25 +1376,23 @@ int WebsterInitialize(
 		memory.free = free;
 	}
 
-	int result = network_setImpl(net);
-	if (result != WBERR_OK) goto ESCAPE;
-	result = WBNET_INITIALIZE(&memory);
-	if (result != WBERR_OK) goto ESCAPE;
+	#ifdef WB_WINDOWS
+	InitializeCriticalSection(&network_mutex);
+	#endif
 
 	return WBERR_OK;
-ESCAPE:
-	WebsterTerminate();
-	return result;
 }
 
 
 int WebsterTerminate()
 {
-	if (WBNET_TERMINATE != NULL) WBNET_TERMINATE();
-	network_resetImpl();
 	memory.malloc = NULL;
 	memory.calloc = NULL;
 	memory.free = NULL;
+
+	#ifdef WB_WINDOWS
+	DeleteCriticalSection(&network_mutex);
+	#endif
 
 	return WBERR_OK;
 }
@@ -1506,39 +1420,50 @@ int WebsterFreeURL(
 
 int WebsterConnect(
     webster_client_t **client,
-    int scheme,
-	const char *host,
-    int port )
+    const webster_target_t *target,
+    const webster_config_t *config )
 {
 	if (client == NULL)
 		return WBERR_INVALID_CLIENT;
-	if (port < 0 || port > 0xFFFF)
-		return WBERR_INVALID_PORT;
-	if (host == NULL || host[0] == 0)
-		return WBERR_INVALID_HOST;
-	if (!WB_IS_VALID_SCHEME(scheme))
-		return WBERR_INVALID_SCHEME;
 
-	// allocate memory for everything
-	*client = new(std::nothrow) webster_client_t_();
+	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
 
-	// try to connect with the remote host
-	int result = WBNET_OPEN( &(*client)->channel );
-	if (result != WBERR_OK) goto ESCAPE;
-	result = WBNET_CONNECT((*client)->channel, scheme, host, port);
-	if (result != WBERR_OK) goto ESCAPE;
+	(*client)->config.net = &DEFAULT_NETWORK;
+	(*client)->target = target;
 
-	(*client)->host = host;
-	(*client)->port = port;
+	if (config)
+	{
+		if (config->net) (*client)->config.net = config->net;
+		(*client)->config.max_clients = config->max_clients;
+		(*client)->config.buffer_size = config->buffer_size + 3 & (~3);
+	}
+
+	if ((*client)->config.max_clients <= 0)
+		(*client)->config.max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if ((*client)->config.max_clients > WBL_MAX_CONNECTIONS)
+		(*client)->config.max_clients = WBL_MAX_CONNECTIONS;
+
+	if ((*client)->config.buffer_size == 0)
+		(*client)->config.buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if ((*client)->config.buffer_size > WBL_MAX_BUFFER_SIZE)
+		(*client)->config.buffer_size = WBL_MAX_BUFFER_SIZE;
+
+	// try to connect with the remote host
+	int result = (*client)->config.net->open( &(*client)->channel );
+	if (result != WBERR_OK) goto ESCAPE;
+	result = (*client)->config.net->connect((*client)->channel, target->scheme, target->host, target->port);
+	if (result != WBERR_OK) goto ESCAPE;
 
 	return WBERR_OK;
 
 ESCAPE:
 	if (*client != NULL)
 	{
-		if ((*client)->channel != NULL) WBNET_CLOSE((*client)->channel);
-		delete *client;
+		if ((*client)->channel != NULL) (*client)->config.net->close((*client)->channel);
+		memory.free(*client);
 		*client = NULL;
 	}
 	return result;
@@ -1546,21 +1471,6 @@ ESCAPE:
 
 
 int WebsterCommunicate(
-    webster_client_t *client,
-    const char *path,
-    const char *query,
-    webster_handler_t *callback,
-    void *data )
-{
-	webster_target_t url;
-	url.type = WBRT_ORIGIN;
-	url.path = (char*) path;
-	url.query = (char*) query;
-	return WebsterCommunicateURL(client, &url, callback, data);
-}
-
-
-int WebsterCommunicateURL(
     webster_client_t *client,
     webster_target_t *url,
     webster_handler_t *callback,
@@ -1570,8 +1480,8 @@ int WebsterCommunicateURL(
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
 	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
-	webster_message_t_ request(client->bufferSize);
-	webster_message_t_ response(client->bufferSize);
+	webster_message_t_ request(client->config.buffer_size);
+	webster_message_t_ response(client->config.buffer_size);
 
 	//memset(&request, 0, sizeof(struct webster_message_t_));
 	request.type = WBMT_REQUEST;
@@ -1600,8 +1510,8 @@ int WebsterDisconnect(
 {
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 
-	WBNET_CLOSE(client->channel);
-	delete client;
+	client->config.net->close(client->channel);
+	memory.free(client);
 	return WBERR_OK;
 }
 
@@ -1614,15 +1524,33 @@ int WebsterDisconnect(
 
 int WebsterCreate(
     webster_server_t **server,
-	int maxClients )
+	const webster_config_t *config )
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
 
-	if (maxClients <= 0 || maxClients >= WBL_MAX_CONNECTIONS)
-		maxClients = WBL_MAX_CONNECTIONS;
-
-	*server = new(std::nothrow) webster_server_t_();
+	*server = (struct webster_server_t_*) memory.calloc(1, sizeof(struct webster_server_t_));
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
+
+	(*server)->config.net = &DEFAULT_NETWORK;
+
+	if (config)
+	{
+		if (config->net) (*server)->config.net = config->net;
+		(*server)->config.max_clients = config->max_clients;
+		(*server)->config.buffer_size = config->buffer_size + 3 & (~3);
+	}
+
+	if ((*server)->config.max_clients <= 0)
+		(*server)->config.max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if ((*server)->config.max_clients > WBL_MAX_CONNECTIONS)
+		(*server)->config.max_clients = WBL_MAX_CONNECTIONS;
+
+	if ((*server)->config.buffer_size == 0)
+		(*server)->config.buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if ((*server)->config.buffer_size > WBL_MAX_BUFFER_SIZE)
+		(*server)->config.buffer_size = WBL_MAX_BUFFER_SIZE;
 
 	return WBERR_OK;
 }
@@ -1634,7 +1562,7 @@ int WebsterDestroy(
 	if (server == NULL) return WBERR_INVALID_SERVER;
 
 	WebsterStop(server);
-	delete server;
+	memory.free(server);
 
 	return WBERR_OK;
 }
@@ -1642,15 +1570,17 @@ int WebsterDestroy(
 
 int WebsterStart(
 	webster_server_t *server,
-    const char *host,
-    int port )
+    const webster_target_t *target )
 {
-	if (server == NULL) return WBERR_INVALID_SERVER;
+	if (server == NULL)
+		return WBERR_INVALID_SERVER;
+	if (target == NULL || (target->type & WBRT_AUTHORITY) == 0)
+		return WBERR_INVALID_TARGET;
 
-	int result = WBNET_OPEN(&server->channel);
+	int result = server->config.net->open(&server->channel);
 	if (result != WBERR_OK) return result;
 
-	return WBNET_LISTEN(server->channel, host, port, server->maxClients);
+	return server->config.net->listen(server->channel, target->host, target->port, server->config.max_clients);
 }
 
 
@@ -1659,7 +1589,7 @@ int WebsterStop(
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
 
-	WBNET_CLOSE(server->channel);
+	server->config.net->close(server->channel);
 	server->channel = NULL;
 
 	return WBERR_OK;
@@ -1674,23 +1604,24 @@ int WebsterAccept(
 	if (remote == NULL) return WBERR_INVALID_CLIENT;
 
 	void *client = NULL;
-	int result = WBNET_ACCEPT(server->channel, &client);
+	int result = server->config.net->accept(server->channel, &client);
 	if (result != WBERR_OK) return result;
 
-	*remote = new(std::nothrow) webster_client_t_();
+	*remote = (webster_client_t_*) memory.calloc(1, sizeof(webster_client_t_));
 	if (*remote == NULL)
 	{
-		WBNET_CLOSE(client);
+		server->config.net->close(client);
 		return WBERR_MEMORY_EXHAUSTED;
 	}
 
 	(*remote)->channel = client;
-	(*remote)->bufferSize = server->bufferSize;
+	(*remote)->config.buffer_size = server->config.buffer_size;
+	(*remote)->config.net = server->config.net;
 
 	return WBERR_OK;
 }
 
-
+/*
 int WebsterSetOption(
 	webster_server_t *server,
     int option,
@@ -1725,7 +1656,7 @@ int WebsterGetOption(
 
 	return WBERR_OK;
 }
-
+*/
 
 //
 // Request and response API
@@ -1771,7 +1702,7 @@ static int webster_receive(
 	{
 		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
 		// receive new data and adjust pending information
-		int result = WBNET_RECEIVE(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
+		int result = input->client->config.net->receive(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
 
 		// only keep trying if expecting header data
 		if (result == WBERR_TIMEOUT)
@@ -1831,7 +1762,7 @@ static int webster_writeBuffer(
 	// send pending data if the buffer is full
 	if (output->buffer.current >= output->buffer.data + output->buffer.size)
 	{
-		result = WBNET_SEND(output->channel, output->buffer.data, (uint32_t) output->buffer.size);
+		result = output->client->config.net->send(output->channel, output->buffer.data, (uint32_t) output->buffer.size);
 		output->buffer.current = output->buffer.data;
 	}
 
@@ -2332,7 +2263,7 @@ int WebsterWriteData(
 		{
 			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
 			char host[HOST_LEN + 1];
-			SNPRINTF(host, HOST_LEN, "%s:%d", output->client->host.c_str(), output->client->port);
+			SNPRINTF(host, HOST_LEN, "%s:%d", output->client->target->host, output->client->target->port);
 			host[HOST_LEN] = 0;
 			WebsterSetStringField(output, "host", host);
 		}
@@ -2380,7 +2311,7 @@ int WebsterFlush(
 	// send all remaining body data
 	if (output->buffer.current > output->buffer.data)
 	{
-		WBNET_SEND(output->channel, output->buffer.data, (uint32_t) (output->buffer.current - output->buffer.data));
+		output->client->config.net->send(output->channel, output->buffer.data, (uint32_t) (output->buffer.current - output->buffer.data));
 		output->buffer.current = output->buffer.data;
 	}
 
@@ -2398,7 +2329,7 @@ int WebsterFinish(
 
 	// send the last marker if using chunked transfer encoding
 	if (output->flags & WBMF_CHUNKED)
-		WBNET_SEND(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
+		output->client->config.net->send(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	output->state = WBS_COMPLETE;
 

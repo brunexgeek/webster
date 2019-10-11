@@ -52,6 +52,7 @@
 #define WBERR_INVALID_CHUNK              -28
 #define WBERR_NOT_CONNECTED              -29
 #define WBERR_SIGNAL                     -30
+#define WBERR_INVALID_TARGET             -31
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -144,16 +145,17 @@
 #define WBFI_WARNING                                  670
 #define WBFI_WWW_AUTHENTICATE                         680
 
-#define WBRT_ORIGIN      1
-#define WBRT_ABSOLUTE    2
-#define WBRT_AUTHORITY   3
-#define WBRT_ASTERISK    4
+#define WBRT_ORIGIN      0x01
+#define WBRT_AUTHORITY   0x02
+#define WBRT_ABSOLUTE    (WBRT_ORIGIN + 0x04 + WBRT_AUTHORITY)
+#define WBRT_ASTERISK    0x08
 
+#define WBP_AUTO         0
 #define WBP_HTTP         1
 #define WBP_HTTPS        2
 
 #define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
-#define WB_IS_VALID_SCHEME(x)  ( (x) == WBP_HTTP || (x) == WBP_HTTPS )
+#define WB_IS_VALID_SCHEME(x)  ( (x) >= WBP_AUTO && (x) <= WBP_HTTPS )
 #define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
 
 #define WBL_MAX_FIELD_NAME     128
@@ -254,8 +256,6 @@ typedef int webster_network_listen(
 
 typedef struct
 {
-    webster_network_initialize *initialize;
-    webster_network_terminate *terminate;
 	webster_network_open *open;
 	webster_network_close *close;
 	webster_network_connect *connect;
@@ -266,14 +266,20 @@ typedef struct
 } webster_network_t;
 
 
+typedef struct
+{
+    webster_network_t *net;
+    int max_clients;
+    uint32_t buffer_size;
+} webster_config_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
 WEBSTER_EXPORTED int WebsterInitialize(
-    webster_memory_t *mem,
-	webster_network_t *net );
+    const webster_memory_t *mem );
 
 WEBSTER_EXPORTED int WebsterTerminate();
 
@@ -290,20 +296,12 @@ WEBSTER_EXPORTED int WebsterFreeURL(
 
 WEBSTER_EXPORTED int WebsterConnect(
     webster_client_t **client,
-    int scheme,
-    const char *host,
-    int port );
+    const webster_target_t *target,
+    const webster_config_t *config );
 
 WEBSTER_EXPORTED int WebsterCommunicate(
     webster_client_t *client,
-    char *path,
-    char *query,
-    webster_handler_t *callback,
-    void *data );
-
-WEBSTER_EXPORTED int WebsterCommunicateURL(
-    webster_client_t *client,
-    webster_target_t *url,
+    webster_target_t *target,
     webster_handler_t *callback,
     void *data );
 
@@ -315,17 +313,23 @@ WEBSTER_EXPORTED int WebsterDisconnect(
  * HTTP server API
  */
 
+
+/**
+ * Create a HTTP/HTTPS server.
+ *
+ * @param server Pointer to hold the server handler.
+ * @param config Pointer to optional configuration object. Can be NULL.
+ */
 WEBSTER_EXPORTED int WebsterCreate(
     webster_server_t **server,
-    int maxClients );
+    const webster_config_t *config );
 
 WEBSTER_EXPORTED int WebsterDestroy(
     webster_server_t *server );
 
 WEBSTER_EXPORTED int WebsterStart(
     webster_server_t *server,
-    const char *host,
-    int port );
+    const webster_target_t *target );
 
 WEBSTER_EXPORTED int WebsterStop(
     webster_server_t *server );
@@ -333,16 +337,6 @@ WEBSTER_EXPORTED int WebsterStop(
 WEBSTER_EXPORTED int WebsterAccept(
     webster_server_t *server,
 	webster_client_t **remote );
-
-WEBSTER_EXPORTED int WebsterSetOption(
-	webster_server_t *server,
-    int option,
-    int value );
-
-WEBSTER_EXPORTED int WebsterGetOption(
-	webster_server_t *server,
-    int option,
-    int *value );
 
 
 /*

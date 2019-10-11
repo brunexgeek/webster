@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <linux/limits.h>
 #include <dirent.h>
+#include <ctype.h>
 
 
 #define SERVER_RUNNING    1
@@ -135,6 +136,22 @@ static void main_signalHandler(
 #endif
 
 
+static int strcmpi(const char *s1, const char *s2)
+{
+   if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
+   if (s2 == NULL) return *s1;
+
+   char c1, c2;
+   while ((c1 = (char) tolower(*s1)) == (c2 = (char) tolower(*s2)))
+   {
+     if (*s1 == '\0') break;
+     ++s1; ++s2;
+   }
+
+   return c1 - c2;
+}
+
+
 static const char *main_getMime(
 	const char *fileName )
 {
@@ -149,7 +166,7 @@ static const char *main_getMime(
     while (first <= last)
 	{
 		int current = (first + last) / 2;
-		int dir = strcmp(ptr, MIME_TABLE[current].extension);
+		int dir = strcmpi(ptr, MIME_TABLE[current].extension);
 		if (dir == 0) return MIME_TABLE[current].mime;
 		if (dir < 0)
 			last = current - 1;
@@ -474,11 +491,13 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
-	if (WebsterInitialize(NULL, NULL) == WBERR_OK)
+	if (WebsterInitialize(NULL) == WBERR_OK)
 	{
-		if (WebsterCreate(&server, 100) == WBERR_OK)
+		if (WebsterCreate(&server, NULL) == WBERR_OK)
 		{
-			if (WebsterStart(server, "0.0.0.0", 7000) == WBERR_OK)
+			webster_target_t *target;
+			WebsterParseURL("0.0.0.0:7000", &target);
+			if (WebsterStart(server, target) == WBERR_OK)
 			{
 				while (serverState == SERVER_RUNNING)
 				{
@@ -487,7 +506,7 @@ int main(int argc, char* argv[])
 					if (result == WBERR_OK)
 					{
 						// you problably should handle the client request in another thread
-						WebsterCommunicateURL(remote, NULL, main_serverHandler, NULL);
+						WebsterCommunicate(remote, NULL, main_serverHandler, NULL);
 						WebsterDisconnect(remote);
 					}
 					else

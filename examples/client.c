@@ -75,15 +75,15 @@ int main( int argc, char **argv )
     (void) argc;
     (void) argv;
 
-    WebsterInitialize(NULL, NULL);
+    WebsterInitialize(NULL);
 
     webster_target_t *url;
-    WebsterParseURL("/", &url);
+    WebsterParseURL("http://duckduckgo.com:80/", &url);
 
     webster_client_t *client = NULL;
-    if (WebsterConnect(&client, WBP_HTTP, "duckduckgo.com", 80) == WBERR_OK)
+    if (WebsterConnect(&client, url, NULL) == WBERR_OK)
     {
-        WebsterCommunicateURL(client, url, main_clientHandler, NULL);
+        WebsterCommunicate(client, url, main_clientHandler, NULL);
         WebsterDisconnect(client);
     }
     else
