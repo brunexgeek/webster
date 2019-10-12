@@ -1,7 +1,6 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include "webster.h"
-#include <string>
 #include <stdlib.h>
 
 #if defined(_WIN32) || defined(WIN32)
@@ -16,7 +15,7 @@
 #define WBMF_CHUNKED    0x01
 
 
-static webster_memory_t memory = { malloc, calloc, free };
+static webster_memory_t memory = { malloc, calloc, realloc, free };
 
 
 struct webster_client_t_
@@ -35,6 +34,66 @@ struct webster_server_t_
 };
 
 
+#include <ctype.h>
+#include <string.h>
+
+
+#ifdef _WIN32
+#define STRCMPI      _strcmpi
+#else
+#define STRCMPI      strcmpi
+#endif
+
+
+#ifndef _WIN32
+
+static int strcmpi(const char *s1, const char *s2)
+{
+   if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
+   if (s2 == NULL) return *s1;
+
+   char c1, c2;
+   while ((c1 = (char) tolower(*s1)) == (c2 = (char) tolower(*s2)))
+   {
+     if (*s1 == '\0') break;
+     ++s1; ++s2;
+   }
+
+   return c1 - c2;
+}
+
+#endif
+
+
+static char *string_duplicate(
+    const char *text )
+{
+    if (text == NULL) return NULL;
+    size_t len = strlen(text);
+    char *output = (char*) memory.malloc(len + 1);
+    strcpy(output, text);
+    return output;
+}
+
+
+static char *subString(
+    const char *text,
+    size_t offset,
+    size_t length )
+{
+    if (text == NULL) return NULL;
+
+    size_t len = strlen(text);
+    if (offset + length > len) return NULL;
+
+    char *output = (char*) memory.malloc(length + 1);
+    if (output == NULL) return NULL;
+    memcpy(output, text + offset, length);
+    output[length] = 0;
+    return output;
+}
+
+
 /*************
  * HTTP stack
  *************/
@@ -43,7 +102,6 @@ struct webster_server_t_
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <map>
 
 
 // is a header field name character?
@@ -68,39 +126,38 @@ typedef struct
     int id;
 } webster_field_info_t;
 
+typedef struct
+{
+	char *name;
+	int id;
+	char *value;
+} webster_field_t ;
 
-typedef std::map<int, std::string> standard_field_map;
-typedef std::map<std::string, std::string> custom_field_map;
 
-struct webster_header_t
+//typedef std::map<int, std::string> standard_field_map;
+//typedef std::map<std::string, std::string> custom_field_map;
+
+typedef struct
 {
     webster_target_t *target;
     int status;
     int method;
     int content_length;
-    standard_field_map s_fields;
-    custom_field_map c_fields;
+    webster_field_t *s_fields;
+	int s_count;
+	int s_total;
+    webster_field_t *c_fields;
+	int c_count;
+	int c_total;
+} webster_header_t;
 
-    webster_header_t();
-    ~webster_header_t();
-
-    const std::string *field( const int id ) const;
-
-    const std::string *field( const std::string &name ) const;
-
-    int field(
-        const int id,
-        const std::string &value );
-
-    int field(
-        const std::string &name,
-        const std::string &value );
-
-    int remove( const std::string &name );
-
-    int count() const;
-};
-
+static const char *get_field_by_id( webster_header_t *header, int id );
+static const char *get_field_by_name( webster_header_t *header, const char *name );
+static int set_field_by_id( webster_header_t *header, int id, const char *value );
+static int set_field_by_name( webster_header_t *header, const char *name, const char *value );
+static int remove_field_by_id( webster_header_t *header, int id );
+static int remove_field_by_name( webster_header_t *header, const char *name );
+static int field_count( webster_header_t *header );
 
 
 struct webster_message_t_
@@ -168,9 +225,6 @@ struct webster_message_t_
     webster_header_t header;
 
     struct webster_client_t_ *client;
-
-    webster_message_t_( int size );
-    ~webster_message_t_();
 };
 
 
@@ -278,99 +332,169 @@ webster_field_info_t HTTP_HEADER_FIELDS[] =
  * webster_header_t
  */
 
-webster_header_t::webster_header_t() : target(NULL), status(0), method(WBM_NONE)
+
+static const char *get_field_by_name( webster_header_t *header, const char *name )
 {
+	for (int i = 0; i < header->c_count; ++i)
+	{
+		if (STRCMPI(header->c_fields[i].name, name) == 0)
+			return header->s_fields[i].value;
+	}
+	return NULL;
 }
 
 
-webster_header_t::~webster_header_t()
+static const char *get_field_by_id( webster_header_t *header, int id )
 {
-
+	for (int i = 0; i < header->s_count; ++i)
+	{
+		if (header->s_fields[i].id == id)
+			return header->s_fields[i].value;
+	}
+	return NULL;
 }
 
 
-const std::string *webster_header_t::field( const std::string &name ) const
+static int grow_standard_fields( webster_header_t *header )
 {
-	std::string tmp = name;
-	for (size_t i = 0, t = tmp.length(); i < t; ++i)
-		tmp[i] = (char) tolower(tmp[i]);
-
-    custom_field_map::const_iterator it = c_fields.find(tmp);
-    if (it != c_fields.end()) return &(it->second);
-    return NULL;
+	int total = header->s_total + WBL_DEF_FIELD_GROW;
+	webster_field_t *tmp = memory.realloc(header->s_fields, (size_t) total * sizeof(webster_field_t));
+	if (tmp != NULL)
+	{
+		header->s_fields = tmp;
+		header->s_total = total;
+		return 1;
+	}
+	return 0;
 }
 
 
-const std::string *webster_header_t::field( const int id ) const
+static int grow_custom_fields( webster_header_t *header )
 {
-    standard_field_map::const_iterator it = s_fields.find(id);
-    if (it != s_fields.end()) return &(it->second);
-    return NULL;
+	int total = header->c_total + WBL_DEF_FIELD_GROW;
+	webster_field_t *tmp = memory.realloc(header->c_fields, (size_t) total * sizeof(webster_field_t));
+	if (tmp != NULL)
+	{
+		header->c_fields = tmp;
+		header->c_total = total;
+		return 1;
+	}
+	return 0;
 }
 
 
-int webster_header_t::field(
-    const int id,
-    const std::string &value )
+static int set_field_by_id( webster_header_t *header, int id, const char *value )
 {
-    if (c_fields.size() + s_fields.size() >= WBL_MAX_FIELDS)
-        return WBERR_TOO_MANY_FIELDS;
+	if (header->c_count + header->s_count >= WBL_MAX_FIELDS)
+		return WBERR_TOO_MANY_FIELDS;
 
-    s_fields[id] = value;
+	if (header->s_count == header->s_total && !grow_standard_fields(header))
+		return WBERR_MEMORY_EXHAUSTED;
+
+	webster_field_t *field = &header->s_fields[ header->s_count++ ];
+	field->id = id;
+	field->name = NULL;
+	field->value = string_duplicate(value);
+
 	return WBERR_OK;
 }
 
-int webster_header_t::field(
-    const std::string &name,
-    const std::string &value )
-{
-    if (c_fields.size() + s_fields.size() >= WBL_MAX_FIELDS)
-        return WBERR_TOO_MANY_FIELDS;
 
-    std::string temp = name;
-    for (size_t i = 0, t = temp.size(); i < t; ++i)
+static char *transform_field_name( const char *name )
+{
+	if (name == NULL || name[0] == 0) return NULL;
+
+	// check for invalid characters
+	size_t len = strlen(name);
+	for (size_t i = 0; i < len; ++i)
     {
-        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
-        temp[i] = (char) tolower(temp[i]);
+        if (!IS_HFNC(name[i])) return NULL;
     }
 
-    int id = http_getFieldID(temp.c_str());
-    if (id != WBFI_NON_STANDARD)
-        return field(id, value);
+	// convert the name to lower case
+    char *temp = memory.malloc(len + 1);
+	if (temp == NULL) return NULL;
+    for (size_t i = 0; i < len; ++i)
+    {
+        temp[i] = (char) tolower(name[i]);
+    }
 
-    c_fields[temp] = value;
+	return temp;
+}
+
+
+static int set_field_by_name( webster_header_t *header, const char *name, const char *value )
+{
+	if (header->c_count + header->s_count >= WBL_MAX_FIELDS)
+		return WBERR_TOO_MANY_FIELDS;
+
+	if (header->c_count == header->c_total && !grow_custom_fields(header))
+		return WBERR_MEMORY_EXHAUSTED;
+
+	// check whether the name is standard
+    int id = http_getFieldID(name);
+    if (id != WBFI_NON_STANDARD)
+	{
+        return set_field_by_id(header, id, value);
+	}
+
+	// prepare the field name
+    char *temp = transform_field_name(name);
+	if (temp == NULL) return WBERR_INVALID_HEADER_FIELD; // or memory exhausted ???
+
+	webster_field_t *field = &header->s_fields[ header->s_count++ ];
+	field->id = WBFI_NON_STANDARD;
+	field->name = temp;
+	field->value = string_duplicate(value);
+
 	return WBERR_OK;
 }
 
 
-int webster_header_t::remove(
-    const std::string &name )
+static int remove_field_by_id( webster_header_t *header, int id )
 {
-    std::string temp = name;
-    for (size_t i = 0, t = temp.size(); i < t; ++i)
-    {
-        if (!IS_HFNC(temp[i])) return WBERR_INVALID_ARGUMENT;
-        temp[i] = (char) tolower(temp[i]);
-    }
+	int index = WBL_MAX_FIELDS + 1;
 
-    int id = http_getFieldID(temp.c_str());
-    if (id != WBFI_NON_STANDARD)
-    {
-        standard_field_map::iterator it = s_fields.find(id);
-        if (it != s_fields.end()) s_fields.erase(it);
-    }
-    else
-    {
-        custom_field_map::iterator it = c_fields.find(name);
-        if (it != c_fields.end()) c_fields.erase(it);
-    }
+	for (index = 0; index < header->s_count; ++index)
+	{
+		if (header->s_fields[index].id == id) break;
+	}
+	if (index >= header->s_count) return WBERR_OK;
 
-    return WBERR_OK;
+	webster_field_t *field = &header->s_fields[index];
+	if (field->name) memory.free(field->name);
+	if (field->value) memory.free(field->value);
+	field->id = WBFI_NON_STANDARD;
+	field->name = NULL;
+	field->value = NULL;
+
+	return WBERR_OK;
 }
 
-int webster_header_t::count() const
+
+static int remove_field_by_name( webster_header_t *header, const char *name )
 {
-    return (int) s_fields.size() + (int) c_fields.size();
+	int index = WBL_MAX_FIELDS + 1;
+
+	for (index = 0; index < header->c_count; ++index)
+	{
+		if (STRCMPI(header->c_fields[index].name, name) == 0) break;
+	}
+	if (index >= header->c_count) return WBERR_OK;
+
+	webster_field_t *field = &header->c_fields[index];
+	if (field->name) memory.free(field->name);
+	if (field->value) memory.free(field->value);
+	field->id = WBFI_NON_STANDARD;
+	field->name = NULL;
+	field->value = NULL;
+
+	return WBERR_OK;
+}
+
+static int field_count( webster_header_t *header )
+{
+    return (int) header->s_count + (int) header->c_count;
 }
 
 
@@ -378,62 +502,43 @@ int webster_header_t::count() const
  * webster_message_t_
  */
 
-webster_message_t_::webster_message_t_( int size ) : state(WBS_IDLE), channel(NULL),
-    type(WBMT_UNKNOWN), flags(0), client(NULL)
+
+static void message_initialize( struct webster_message_t_ *message, uint32_t size )
 {
-    size = (size + 3) & (~3);
+	memset(message, 0, sizeof(struct webster_message_t_));
+
+	message->state = WBS_IDLE;
+	message->channel = NULL;
+	message->type = WBMT_UNKNOWN;
+	message->flags = 0;
+	message->client = NULL;
+
+    size = (size + 3) & (uint32_t) (~3);
     if (size < WBL_MIN_BUFFER_SIZE)
         size = WBL_MIN_BUFFER_SIZE;
     else
     if (size > WBL_MAX_BUFFER_SIZE)
         size = WBL_MAX_BUFFER_SIZE;
 
-    body.expected = body.chunkSize = 0;
+    message->body.expected = message->body.chunkSize = 0;
     // FIXME: can be NULL
-    buffer.data = buffer.current = (uint8_t*) memory.malloc(size);
-    buffer.data[0] = 0;
-    buffer.size = size;
-    buffer.pending = 0;
+    message->buffer.data = message->buffer.current = (uint8_t*) memory.malloc(size);
+    message->buffer.data[0] = 0;
+    message->buffer.size = (int) size;
+    message->buffer.pending = 0;
 }
 
 
-webster_message_t_::~webster_message_t_()
+static void message_terminate( struct webster_message_t_ *message )
 {
-    memory.free(buffer.data);
+    memory.free(message->buffer.data);
+	memset(message, 0, sizeof(struct webster_message_t_));
 }
 
 
 /*
  * HTTP parser
  */
-
-static char *cloneString(
-    const char *text )
-{
-    if (text == NULL) return NULL;
-    size_t len = strlen(text);
-    char *output = (char*) memory.malloc(len + 1);
-    strcpy(output, text);
-    return output;
-}
-
-
-static char *subString(
-    const char *text,
-    size_t offset,
-    size_t length )
-{
-    if (text == NULL) return NULL;
-
-    size_t len = strlen(text);
-    if (offset + length > len) return NULL;
-
-    char *output = (char*) memory.malloc(length + 1);
-    if (output == NULL) return NULL;
-    memcpy(output, text + offset, length);
-    output[length] = 0;
-    return output;
-}
 
 
 const char *http_statusMessage(
@@ -642,7 +747,7 @@ int http_parseTarget(
         }
         else
         {
-            target->path = cloneString(url);
+            target->path = string_duplicate(url);
         }
 
         http_decodeUrl(target->path);
@@ -722,7 +827,7 @@ int http_parseTarget(
 		if (re != NULL)
 			target->path = subString(rb, 0, (size_t) (re - rb));
 		else
-			target->path = cloneString("/");
+			target->path = string_duplicate("/");
 
 		http_decodeUrl(target->path);
         http_decodeUrl(target->query);
@@ -763,7 +868,7 @@ int http_parseTarget(
         }
         else
         {
-            target->host = cloneString(hb);
+            target->host = string_duplicate(hb);
             target->port = 80;
         }
     }
@@ -944,7 +1049,7 @@ int http_parse(
             int id = http_getFieldID(name);
             if (id != WBFI_NON_STANDARD)
             {
-                header->field(id, value);
+                set_field_by_id(header, id, value);
 
                 // if is 'content-length' field, get the value
                 if (id == WBFI_CONTENT_LENGTH)
@@ -954,7 +1059,7 @@ int http_parse(
                     message->flags |= WBMF_CHUNKED;
             }
             else
-                header->field(name, value);
+                set_field_by_name(header, name, value);
         }
         else
             break;
@@ -1073,16 +1178,6 @@ static int network_initialize()
 	#endif // __WINDOWS__
 
 	return result;
-}
-
-
-static int network_terminate()
-{
-	#ifdef WB_WINDOWS
-	//WSACleanup();
-	#endif
-
-	return WBERR_OK;
 }
 
 
@@ -1330,7 +1425,6 @@ static webster_network_t DEFAULT_NETWORK =
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include <iostream>
 
 
 #ifdef WB_WINDOWS
@@ -1436,7 +1530,7 @@ int WebsterConnect(
 	{
 		if (config->net) (*client)->config.net = config->net;
 		(*client)->config.max_clients = config->max_clients;
-		(*client)->config.buffer_size = config->buffer_size + 3 & (~3);
+		(*client)->config.buffer_size = (uint32_t) (config->buffer_size + 3) & (uint32_t) (~3);
 	}
 
 	if ((*client)->config.max_clients <= 0)
@@ -1480,8 +1574,10 @@ int WebsterCommunicate(
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
 	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
-	webster_message_t_ request(client->config.buffer_size);
-	webster_message_t_ response(client->config.buffer_size);
+	struct webster_message_t_ request;
+	message_initialize(&request, client->config.buffer_size);
+	struct webster_message_t_ response;
+	message_initialize(&response, client->config.buffer_size);
 
 	//memset(&request, 0, sizeof(struct webster_message_t_));
 	request.type = WBMT_REQUEST;
@@ -1500,6 +1596,9 @@ int WebsterCommunicate(
 
 	if (request.header.target != url) http_freeTarget(request.header.target);
 	if (response.header.target != url) http_freeTarget(response.header.target);
+
+	message_terminate(&request);
+	message_terminate(&response);
 
 	return WBERR_OK;
 }
@@ -1537,7 +1636,7 @@ int WebsterCreate(
 	{
 		if (config->net) (*server)->config.net = config->net;
 		(*server)->config.max_clients = config->max_clients;
-		(*server)->config.buffer_size = config->buffer_size + 3 & (~3);
+		(*server)->config.buffer_size = (uint32_t) (config->buffer_size + 3) & (uint32_t) (~3);
 	}
 
 	if ((*server)->config.max_clients <= 0)
@@ -1607,7 +1706,7 @@ int WebsterAccept(
 	int result = server->config.net->accept(server->channel, &client);
 	if (result != WBERR_OK) return result;
 
-	*remote = (webster_client_t_*) memory.calloc(1, sizeof(webster_client_t_));
+	*remote = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
 	if (*remote == NULL)
 	{
 		server->config.net->close(client);
@@ -1897,14 +1996,12 @@ int WebsterGetStringField(
 		if (fid != WBFI_NON_STANDARD) id = fid;
 	}
 
-	const std::string *result = NULL;
 	if (id == WBFI_NON_STANDARD)
-		result = input->header.field(name);
+		*value = get_field_by_name(&input->header, name);
 	else
-		result = input->header.field(id);
+		*value = get_field_by_id(&input->header, id);
 
-	if (result == NULL) return WBERR_NO_DATA;
-	*value = result->c_str();
+	if (*value == NULL) return WBERR_NO_DATA;
 	return WBERR_OK;
 }
 
@@ -1932,31 +2029,26 @@ int WebsterIterateField(
     const char **value )
 {
 	if (index < 0) return WBERR_INVALID_ARGUMENT;
-	if (index >= input->header.count()) return WBERR_INVALID_ARGUMENT;
+	if (index >= field_count(&input->header)) return WBERR_INVALID_ARGUMENT;
 	if (id == NULL && name == NULL && value == NULL) return WBERR_OK;
 
-	if (index < (int) input->header.s_fields.size())
+	if (index < (int) input->header.s_count)
 	{
-		int i = 0;
-		standard_field_map::const_iterator it = input->header.s_fields.begin();
-		for (; i < index && it != input->header.s_fields.end(); ++it, ++i);
-		if (i != index) return WBERR_INVALID_ARGUMENT;
+		webster_field_t *field = input->header.s_fields + index;
 
-		if (id != NULL) *id = it->first;
-		if (name != NULL) *name = http_getFieldName(it->first);
-		if (value != NULL) *value = it->second.c_str();
+		if (id != NULL) *id = field->id;
+		if (name != NULL) *name = http_getFieldName(field->id);
+		if (value != NULL) *value = field->value;
 		return WBERR_OK;
 	}
 	else
 	{
-		int i = (int) input->header.s_fields.size();
-		custom_field_map::const_iterator it = input->header.c_fields.begin();
-		for (; i < index && it != input->header.c_fields.end(); ++it, ++i);
-		if (i != index) return WBERR_INVALID_ARGUMENT;
+		index -= (int) input->header.s_count;
+		webster_field_t *field = input->header.c_fields + index;
 
-		if (name != NULL) *name = it->first.c_str();
-		if (id != NULL) *id = http_getFieldID(it->first.c_str());
-		if (value != NULL) *value = it->second.c_str();
+		if (id != NULL) *id = WBFI_NON_STANDARD;
+		if (name != NULL) *name = field->name;
+		if (value != NULL) *value = field->value;
 		return WBERR_OK;
 	}
 }
@@ -2172,9 +2264,9 @@ int WebsterSetStringField(
 		output->body.expected = atoi(value);
 
 	if (id != WBFI_NON_STANDARD)
-		return output->header.field(id, value);
+		return set_field_by_id(&output->header, id, value);
 	else
-		return output->header.field(name, value);
+		return set_field_by_name(&output->header, name, value);
 }
 
 
@@ -2196,7 +2288,11 @@ int WebsterRemoveField(
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
 	if (name == NULL) return WBERR_INVALID_ARGUMENT;
 
-	output->header.remove(name);
+	int id = http_getFieldID(name);
+	if (id != WBFI_NON_STANDARD)
+		remove_field_by_id(&output->header, id);
+	else
+		remove_field_by_name(&output->header, name);
 	return WBERR_OK;
 }
 
@@ -2205,24 +2301,28 @@ static void webster_commitHeaderFields(
     webster_message_t *output )
 {
 	// write standard fields
-	for (standard_field_map::const_iterator it = output->header.s_fields.begin();
-		 it != output->header.s_fields.end(); ++it)
+	for (int i = 0; i < output->header.s_count; ++i)
 	{
-		const char *name = http_getFieldName(it->first);
+		webster_field_t *field = output->header.s_fields + i;
+
+		if (field->value == NULL) continue;
+
+		const char *name = http_getFieldName(field->id);
 		if (name == NULL) continue;
 
 		webster_writeString(output, name);
 		webster_writeString(output, ": ");
-		webster_writeString(output, it->second.c_str());
+		webster_writeString(output, field->value);
 		webster_writeString(output, "\r\n");
 	}
-	// write standard fields
-	for (custom_field_map::const_iterator it = output->header.c_fields.begin();
-		 it != output->header.c_fields.end(); ++it)
+	// write custom fields
+	for (int i = 0; i < output->header.c_count; ++i)
 	{
-		webster_writeString(output, it->first.c_str());
+		webster_field_t *field = output->header.c_fields + i;
+
+		webster_writeString(output, field->name);
 		webster_writeString(output, ": ");
-		webster_writeString(output, it->second.c_str());
+		webster_writeString(output, field->value);
 		webster_writeString(output, "\r\n");
 	}
 
@@ -2251,14 +2351,14 @@ int WebsterWriteData(
 	if (output->state == WBS_HEADER)
 	{
 		// set 'tranfer-encoding' to chunked if required
-		if (output->header.field(WBFI_CONTENT_LENGTH) == NULL)
+		if (get_field_by_id(&output->header, WBFI_CONTENT_LENGTH) == NULL)
 		{
 			output->flags |= WBMF_CHUNKED;
 			// TODO: merge with previously set value, if any
 			WebsterSetStringField(output, "transfer-encoding", "chunked");
 		}
 		if (output->type == WBMT_REQUEST &&
-			output->header.field(WBFI_HOST) == NULL &&
+			get_field_by_id(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
 			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port

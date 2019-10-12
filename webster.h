@@ -168,6 +168,8 @@
 #define WBL_MAX_CONNECTIONS    1000
 #define WBL_DEF_CONNECTIONS    200
 #define WBL_READ_TIMEOUT       10000
+#define WBL_DEF_FIELD_INITIAL  16
+#define WBL_DEF_FIELD_GROW     8
 
 
 struct webster_server_t_;
@@ -212,6 +214,7 @@ typedef struct
 {
     void *(*malloc)(size_t size);
     void *(*calloc)(size_t count, size_t size);
+    void *(*realloc)(void *ptr, size_t size);
     void (*free)(void *ptr);
 } webster_memory_t;
 

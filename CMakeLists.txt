@@ -74,7 +74,7 @@ if (UNIX)
 endif()
 
 
-add_library(libwebster SHARED "webster.cc")
+add_library(libwebster SHARED "webster.c")
 target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster PUBLIC "./")
 target_compile_definitions(libwebster PRIVATE BUILDING_DYNAMIC=1)
@@ -88,7 +88,7 @@ set_target_properties(libwebster PROPERTIES
     PREFIX "lib" )
 
 
-add_library(libwebster_static STATIC "webster.cc")
+add_library(libwebster_static STATIC "webster.c")
 target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster_static PUBLIC "./")
 set_target_properties(libwebster_static PROPERTIES
