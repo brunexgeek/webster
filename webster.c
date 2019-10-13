@@ -11,7 +11,7 @@
 #define WBMF_CHUNKED    0x01
 
 
-static webster_memory_t memory = { malloc, calloc, realloc, free };
+static webster_memory_t memory = { NULL, NULL, NULL, NULL };
 
 
 struct webster_client_t_
@@ -1398,19 +1398,21 @@ static const char *HTTP_METHODS[] =
 int WebsterInitialize(
     const webster_memory_t *mem )
 {
-	if (mem != NULL && (mem->malloc == NULL || mem->free == NULL))
+	if (mem && (!mem->malloc || !mem->free || !mem->calloc || !mem->realloc))
 		return WBERR_INVALID_ARGUMENT;
 
 	if (mem != NULL)
 	{
 		memory.malloc = mem->malloc;
 		memory.calloc = mem->calloc;
+		memory.realloc = mem->realloc;
 		memory.free = mem->free;
 	}
 	else
 	{
 		memory.malloc = malloc;
 		memory.calloc = calloc;
+		memory.realloc = realloc;
 		memory.free = free;
 	}
 
@@ -1426,6 +1428,7 @@ int WebsterTerminate()
 {
 	memory.malloc = NULL;
 	memory.calloc = NULL;
+	memory.realloc = NULL;
 	memory.free = NULL;
 
 	#ifdef WB_WINDOWS
