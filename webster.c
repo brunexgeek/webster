@@ -1227,7 +1227,7 @@ static int network_receive(
 	if (result < 0) return WBERR_SOCKET;
 
 	ssize_t bytes = recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
-	if (bytes == ECONNRESET || bytes == EPIPE || bytes == ENOTCONN)
+	if (bytes == ECONNRESET || bytes == EPIPE || bytes == ENOTCONN || bytes == 0)
 		return WBERR_NOT_CONNECTED;
 	else
 	if (bytes < 0)
@@ -1237,7 +1237,6 @@ static int network_receive(
 		return WBERR_SOCKET;
 	}
 	*size = (uint32_t) bytes;
-	if (bytes == 0) return WBERR_TIMEOUT;
 
 	return WBERR_OK;
 }
@@ -1279,9 +1278,9 @@ static int network_accept(
 	webster_channel_t *chann = (webster_channel_t*) channel;
 
 	#ifdef WB_WINDOWS
-	int result = WSAPoll(&chann->poll, 1, 1000);
+	int result = WSAPoll(&chann->poll, 1, 10000);
 	#else
-	int result = poll(&chann->poll, 1, 1000);
+	int result = poll(&chann->poll, 1, 10000);
 	#endif
 	if (result == 0) return WBERR_TIMEOUT;
 	if (result == EINTR) return WBERR_SIGNAL;
@@ -1740,11 +1739,7 @@ static int webster_receive(
 	// Note: when reading input data we leave room in the buffer for a null-terminator
 	//       so we can use the function 'WebsterReadString'.
 
-	// when reading header data, we have 'timeout' milliseconds to receive the
-	// entire HTTP header
 	int recvTimeout = (timeout >= 0) ? timeout : 0;
-	if (isHeader) recvTimeout = 50;
-
 	uint64_t startTime = webster_tick();
 
 	while (input->buffer.pending < input->buffer.size)
@@ -1752,12 +1747,15 @@ static int webster_receive(
 		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
 		// receive new data and adjust pending information
 		int result = input->client->config.net->receive(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
-
-		// only keep trying if expecting header data
-		if (result == WBERR_TIMEOUT)
+		if (result == WBERR_TIMEOUT || result == WBERR_SIGNAL)
 		{
-			if (isHeader && webster_tick() - startTime < (size_t)timeout)
-				continue;
+			// when reading header data or while having a signal, we have 'timeout'
+			// milliseconds to receive the entire HTTP header
+			if (isHeader || result == WBERR_SIGNAL)
+			{
+				recvTimeout = recvTimeout - (int) (webster_tick() - startTime);
+				if (recvTimeout > 0) continue;
+			}
 			return WBERR_TIMEOUT;
 		}
 		else
