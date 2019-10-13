@@ -69,6 +69,9 @@
 #define WBM_TRACE                        8
 #define WBM_PATCH                        9
 
+#define WBMT_REQUEST                     1
+#define WBMT_RESPONSE                    2
+
 #define WBS_IDLE                         0
 #define WBS_HEADER                       1
 #define WBS_BODY                         2
