@@ -25,7 +25,6 @@ struct webster_client_t_
 struct webster_server_t_
 {
     void *channel;
-    //webster_target_t target;
     webster_config_t config;
 };
 
@@ -34,28 +33,28 @@ struct webster_server_t_
 #include <string.h>
 
 
-#ifdef _WIN32
+#ifdef WB_WINDOWS
 #define STRCMPI      _strcmpi
 #else
 #define STRCMPI      strcmpi
 #endif
 
 
-#ifndef _WIN32
+#ifndef WB_WINDOWS
 
 static int strcmpi(const char *s1, const char *s2)
 {
-   if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
-   if (s2 == NULL) return *s1;
+	if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
+	if (s2 == NULL) return *s1;
 
-   char c1, c2;
-   while ((c1 = (char) tolower(*s1)) == (c2 = (char) tolower(*s2)))
-   {
-     if (*s1 == '\0') break;
-     ++s1; ++s2;
-   }
+	char c1, c2;
+	while ((c1 = (char) tolower(*s1)) == (c2 = (char) tolower(*s2)))
+	{
+		if (*s1 == '\0') return 0;
+		++s1; ++s2;
+	}
 
-   return c1 - c2;
+	return c1 - c2;
 }
 
 #endif
@@ -1039,9 +1038,6 @@ int http_parse(
 
 #ifdef WB_WINDOWS
 #include <winsock2.h>
-#if (_WIN32_WINNT > 0x0501 || WINVER > 0x0501)
-#include <ws2tcpip.h>
-#endif
 #pragma comment(lib, "ws2_32.lib")
 typedef SSIZE_T ssize_t;
 CRITICAL_SECTION network_mutex;
@@ -1056,16 +1052,6 @@ CRITICAL_SECTION network_mutex;
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
-
-
-#if defined(WB_WINDOWS) && (_WIN32_WINNT <= 0x0501 || WINVER <= 0x0501)
-// Note: on Windows XP or older, the functions 'getaddrinfo' and 'freeaddrinfo'
-//       should be loaded manually.
-
-HINSTANCE winSocketLib;
-getaddrinfo_f getaddrinfo;
-freeaddrinfo_f freeaddrinfo;
-#endif
 
 
 typedef struct
@@ -1230,7 +1216,6 @@ static int network_receive(
 	webster_channel_t *chann = (webster_channel_t*) channel;
 	uint32_t bufferSize = *size;
 	*size = 0;
-
 	// wait for data
 	#ifdef WB_WINDOWS
 	int result = WSAPoll(&chann->poll, 1, timeout);
