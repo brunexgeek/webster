@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
+
 #ifdef _WIN32
 #include <Windows.h>
 #define PATH_LENGTH  MAX_PATH
@@ -475,6 +476,67 @@ static int main_serverHandler(
 
 #include <sys/time.h>
 
+//#define ENABLE_MEM_TEST
+
+#ifdef ENABLE_MEM_TEST
+
+static size_t total = 0;
+static size_t top = 0;
+
+static void *custom_malloc( size_t size )
+{
+	void *ptr = malloc(size + sizeof(size_t));
+	if (ptr)
+	{
+		*((size_t*)ptr) = size;
+		total += size;
+		if (total > top) top = total;
+	}
+	return (void*) ((uint8_t*) ptr + sizeof(size_t));
+}
+
+static void *custom_calloc( size_t num, size_t size )
+{
+	void *ptr = calloc(1, num * size + sizeof(size_t));
+	if (ptr)
+	{
+		*((size_t*)ptr) = num * size;
+		total += size * num;
+		if (total > top) top = total;
+	}
+	return (void*) ((uint8_t*) ptr + sizeof(size_t));
+}
+
+static void *custom_realloc( void *ptr, size_t size )
+{
+	if (ptr == NULL) return custom_malloc(size);
+
+	ptr = (uint8_t*) ptr - sizeof(size_t);
+	size_t bytes = *((size_t*)ptr);
+	void *nptr = realloc(ptr, size + sizeof(size_t));
+	if (nptr)
+	{
+		*((size_t*)nptr) = size;
+		total -= bytes;
+		total += size;
+		if (total > top) top = total;
+	}
+	return (void*) ((uint8_t*) nptr + sizeof(size_t));
+}
+
+static void custom_free( void *ptr )
+{
+	if (ptr == NULL) return;
+	ptr = (uint8_t*) ptr - sizeof(size_t);
+	size_t bytes = *((size_t*)ptr);
+	free(ptr);
+	total -= bytes;
+}
+
+webster_memory_t MEM_TEST_FUNCTIONS = {custom_malloc, custom_calloc, custom_realloc, custom_free};
+
+#endif
+
 int main(int argc, char* argv[])
 {
 	#if defined(_WIN32) || defined(WIN32)
@@ -503,7 +565,13 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
-	if (WebsterInitialize(NULL) == WBERR_OK)
+	#ifdef ENABLE_MEM_TEST
+	webster_memory_t *mem = &MEM_TEST_FUNCTIONS;
+	#else
+	webster_memory_t *mem = NULL;
+	#endif
+
+	if (WebsterInitialize(mem) == WBERR_OK)
 	{
 		if (WebsterCreate(&server, NULL) == WBERR_OK)
 		{
@@ -531,6 +599,9 @@ int main(int argc, char* argv[])
 		WebsterTerminate();
 	}
 
+	#ifdef ENABLE_MEM_TEST
+	printf("Memory peak: %lu bytes!\n", top);
+	#endif
 	printf("Server terminated!\n");
 
     return 0;
