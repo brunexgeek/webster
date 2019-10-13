@@ -270,9 +270,24 @@ typedef struct
 
 typedef struct
 {
+    /**
+     * Pointer to custom network functions. If NULL uses the default implementation.
+     */
     webster_network_t *net;
+
+    /**
+     * Maximum number of concurrent remote clients (server only).
+     */
     int max_clients;
+
+    /**
+     * Size in bytes of the message internal buffer (read and write).
+     */
     uint32_t buffer_size;
+
+    /**
+     * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
     int read_timeout;
 } webster_config_t;
 
