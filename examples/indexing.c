@@ -5,11 +5,20 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <ctype.h>
+
+#ifdef _WIN32
+#include <Windows.h>
+#define PATH_LENGTH  MAX_PATH
+#define STRCMPI      _strcmpi
+#else
+#include <unistd.h>
 #include <linux/limits.h>
 #include <dirent.h>
-#include <ctype.h>
+#define PATH_LENGTH  PATH_MAX
+#define STRCMPI      strcmpi
+#endif
 
 
 #define SERVER_RUNNING    1
@@ -97,7 +106,7 @@ static const struct mime_t MIME_TABLE[] =
 
 static int serverState = SERVER_RUNNING;
 
-static char rootDirectory[PATH_MAX];
+static char rootDirectory[PATH_LENGTH];
 
 static const char *HTTP_METHODS[] =
 {
@@ -136,6 +145,8 @@ static void main_signalHandler(
 #endif
 
 
+#ifndef _WIN32
+
 static int strcmpi(const char *s1, const char *s2)
 {
    if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
@@ -151,6 +162,7 @@ static int strcmpi(const char *s1, const char *s2)
    return c1 - c2;
 }
 
+#endif
 
 static const char *main_getMime(
 	const char *fileName )
@@ -166,7 +178,7 @@ static const char *main_getMime(
     while (first <= last)
 	{
 		int current = (first + last) / 2;
-		int dir = strcmpi(ptr, MIME_TABLE[current].extension);
+		int dir = STRCMPI(ptr, MIME_TABLE[current].extension);
 		if (dir == 0) return MIME_TABLE[current].mime;
 		if (dir < 0)
 			last = current - 1;
@@ -513,6 +525,7 @@ int main(int argc, char* argv[])
 					if (result != WBERR_TIMEOUT) break;
 				}
 			}
+			WebsterFreeURL(target);
 			WebsterDestroy(server);
 		}
 		WebsterTerminate();

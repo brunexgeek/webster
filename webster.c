@@ -531,7 +531,23 @@ static void message_initialize( struct webster_message_t_ *message, uint32_t siz
 
 static void message_terminate( struct webster_message_t_ *message )
 {
-    memory.free(message->buffer.data);
+	for (int i = 0; i < message->header.s_count; ++i)
+	{
+		webster_field_t *field = message->header.s_fields + i;
+		if (field->name) memory.free(field->name);
+		if (field->value) memory.free(field->value);
+	}
+	memory.free(message->header.s_fields);
+
+	for (int i = 0; i < message->header.c_count; ++i)
+	{
+		webster_field_t *field = message->header.c_fields + i;
+		if (field->name) memory.free(field->name);
+		if (field->value) memory.free(field->value);
+	}
+	memory.free(message->header.c_fields);
+
+    if (message->buffer.data) memory.free(message->buffer.data);
 	memset(message, 0, sizeof(struct webster_message_t_));
 }
 
