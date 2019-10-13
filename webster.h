@@ -170,9 +170,10 @@
 #define WBL_DEF_BUFFER_SIZE    (1024 * 4) // 4KB
 #define WBL_MAX_CONNECTIONS    1000
 #define WBL_DEF_CONNECTIONS    200
-#define WBL_READ_TIMEOUT       10000
 #define WBL_DEF_FIELD_INITIAL  16
 #define WBL_DEF_FIELD_GROW     8
+#define WBL_DEF_TIMEOUT        10000 // 10 sec
+#define WBL_MAX_TIMEOUT        120000 // 120 sec
 
 
 struct webster_server_t_;
@@ -221,11 +222,6 @@ typedef struct
     void (*free)(void *ptr);
 } webster_memory_t;
 
-
-typedef int webster_network_initialize(
-    webster_memory_t *memory );
-
-typedef int webster_network_terminate();
 
 typedef int webster_network_open(
 	void **channel );
@@ -277,6 +273,7 @@ typedef struct
     webster_network_t *net;
     int max_clients;
     uint32_t buffer_size;
+    int read_timeout;
 } webster_config_t;
 
 #ifdef __cplusplus

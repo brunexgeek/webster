@@ -1459,6 +1459,40 @@ int WebsterFreeURL(
 //
 
 
+static void copy_config( const webster_config_t *from, webster_config_t *to )
+{
+	memset(to, 0, sizeof(webster_config_t));
+
+	to->net = &DEFAULT_NETWORK;
+
+	if (from)
+	{
+		if (from->net) to->net = from->net;
+		to->max_clients = from->max_clients;
+		to->buffer_size = (uint32_t) (from->buffer_size + 3) & (uint32_t) (~3);
+		to->read_timeout = from->read_timeout;
+	}
+
+	if (to->max_clients <= 0)
+		to->max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if (to->max_clients > WBL_MAX_CONNECTIONS)
+		to->max_clients = WBL_MAX_CONNECTIONS;
+
+	if (to->buffer_size == 0)
+		to->buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if (to->buffer_size > WBL_MAX_BUFFER_SIZE)
+		to->buffer_size = WBL_MAX_BUFFER_SIZE;
+
+	if (to->read_timeout <= 0)
+		to->read_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (to->read_timeout > WBL_MAX_TIMEOUT)
+		to->read_timeout = WBL_DEF_TIMEOUT;
+}
+
+
 int WebsterConnect(
     webster_client_t **client,
     const webster_target_t *target,
@@ -1469,28 +1503,9 @@ int WebsterConnect(
 
 	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
-
-	(*client)->config.net = &DEFAULT_NETWORK;
 	(*client)->target = target;
 
-	if (config)
-	{
-		if (config->net) (*client)->config.net = config->net;
-		(*client)->config.max_clients = config->max_clients;
-		(*client)->config.buffer_size = (uint32_t) (config->buffer_size + 3) & (uint32_t) (~3);
-	}
-
-	if ((*client)->config.max_clients <= 0)
-		(*client)->config.max_clients = WBL_DEF_CONNECTIONS;
-	else
-	if ((*client)->config.max_clients > WBL_MAX_CONNECTIONS)
-		(*client)->config.max_clients = WBL_MAX_CONNECTIONS;
-
-	if ((*client)->config.buffer_size == 0)
-		(*client)->config.buffer_size = WBL_DEF_BUFFER_SIZE;
-	else
-	if ((*client)->config.buffer_size > WBL_MAX_BUFFER_SIZE)
-		(*client)->config.buffer_size = WBL_MAX_BUFFER_SIZE;
+	copy_config(config, &(*client)->config);
 
 	// try to connect with the remote host
 	int result = (*client)->config.net->open( &(*client)->channel );
@@ -1520,7 +1535,6 @@ int WebsterCommunicate(
 	int result;
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
-	//if (url == NULL || !WB_IS_VALID_URL(url->type)) return WBERR_INVALID_URL;
 
 	struct webster_message_t_ request;
 	result = message_initialize(&request, client->config.buffer_size);
@@ -1572,7 +1586,6 @@ int WebsterDisconnect(
 //
 
 
-
 int WebsterCreate(
     webster_server_t **server,
 	const webster_config_t *config )
@@ -1582,26 +1595,7 @@ int WebsterCreate(
 	*server = (struct webster_server_t_*) memory.calloc(1, sizeof(struct webster_server_t_));
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
 
-	(*server)->config.net = &DEFAULT_NETWORK;
-
-	if (config)
-	{
-		if (config->net) (*server)->config.net = config->net;
-		(*server)->config.max_clients = config->max_clients;
-		(*server)->config.buffer_size = (uint32_t) (config->buffer_size + 3) & (uint32_t) (~3);
-	}
-
-	if ((*server)->config.max_clients <= 0)
-		(*server)->config.max_clients = WBL_DEF_CONNECTIONS;
-	else
-	if ((*server)->config.max_clients > WBL_MAX_CONNECTIONS)
-		(*server)->config.max_clients = WBL_MAX_CONNECTIONS;
-
-	if ((*server)->config.buffer_size == 0)
-		(*server)->config.buffer_size = WBL_DEF_BUFFER_SIZE;
-	else
-	if ((*server)->config.buffer_size > WBL_MAX_BUFFER_SIZE)
-		(*server)->config.buffer_size = WBL_MAX_BUFFER_SIZE;
+	copy_config(config, &(*server)->config);
 
 	return WBERR_OK;
 }
@@ -1851,7 +1845,7 @@ static int webster_writeInteger(
 static int webster_receiveHeader(
 	webster_message_t *input )
 {
-	int result = webster_receive(input, WBL_READ_TIMEOUT, 1);
+	int result = webster_receive(input, input->client->config.read_timeout, 1);
 	if (result != WBERR_OK) return result;
 
 	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
@@ -1900,7 +1894,7 @@ int WebsterWaitEvent(
 		}
 
 		// TODO: should not receive more data than expected
-		result = webster_receive(input, WBL_READ_TIMEOUT, 0);
+		result = webster_receive(input, input->client->config.read_timeout, 0);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra bytes beyond content length
