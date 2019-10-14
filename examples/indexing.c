@@ -43,17 +43,26 @@
 	"MTk5NQAh+QQBAAABACwAAAAAFAAWAAADUDi6vPEwDECrnSO+aTvPEddVIriN1wWJKDG48IlSRG0T" \
 	"8kwJvIBLOkvvxwoCfDnjkaisIIHNZdL4LAarUSm0iY12uUwvcdArm3mvyG3N/iUAADs=);}"
 
+#define BACK_CSS ".icon-back{width:20px;height:22px;background-image: url(data:image/gif;base64," \
+	"R0lGODlhFAAWAMIAAP///8z//5mZmWZmZjMzMwAAAAAAAAAAACH+TlRoaXMgYXJ0IGlzIGluIHRo" \
+	"ZSBwdWJsaWMgZG9tYWluLiBLZXZpbiBIdWdoZXMsIGtldmluaEBlaXQuY29tLCBTZXB0ZW1iZXIg" \
+	"MTk5NQAh+QQBAAABACwAAAAAFAAWAAADSxi63P4jEPJqEDNTu6LO3PVpnDdOFnaCkHQGBTcqRRxu" \
+	"WG0v+5LrNUZQ8QPqeMakkaZsFihOpyDajMCoOoJAGNVWkt7QVfzokc+LBAA7);}"
+
 #define HTML_BEGIN "<html><head><meta charset='UTF-8'><title>" PROGRAM_TITLE "</title></head>" \
 	"<style type='text/css'>html{font-family: sans-serif; font-size: 16px;}" \
-	"a{text-decoration: none}" DIR_CSS FIL_CSS "</style><body>"
+	"a{text-decoration: none}" DIR_CSS FIL_CSS BACK_CSS "</style><body>"
 
 #define HTML_END "</body></html>"
 
 #define DIR_FORMAT "<tr><td><div class='icon-folder'></div>" \
-	"</td><td><strong><a href='%s/%s'>%s/</a></strong></div></td><td></td></tr>"
+	"</td><td><a href='%s/%s'>%s/</a></div></td><td></td></tr>"
 
 #define FIL_FORMAT "<tr><td><div class='icon-file'></div>" \
 	"</td><td><a href='%s/%s'>%s</a></td><td>%.1f %c</td></tr>"
+
+#define PAR_FORMAT "<tr><td><div class='icon-back'></div>" \
+	"</td><td><a href='%s/..'>Parent directory</a></div></td><td></td></tr>"
 
 struct mime_t
 {
@@ -267,6 +276,7 @@ static void enumerateFiles(
 	*count = 0;
 	while ((de = readdir(dr)) != NULL) (*count)++;
 	(*count)--; // ignore '.'
+	(*count)--; // ignore '..'
 	if (*count < 0)
 	{
 		closedir(dr);
@@ -285,7 +295,11 @@ static void enumerateFiles(
 	int i = 0;
 	while ((de = readdir(dr)) != NULL)
 	{
-		if (de->d_name[0] == '.' && de->d_name[1] == 0) continue;
+		if (de->d_name[0] == '.')
+		{
+			if (de->d_name[1] == 0) continue;
+			if (de->d_name[1] == '.' && de->d_name[2] == 0) continue;
+		}
 		(*entries)[i].fileName = strdup(de->d_name);
 		(*entries)[i].size = 0;
 		(*entries)[i].type = de->d_type;
@@ -301,16 +315,26 @@ static void main_listDirectory(
 	webster_message_t *response,
 	const char *path )
 {
-	char temp[1024];
+	char temp[2048];
+	size_t length = strlen(rootDirectory);
 
 	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
-
 	WebsterWriteString(response, HTML_BEGIN);
-	WebsterWriteString(response, "<h1>");
-	WebsterWriteString(response, path);
+	WebsterWriteString(response, "<h1>Index of ");
+	if (*(path + length) == 0)
+		WebsterWriteString(response, "/");
+	else
+		WebsterWriteString(response, path + length);
 	WebsterWriteString(response, "</h1><table>");
 
-	size_t length = strlen(rootDirectory);
+	// parent directory
+	if (*(path + length) != 0)
+	{
+		temp[0] = 0;
+		snprintf(temp, sizeof(temp) - 1, PAR_FORMAT, path + length);
+		WebsterWriteString(response, temp);
+	}
+
 	struct dir_entry *entries;
 	int total;
 	enumerateFiles(path, &entries, &total);
