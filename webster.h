@@ -53,6 +53,7 @@
 #define WBERR_NOT_CONNECTED              -29
 #define WBERR_SIGNAL                     -30
 #define WBERR_INVALID_TARGET             -31
+#define WBERR_INVALID_VALUE              -32
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -375,7 +376,7 @@ WEBSTER_EXPORTED int WebsterGetIntegerField(
     webster_message_t *input,
     int id,
     const char *name,
-    int *value );
+    int64_t *value );
 
 WEBSTER_EXPORTED int WebsterIterateField(
     webster_message_t *input,
@@ -421,7 +422,7 @@ WEBSTER_EXPORTED int WebsterSetStringField(
 WEBSTER_EXPORTED int WebsterSetIntegerField(
     webster_message_t *output,
     const char *name,
-    int value );
+    int64_t value );
 
 WEBSTER_EXPORTED int WebsterRemoveField(
     webster_message_t *output,

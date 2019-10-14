@@ -1850,11 +1850,15 @@ static int webster_writeChar(
 
 static int webster_writeInteger(
 	webster_message_t *output,
-	int value )
+	int64_t value )
 {
 	if (output == NULL) return WBERR_INVALID_MESSAGE;
-	char temp[16] = { 0 };
-	SNPRINTF(temp, sizeof(temp)-1, "%d", value);
+	char temp[24] = { 0 };
+	#ifdef WB_WINDOWS
+	SNPRINTF(temp, sizeof(temp)-1, "%lld", value);
+	#else
+	SNPRINTF(temp, sizeof(temp)-1, "%ld", value);
+	#endif
 	return webster_writeBuffer(output, (uint8_t*) temp, (int) strlen(temp));
 }
 
@@ -1972,13 +1976,23 @@ int WebsterGetIntegerField(
     webster_message_t *input,
     int id,
     const char *name,
-    int *value )
+    int64_t *value )
 {
+	if (value == NULL) return WBERR_INVALID_ARGUMENT;
+
 	const char *temp = NULL;
+	char *ptr = NULL;
 	int result = WebsterGetStringField(input, id, name, &temp);
 	if (result != WBERR_OK) return result;
 
-	*value = atoi(temp);
+	#ifdef WB_WINDOWS
+	*value = strtoll(temp, &ptr, 10);
+	#else
+	*value = strtol(temp, &ptr, 10);
+	#endif
+
+	if (ptr == temp) return WBERR_INVALID_VALUE;
+
 	return WBERR_OK;
 }
 
@@ -2215,8 +2229,6 @@ int WebsterSetStringField(
 		if (result != WBERR_OK) return result;
 	}
 
-	// TODO: evaluate field value
-
 	int id = http_get_field_id(name);
 	if (id == WBFI_CONTENT_LENGTH)
 		output->body.expected = atoi(value);
@@ -2231,10 +2243,14 @@ int WebsterSetStringField(
 int WebsterSetIntegerField(
     webster_message_t *output,
     const char *name,
-    int value )
+    int64_t value )
 {
-	char temp[12];
-	SNPRINTF(temp, sizeof(temp)-1, "%d", value);
+	char temp[24] = { 0 };
+	#ifdef WB_WINDOWS
+	SNPRINTF(temp, sizeof(temp)-1, "%lld", value);
+	#else
+	SNPRINTF(temp, sizeof(temp)-1, "%ld", value);
+	#endif
 	return WebsterSetStringField(output, name, temp);
 }
 
@@ -2344,7 +2360,7 @@ int WebsterWriteData(
 }
 
 
-WEBSTER_EXPORTED int WebsterWriteString(
+int WebsterWriteString(
     webster_message_t *output,
     const char *text )
 {
@@ -2390,7 +2406,7 @@ int WebsterFinish(
 }
 
 
-WEBSTER_EXPORTED int WebsterGetState(
+int WebsterGetState(
 	webster_message_t *message,
     int *state )
 {
