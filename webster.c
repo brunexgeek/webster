@@ -229,73 +229,73 @@ static int http_free_target( webster_target_t *target );
 
 webster_field_info_t HTTP_HEADER_FIELDS[] =
 {
-    { "accept"                          , WBFI_ACCEPT },
-    { "accept-charset"                  , WBFI_ACCEPT_CHARSET },
-    { "accept-encoding"                 , WBFI_ACCEPT_ENCODING },
-    { "accept-language"                 , WBFI_ACCEPT_LANGUAGE },
-    { "accept-patch"                    , WBFI_ACCEPT_PATCH },
-    { "accept-ranges"                   , WBFI_ACCEPT_RANGES },
-    { "access-control-allow-credentials", WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS },
-    { "access-control-allow-headers"    , WBFI_ACCESS_CONTROL_ALLOW_HEADERS },
-    { "access-control-allow-methods"    , WBFI_ACCESS_CONTROL_ALLOW_METHODS },
-    { "access-control-allow-origin"     , WBFI_ACCESS_CONTROL_ALLOW_ORIGIN },
-    { "access-control-expose-headers"   , WBFI_ACCESS_CONTROL_EXPOSE_HEADERS },
-    { "access-control-max-age"          , WBFI_ACCESS_CONTROL_MAX_AGE },
-    { "access-control-request-headers"  , WBFI_ACCESS_CONTROL_REQUEST_HEADERS },
-    { "access-control-request-method"   , WBFI_ACCESS_CONTROL_REQUEST_METHOD },
-    { "age"                             , WBFI_AGE },
-    { "allow"                           , WBFI_ALLOW },
-    { "alt-svc"                         , WBFI_ALT_SVC },
-    { "authorization"                   , WBFI_AUTHORIZATION },
-    { "cache-control"                   , WBFI_CACHE_CONTROL },
-    { "connection"                      , WBFI_CONNECTION },
-    { "content-disposition"             , WBFI_CONTENT_DISPOSITION },
-    { "content-encoding"                , WBFI_CONTENT_ENCODING },
-    { "content-language"                , WBFI_CONTENT_LANGUAGE },
-    { "content-length"                  , WBFI_CONTENT_LENGTH },
-    { "content-location"                , WBFI_CONTENT_LOCATION },
-    { "content-range"                   , WBFI_CONTENT_RANGE },
-    { "content-type"                    , WBFI_CONTENT_TYPE },
-    { "cookie"                          , WBFI_COOKIE },
-    { "date"                            , WBFI_DATE },
-    { "dnt"                             , WBFI_DNT },
-    { "etag"                            , WBFI_ETAG },
-    { "expect"                          , WBFI_EXPECT },
-    { "expires"                         , WBFI_EXPIRES },
-    { "forwarded"                       , WBFI_FORWARDED },
-    { "from"                            , WBFI_FROM },
-    { "host"                            , WBFI_HOST },
-    { "if-match"                        , WBFI_IF_MATCH },
-    { "if-modified-since"               , WBFI_IF_MODIFIED_SINCE },
-    { "if-none-match"                   , WBFI_IF_NONE_MATCH },
-    { "if-range"                        , WBFI_IF_RANGE },
-    { "if-unmodified-since"             , WBFI_IF_UNMODIFIED_SINCE },
-    { "last-modified"                   , WBFI_LAST_MODIFIED },
-    { "link"                            , WBFI_LINK },
-    { "location"                        , WBFI_LOCATION },
-    { "max-forwards"                    , WBFI_MAX_FORWARDS },
-    { "origin"                          , WBFI_ORIGIN },
-    { "pragma"                          , WBFI_PRAGMA },
-    { "proxy-authenticate"              , WBFI_PROXY_AUTHENTICATE },
-    { "proxy-authorization"             , WBFI_PROXY_AUTHORIZATION },
-    { "public-key-pins"                 , WBFI_PUBLIC_KEY_PINS },
-    { "range"                           , WBFI_RANGE },
-    { "referer"                         , WBFI_REFERER },
-    { "retry-after"                     , WBFI_RETRY_AFTER },
-    { "server"                          , WBFI_SERVER },
-    { "set-cookie"                      , WBFI_SET_COOKIE },
-    { "strict-transport-security"       , WBFI_STRICT_TRANSPORT_SECURITY },
-    { "te"                              , WBFI_TE },
-    { "tk"                              , WBFI_TK },
-    { "trailer"                         , WBFI_TRAILER },
-    { "transfer-encoding"               , WBFI_TRANSFER_ENCODING },
-    { "upgrade"                         , WBFI_UPGRADE },
-    { "upgrade-insecure-requests"       , WBFI_UPGRADE_INSECURE_REQUESTS },
-    { "user-agent"                      , WBFI_USER_AGENT },
-    { "vary"                            , WBFI_VARY },
-    { "via"                             , WBFI_VIA },
-    { "warning"                         , WBFI_WARNING },
-    { "www-authenticate"                , WBFI_WWW_AUTHENTICATE },
+    { "Accept"                          , WBFI_ACCEPT },
+    { "Accept-Charset"                  , WBFI_ACCEPT_CHARSET },
+    { "Accept-Encoding"                 , WBFI_ACCEPT_ENCODING },
+    { "Accept-Language"                 , WBFI_ACCEPT_LANGUAGE },
+    { "Accept-Patch"                    , WBFI_ACCEPT_PATCH },
+    { "Accept-Ranges"                   , WBFI_ACCEPT_RANGES },
+    { "Access-Control-Allow-Credentials", WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS },
+    { "Access-Control-Allow-Headers"    , WBFI_ACCESS_CONTROL_ALLOW_HEADERS },
+    { "Access-Control-Allow-Methods"    , WBFI_ACCESS_CONTROL_ALLOW_METHODS },
+    { "Access-Control-Allow-Origin"     , WBFI_ACCESS_CONTROL_ALLOW_ORIGIN },
+    { "Access-Control-Expose-Headers"   , WBFI_ACCESS_CONTROL_EXPOSE_HEADERS },
+    { "Access-Control-Max-Age"          , WBFI_ACCESS_CONTROL_MAX_AGE },
+    { "Access-Control-Request-Headers"  , WBFI_ACCESS_CONTROL_REQUEST_HEADERS },
+    { "Access-Control-Request-Method"   , WBFI_ACCESS_CONTROL_REQUEST_METHOD },
+    { "Age"                             , WBFI_AGE },
+    { "Allow"                           , WBFI_ALLOW },
+    { "Alt-Svc"                         , WBFI_ALT_SVC },
+    { "Authorization"                   , WBFI_AUTHORIZATION },
+    { "Cache-Control"                   , WBFI_CACHE_CONTROL },
+    { "Connection"                      , WBFI_CONNECTION },
+    { "Content-Disposition"             , WBFI_CONTENT_DISPOSITION },
+    { "Content-Encoding"                , WBFI_CONTENT_ENCODING },
+    { "Content-Language"                , WBFI_CONTENT_LANGUAGE },
+    { "Content-Length"                  , WBFI_CONTENT_LENGTH },
+    { "Content-Location"                , WBFI_CONTENT_LOCATION },
+    { "Content-Range"                   , WBFI_CONTENT_RANGE },
+    { "Content-Type"                    , WBFI_CONTENT_TYPE },
+    { "Cookie"                          , WBFI_COOKIE },
+    { "Date"                            , WBFI_DATE },
+    { "DNT"                             , WBFI_DNT },
+    { "ETag"                            , WBFI_ETAG },
+    { "Expect"                          , WBFI_EXPECT },
+    { "Expires"                         , WBFI_EXPIRES },
+    { "Forwarded"                       , WBFI_FORWARDED },
+    { "From"                            , WBFI_FROM },
+    { "Host"                            , WBFI_HOST },
+    { "If-Match"                        , WBFI_IF_MATCH },
+    { "If-Modified-Since"               , WBFI_IF_MODIFIED_SINCE },
+    { "If-None-Match"                   , WBFI_IF_NONE_MATCH },
+    { "If-Range"                        , WBFI_IF_RANGE },
+    { "If-Unmodified-Since"             , WBFI_IF_UNMODIFIED_SINCE },
+    { "Last-Modified"                   , WBFI_LAST_MODIFIED },
+    { "Link"                            , WBFI_LINK },
+    { "Location"                        , WBFI_LOCATION },
+    { "Max-Forwards"                    , WBFI_MAX_FORWARDS },
+    { "Origin"                          , WBFI_ORIGIN },
+    { "Pragma"                          , WBFI_PRAGMA },
+    { "Proxy-Authenticate"              , WBFI_PROXY_AUTHENTICATE },
+    { "Proxy-Authorization"             , WBFI_PROXY_AUTHORIZATION },
+    { "Public-Key-Pins"                 , WBFI_PUBLIC_KEY_PINS },
+    { "Range"                           , WBFI_RANGE },
+    { "Referer"                         , WBFI_REFERER },
+    { "Retry-After"                     , WBFI_RETRY_AFTER },
+    { "Server"                          , WBFI_SERVER },
+    { "Set-Cookie"                      , WBFI_SET_COOKIE },
+    { "Strict-Transport-Security"       , WBFI_STRICT_TRANSPORT_SECURITY },
+    { "TE"                              , WBFI_TE },
+    { "Tk"                              , WBFI_TK },
+    { "Trailer"                         , WBFI_TRAILER },
+    { "Transfer-Encoding"               , WBFI_TRANSFER_ENCODING },
+    { "Upgrade"                         , WBFI_UPGRADE },
+    { "Upgrade-Insecure-Requests"       , WBFI_UPGRADE_INSECURE_REQUESTS },
+    { "User-Agent"                      , WBFI_USER_AGENT },
+    { "Vary"                            , WBFI_VARY },
+    { "Via"                             , WBFI_VIA },
+    { "Warning"                         , WBFI_WARNING },
+    { "WWW-Authenticate"                , WBFI_WWW_AUTHENTICATE },
 };
 
 
@@ -361,30 +361,6 @@ static int set_field_by_id( webster_header_t *header, int id, const char *value 
 }
 
 
-static char *transform_field_name( const char *name )
-{
-	if (name == NULL || name[0] == 0) return NULL;
-
-	// check for invalid characters
-	size_t len = strlen(name);
-	for (size_t i = 0; i < len; ++i)
-    {
-        if (!IS_HFNC(name[i])) return NULL;
-    }
-
-	// convert the name to lower case
-    char *temp = memory.malloc(len + 1);
-	if (temp == NULL) return NULL;
-    for (size_t i = 0; i < len; ++i)
-    {
-        temp[i] = (char) tolower(name[i]);
-    }
-	temp[len] = 0;
-
-	return temp;
-}
-
-
 static int set_field_by_name( webster_header_t *header, const char *name, const char *value )
 {
 	if (header->fields.count + header->fields.count >= WBL_MAX_FIELDS)
@@ -400,13 +376,15 @@ static int set_field_by_name( webster_header_t *header, const char *name, const 
         return set_field_by_id(header, id, value);
 	}
 
-	// prepare the field name
-    char *temp = transform_field_name(name);
-	if (temp == NULL) return WBERR_INVALID_HEADER_FIELD; // or memory exhausted ???
+	// check for invalid characters
+	for (size_t i = 0; name[i] != 0; ++i)
+    {
+        if (!IS_HFNC(name[i])) return WBERR_INVALID_HEADER_FIELD;
+    }
 
 	webster_field_t *field = &header->fields.head[ header->fields.count++ ];
 	field->id = WBFI_NON_STANDARD;
-	field->name = temp;
+	field->name = string_duplicate(name);
 	field->value = string_duplicate(value);
 
 	return WBERR_OK;
@@ -567,22 +545,13 @@ int http_get_field_id(
 {
 	if (name == NULL || name[0] == 0) return WBFI_NON_STANDARD;
 
-    char temp[WBL_MAX_FIELD_NAME + 1];
-    size_t i = 0;
-    for (size_t t = strlen(name); i < t; ++i)
-    {
-        temp[i] = name[i];
-        if (temp[i] >= 'A' && temp[i] <= 'Z') temp[i] = (char) (temp[i] + 32);
-    }
-    temp[i] = 0;
-
     int first = 0;
     int last = sizeof(HTTP_HEADER_FIELDS) / sizeof(webster_field_info_t) - 1;
 
     while (first <= last)
 	{
 		int current = (first + last) / 2;
-		int dir = strcmp(temp, HTTP_HEADER_FIELDS[current].name);
+		int dir = STRCMPI(name, HTTP_HEADER_FIELDS[current].name);
 		if (dir == 0) return HTTP_HEADER_FIELDS[current].id;
 		if (dir < 0)
 			last = current - 1;
@@ -1004,7 +973,6 @@ int http_parse(
 
             // change the field name to lowercase
             char *p;
-            for (p = name; *p && *p != ' '; ++p) *p = (char) tolower(*p);
             // ignore trailing whitespces in the value
             value = http_removeTrailing(value);
             // get the field ID, if any
@@ -2287,7 +2255,7 @@ int WebsterWriteData(
 		{
 			output->flags |= WBMF_CHUNKED;
 			// TODO: merge with previously set value, if any
-			WebsterSetStringField(output, "transfer-encoding", "chunked");
+			WebsterSetStringField(output, "Transfer-Encoding", "chunked");
 		}
 		if (output->type == WBMT_REQUEST &&
 			get_field_by_id(&output->header, WBFI_HOST) == NULL &&
@@ -2297,7 +2265,7 @@ int WebsterWriteData(
 			char host[HOST_LEN + 1];
 			SNPRINTF(host, HOST_LEN, "%s:%d", output->client->target->host, output->client->target->port);
 			host[HOST_LEN] = 0;
-			WebsterSetStringField(output, "host", host);
+			WebsterSetStringField(output, "Host", host);
 		}
 		webster_commitHeaderFields(output);
 	}
