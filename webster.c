@@ -1677,48 +1677,11 @@ int WebsterAccept(
 	}
 
 	(*remote)->channel = client;
-	(*remote)->config.buffer_size = server->config.buffer_size;
-	(*remote)->config.net = server->config.net;
+	copy_config(&server->config, &(*remote)->config);
 
 	return WBERR_OK;
 }
 
-/*
-int WebsterSetOption(
-	webster_server_t *server,
-    int option,
-    int value )
-{
-	if (server == NULL) return WBERR_INVALID_SERVER;
-
-	if (option == WBO_BUFFER_SIZE)
-	{
-		if (value < WBL_MIN_BUFFER_SIZE || value > WBL_MAX_BUFFER_SIZE) value = WBL_DEF_BUFFER_SIZE;
-		server->bufferSize = (uint32_t) (value & 0x7FFFFFFF);
-	}
-	else
-		return WBERR_INVALID_ARGUMENT;
-
-	return WBERR_OK;
-}
-
-
-int WebsterGetOption(
-	webster_server_t *server,
-    int option,
-    int *value )
-{
-	if (server == NULL) return WBERR_INVALID_SERVER;
-	if (value == NULL) return WBERR_INVALID_ARGUMENT;
-
-	if (option == WBO_BUFFER_SIZE)
-		*value = (int) server->bufferSize;
-	else
-		return WBERR_INVALID_ARGUMENT;
-
-	return WBERR_OK;
-}
-*/
 
 //
 // Request and response API
