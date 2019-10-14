@@ -1036,6 +1036,8 @@ int http_parse(
  * Network stack
  *************/
 
+#ifndef WEBSTER_NO_DEFAULT_NETWORK
+
 #include <sys/types.h>
 
 
@@ -1362,6 +1364,7 @@ static webster_network_t DEFAULT_NETWORK =
 	network_listen
 };
 
+#endif // !WEBSTER_NO_DEFAULT_NETWORK
 
 /*************
  * Webster API
@@ -1466,7 +1469,9 @@ static void copy_config( const webster_config_t *from, webster_config_t *to )
 {
 	memset(to, 0, sizeof(webster_config_t));
 
+	#ifndef WEBSTER_NO_DEFAULT_NETWORK
 	to->net = &DEFAULT_NETWORK;
+	#endif
 
 	if (from)
 	{
@@ -1503,6 +1508,10 @@ int WebsterConnect(
 {
 	if (client == NULL)
 		return WBERR_INVALID_CLIENT;
+	#ifdef WEBSTER_NO_DEFAULT_NETWORK
+	if (config && !config->net)
+		return WBERR_INVALID_ARGUMENT;
+	#endif
 
 	*client = (struct webster_client_t_*) memory.calloc(1, sizeof(struct webster_client_t_));
 	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
@@ -1594,6 +1603,11 @@ int WebsterCreate(
 	const webster_config_t *config )
 {
 	if (server == NULL) return WBERR_INVALID_SERVER;
+
+	#ifdef WEBSTER_NO_DEFAULT_NETWORK
+	if (config && !config->net)
+		return WBERR_INVALID_ARGUMENT;
+	#endif
 
 	*server = (struct webster_server_t_*) memory.calloc(1, sizeof(struct webster_server_t_));
 	if (*server == NULL) return WBERR_MEMORY_EXHAUSTED;
