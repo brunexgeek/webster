@@ -308,7 +308,7 @@ static const char *get_field_by_name( webster_header_t *header, const char *name
 {
 	for (int i = 0; i < header->fields.count; ++i)
 	{
-		if (header->fields.head[i].id == WBFI_NON_STANDARD)
+		if (header->fields.head[i].id != WBFI_NON_STANDARD)
 			continue;
 		if (STRCMPI(header->fields.head[i].name, name) == 0)
 			return header->fields.head[i].value;
@@ -319,6 +319,8 @@ static const char *get_field_by_name( webster_header_t *header, const char *name
 
 static const char *get_field_by_id( webster_header_t *header, int id )
 {
+	if (id == WBFI_NON_STANDARD) return NULL;
+
 	for (int i = 0; i < header->fields.count; ++i)
 	{
 		if (header->fields.head[i].id == id)
@@ -377,6 +379,7 @@ static char *transform_field_name( const char *name )
     {
         temp[i] = (char) tolower(name[i]);
     }
+	temp[len] = 0;
 
 	return temp;
 }
@@ -1980,7 +1983,13 @@ int WebsterIterateField(
 
 		webster_field_t *field = input->header.fields.head + index;
 		if (id != NULL) *id = field->id;
-		if (name != NULL) *name = http_get_field_name(field->id);
+		if (name != NULL)
+		{
+			if (field->id == WBFI_NON_STANDARD)
+				*name = field->name;
+			else
+				*name = http_get_field_name(field->id);
+		}
 		if (value != NULL) *value = field->value;
 		return WBERR_OK;
 	}
@@ -2239,16 +2248,17 @@ static void webster_commitHeaderFields(
 	{
 		webster_field_t *field = output->header.fields.head + i;
 
-		if (field->id != WBFI_NON_STANDARD)
+		if (field->id == WBFI_NON_STANDARD)
+		{
+			if (!field->name) continue;
+			printf("Field name is %s\n", field->name);
+			webster_writeString(output, field->name);
+		}
+		else
 		{
 			const char *name = http_get_field_name(field->id);
 			if (name == NULL) continue;
 			webster_writeString(output, name);
-		}
-		else
-		{
-			if (!field->name) continue;
-			webster_writeString(output, field->name);
 		}
 
 		webster_writeString(output, ": ");
