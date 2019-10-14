@@ -2251,7 +2251,6 @@ static void webster_commitHeaderFields(
 		if (field->id == WBFI_NON_STANDARD)
 		{
 			if (!field->name) continue;
-			printf("Field name is %s\n", field->name);
 			webster_writeString(output, field->name);
 		}
 		else
