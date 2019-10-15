@@ -335,8 +335,8 @@ static void main_listDirectory(
 		WebsterWriteString(response, temp);
 	}
 
-	struct dir_entry *entries;
-	int total;
+	struct dir_entry *entries = NULL;
+	int total = 0;
 	enumerateFiles(path, &entries, &total);
 	if (total > 0)
 	{

@@ -971,9 +971,7 @@ int http_parse(
             *ptr++ = 0;
             ++ptr;
 
-            // change the field name to lowercase
-            char *p;
-            // ignore trailing whitespces in the value
+            // ignore trailing whitespaces in the value
             value = http_removeTrailing(value);
             // get the field ID, if any
             int id = http_get_field_id(name);
@@ -1800,7 +1798,7 @@ static int webster_receiveHeader(
 	int result = webster_receive(input, input->client->config.read_timeout, 1);
 	if (result != WBERR_OK) return result;
 
-	// no empty line means the HTTP header is longer than WEBSTER_MAX_HEADER
+	// no empty line means the HTTP header is longer than buffer size
 	char *ptr = strstr((char*) input->buffer.data, "\r\n\r\n");
 	if (ptr == NULL) return WBERR_TOO_LONG;
 	*(ptr + 3) = 0;
