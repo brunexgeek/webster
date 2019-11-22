@@ -177,14 +177,14 @@ struct webster_message_t_
         /**
          * @brief Message expected size.
          *
-         * This value is less than zero if using chunked transfer encoding.
+         * This value is any negative if using chunked transfer encoding.
          */
         int expected;
 
         /**
          * @brief Amount of bytes until the end of the current chunk.
          */
-        int chunkSize;
+        int chunk;
     } body;
 
     struct
@@ -449,7 +449,7 @@ static int message_initialize( struct webster_message_t_ *message, uint32_t size
     if (size > WBL_MAX_BUFFER_SIZE)
         size = WBL_MAX_BUFFER_SIZE;
 
-    message->body.expected = message->body.chunkSize = 0;
+    message->body.expected = message->body.chunk = 0;
     // FIXME: can be NULL
     message->buffer.data = message->buffer.current = (uint8_t*) memory.malloc(size);
 	if (!message->buffer.data) return WBERR_MEMORY_EXHAUSTED;
@@ -869,7 +869,7 @@ int http_parse(
 
     webster_header_t *header = &message->header;
     message->body.expected = 0;
-    message->body.chunkSize = 0;
+    message->body.chunk = 0;
 
     while (state != STATE_COMPLETE || *ptr == 0)
     {
@@ -1667,54 +1667,98 @@ static uint64_t webster_tick()
 
 
 /**
- * @brief Read data from the network channel until the buffer is full or there's
- * no more data to read.
+ * Read data until we find the header terminator or the internal buffer is full.
  */
-static int webster_receive(
+static int webster_receiveHeader(
 	webster_message_t *input,
-	int timeout,
-	int isHeader )
+	int timeout )
 {
-	// if we have data in the buffer, just return success
-	if (input->buffer.pending > 0) return WBERR_OK;
+	char *ptr = NULL;
+	int result = 0;
+
+	if (input == NULL) return WBERR_INVALID_MESSAGE;
+	if (timeout < 0) timeout = 0;
+
+	// ignore any pending data
 	input->buffer.pending = 0;
 
 	// Note: when reading input data we leave room in the buffer for a null-terminator
-	//       so we can use the function 'WebsterReadString'.
+	//       so we can manipulate its content as a string.
 
-	int recvTimeout = (timeout >= 0) ? timeout : 0;
-	uint64_t startTime = webster_tick();
-
-	while (input->buffer.pending < input->buffer.size)
+	while (1)
 	{
 		uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
+		if (bytes == 0) return WBERR_TOO_LONG;
+
 		// receive new data and adjust pending information
-		int result = input->client->config.net->receive(input->channel, input->buffer.data + input->buffer.pending, &bytes, recvTimeout);
-		if (result == WBERR_TIMEOUT || result == WBERR_SIGNAL)
+		uint64_t startTime = webster_tick();
+		result = input->client->config.net->receive(input->channel, input->buffer.data + input->buffer.pending, &bytes, timeout);
+		if (timeout > 0) timeout = timeout - (int) (webster_tick() - startTime);
+
+		if (result == WBERR_OK)
 		{
-			// when reading header data or while having a signal, we have 'timeout'
-			// milliseconds to receive the entire HTTP header
-			if (isHeader || result == WBERR_SIGNAL)
-			{
-				recvTimeout = recvTimeout - (int) (webster_tick() - startTime);
-				if (recvTimeout > 0) continue;
-			}
-			return WBERR_TIMEOUT;
+			input->buffer.pending += (int) bytes;
+			input->buffer.current = input->buffer.data;
+			// ensure we have a null-terminator at the end
+			*(input->buffer.current + input->buffer.pending) = 0;
+			ptr = strstr((char*)input->buffer.current, "\r\n\r\n");
+			if (ptr != NULL) break;
 		}
 		else
-		if (result != WBERR_OK) return result;
+		if (result != WBERR_TIMEOUT && result != WBERR_SIGNAL)
+			return result;
 
+		if (timeout <= 0) return WBERR_TIMEOUT;
+	}
+
+	*(ptr + 3) = 0;
+	// remember the last position
+	input->buffer.current = (uint8_t*) ptr + 4;
+	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
+	// parse HTTP header fields and retrieve the content length
+	result = http_parse((char*)input->buffer.data, input->type, input);
+	input->header.content_length = input->body.expected;
+
+	return WBERR_OK;
+}
+
+
+/**
+ * Read data until the internal buffer is full or there's no more data to read.
+ */
+static int webster_receiveBody(
+	webster_message_t *input,
+	int *count,
+	int timeout )
+{
+	if (count == NULL || input == NULL) return WBERR_INVALID_ARGUMENT;
+	if (timeout < 0) timeout = 0;
+
+	// if not expecting any data, just return success
+	if (input->body.expected == 0) return WBERR_OK;
+	// if we still have data in the buffer, just return success
+	if (input->buffer.pending > 0) return WBERR_OK;
+
+	input->buffer.pending = 0;
+	*count = 0;
+
+	// Note: when reading input data we leave room in the buffer for a null-terminator
+	//       so we can manipulate its content as a string.
+	uint32_t bytes = (uint32_t) input->buffer.size - (uint32_t) input->buffer.pending - 1;
+	// prevent reading more that's supposed to
+	if (input->body.expected >= 0 && bytes > (uint32_t) input->body.expected) bytes = (uint32_t) input->body.expected;
+
+	// receive new data and adjust pending information
+	int result = input->client->config.net->receive(input->channel, input->buffer.data + input->buffer.pending, &bytes, timeout);
+
+	if (result == WBERR_OK)
+	{
 		input->buffer.pending += (int) bytes;
 		input->buffer.current = input->buffer.data;
 		// ensure we have a null-terminator at the end
 		*(input->buffer.current + input->buffer.pending) = 0;
-
-		if (isHeader == 0) return WBERR_OK;
-		if (strstr((char*)input->buffer.current, "\r\n\r\n") != NULL) return WBERR_OK;
-		if (webster_tick() - startTime > (size_t)timeout) return WBERR_TIMEOUT;
 	}
-
-	return WBERR_OK;
+	return result;
 }
 
 
@@ -1733,7 +1777,7 @@ static int webster_writeBuffer(
 		output->buffer.pending = 0;
 	}
 
-	// fragment input data through recursive calls until the data size fits the internal buffer
+	// fragment input data through recursive call until the data size fits the internal buffer
 	int offset = 0;
 	int result = WBERR_OK;
 	int fit = output->buffer.size - (int)(output->buffer.current - output->buffer.data);
@@ -1792,26 +1836,6 @@ static int webster_writeInteger(
 }
 
 
-static int webster_receiveHeader(
-	webster_message_t *input )
-{
-	int result = webster_receive(input, input->client->config.read_timeout, 1);
-	if (result != WBERR_OK) return result;
-
-	// no empty line means the HTTP header is longer than buffer size
-	char *ptr = strstr((char*) input->buffer.data, "\r\n\r\n");
-	if (ptr == NULL) return WBERR_TOO_LONG;
-	*(ptr + 3) = 0;
-	// remember the last position
-	input->buffer.current = (uint8_t*) ptr + 4;
-	input->buffer.pending = input->buffer.pending - (int) ( (uint8_t*) ptr + 4 - input->buffer.data );
-	// parse HTTP header fields and retrieve the content length
-	result = http_parse((char*)input->buffer.data, input->type, input);
-	input->header.content_length = input->body.expected;
-	return result;
-}
-
-
 int WebsterWaitEvent(
     webster_message_t *input,
     webster_event_t *event )
@@ -1825,7 +1849,7 @@ int WebsterWaitEvent(
 
 	if (input->state == WBS_IDLE)
 	{
-		result = webster_receiveHeader(input);
+		result = webster_receiveHeader(input, input->client->config.read_timeout);
 		if (result == WBERR_OK)
 		{
 			event->type = WBT_HEADER;
@@ -1844,7 +1868,8 @@ int WebsterWaitEvent(
 		}
 
 		// TODO: should not receive more data than expected
-		result = webster_receive(input, input->client->config.read_timeout, 0);
+		int count = 0;
+		result = webster_receiveBody(input, &count, input->client->config.read_timeout);
 		if (result == WBERR_OK)
 		{
 			// truncate any extra bytes beyond content length
