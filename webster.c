@@ -1,3 +1,20 @@
+/*
+ *   Copyright 2019 Bruno Ribeiro
+ *   <https://github.com/brunexgeek/webster>
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #define _POSIX_C_SOURCE 200112L
 
 #include "webster.h"
@@ -170,8 +187,6 @@ struct webster_message_t_
      */
     int type;
 
-    int flags;
-
     struct
     {
         /**
@@ -182,9 +197,11 @@ struct webster_message_t_
         int expected;
 
         /**
-         * @brief Amount of bytes until the end of the current chunk.
+         * @brief Number of chunks received.
          */
-        int chunk;
+        int chunks;
+
+		int flags;
     } body;
 
     struct
@@ -449,7 +466,7 @@ static int message_initialize( struct webster_message_t_ *message, uint32_t size
     if (size > WBL_MAX_BUFFER_SIZE)
         size = WBL_MAX_BUFFER_SIZE;
 
-    message->body.expected = message->body.chunk = 0;
+    message->body.expected = message->body.chunks = 0;
     // FIXME: can be NULL
     message->buffer.data = message->buffer.current = (uint8_t*) memory.malloc(size);
 	if (!message->buffer.data) return WBERR_MEMORY_EXHAUSTED;
@@ -869,7 +886,7 @@ int http_parse(
 
     webster_header_t *header = &message->header;
     message->body.expected = 0;
-    message->body.chunk = 0;
+    message->body.chunks = 0;
 
     while (state != STATE_COMPLETE || *ptr == 0)
     {
@@ -984,7 +1001,10 @@ int http_parse(
                     message->body.expected = atoi(value);
                 else
                 if (id == WBFI_TRANSFER_ENCODING && strstr(value, "chunked"))
-                    message->flags |= WBMF_CHUNKED;
+				{
+					message->body.flags |= WBMF_CHUNKED;
+                    message->body.expected = -1;
+				}
             }
             else
                 set_field_by_name(header, name, value);
@@ -1724,6 +1744,52 @@ static int webster_receiveHeader(
 
 
 /**
+ * Ensure we have at least the specificed amount of data in the reading buffer.
+ */
+static int webster_ensure( webster_message_t *input, int size, int timeout )
+{
+	if (size <= input->buffer.pending) return WBERR_OK;
+	if (size > input->buffer.size) return WBERR_MEMORY_EXHAUSTED;
+
+	size = size - input->buffer.pending;
+	int avail = (int) (input->buffer.current - input->buffer.data) + input->buffer.pending - input->buffer.size;
+	if (size < avail)
+	{
+		memmove(input->buffer.data, input->buffer.current, (size_t) input->buffer.pending);
+		input->buffer.current = input->buffer.data;
+	}
+
+	// receive new data and adjust pending information
+	uint32_t bytes = (uint32_t) size;
+	int result = input->client->config.net->receive(input->channel, input->buffer.current + input->buffer.pending, &bytes, timeout);
+	if (result != WBERR_OK) return result;
+	if ((int) bytes != size) return WBERR_NO_DATA;
+	return WBERR_OK;
+}
+
+
+static int webster_chunkSize( webster_message_t *input, int timeout )
+{
+	#if 0
+	uint64_t startTime = webster_tick();
+	int result = 0;
+	uint8_t buffer[64];
+	uint32_t bytes = 0;
+
+	if (input->body.chunks > 0)
+	{
+		// receive the terminator of the previous chunk
+		bytes = 2;
+		result = input->client->config.net->receive(input->channel, buffer, &bytes, timeout);
+		if (timeout > 0) timeout = timeout - (int) (webster_tick() - startTime);
+	}
+	return WBERR_OK;
+	#endif
+	return WBERR_INVALID_CHUNK;
+}
+
+
+/**
  * Read data until the internal buffer is full or there's no more data to read.
  */
 static int webster_receiveBody(
@@ -1735,7 +1801,17 @@ static int webster_receiveBody(
 	if (timeout < 0) timeout = 0;
 
 	// if not expecting any data, just return success
-	if (input->body.expected == 0) return WBERR_OK;
+	if (input->body.expected == 0)
+	{
+		if ((input->body.flags & WBMF_CHUNKED) == 0)
+			return WBERR_COMPLETE;
+		else
+		{
+			int result = webster_chunkSize(input, timeout);
+			if (result != WBERR_OK) return result;
+			if (input->body.expected == 0) return WBERR_COMPLETE;
+		}
+	}
 	// if we still have data in the buffer, just return success
 	if (input->buffer.pending > 0) return WBERR_OK;
 
@@ -1872,18 +1948,6 @@ int WebsterWaitEvent(
 		result = webster_receiveBody(input, &count, input->client->config.read_timeout);
 		if (result == WBERR_OK)
 		{
-			// truncate any extra bytes beyond content length
-			if (input->body.expected >= 0 && input->buffer.pending > input->body.expected)
-			{
-				input->buffer.pending = input->body.expected;
-				input->buffer.data[input->buffer.pending] = 0;
-				// we still have some data to return?
-				if (input->buffer.pending == 0)
-				{
-					input->state = WBS_COMPLETE;
-					return WBERR_COMPLETE;
-				}
-			}
 			event->type = WBT_BODY;
 			event->size = input->buffer.pending;
 			input->state = WBS_BODY;
@@ -2276,7 +2340,7 @@ int WebsterWriteData(
 		// set 'tranfer-encoding' to chunked if required
 		if (get_field_by_id(&output->header, WBFI_CONTENT_LENGTH) == NULL)
 		{
-			output->flags |= WBMF_CHUNKED;
+			output->body.flags |= WBMF_CHUNKED;
 			// TODO: merge with previously set value, if any
 			WebsterSetStringField(output, "Transfer-Encoding", "chunked");
 		}
@@ -2297,7 +2361,7 @@ int WebsterWriteData(
 	if (size <= 0) return WBERR_OK;
 
 	// check whether we're using chuncked transfer encoding
-	if (output->flags & WBMF_CHUNKED)
+	if (output->body.flags & WBMF_CHUNKED)
 	{
 		char temp[16];
 		SNPRINTF(temp, sizeof(temp)-1, "%X\r\n", size);
@@ -2307,7 +2371,7 @@ int WebsterWriteData(
 	// write data
 	webster_writeBuffer(output, buffer, size);
 	// append the block terminator, if using chuncked transfer encoding
-	if (output->flags & WBMF_CHUNKED)
+	if (output->body.flags & WBMF_CHUNKED)
 		webster_writeBuffer(output, (const uint8_t*) "\r\n", 2);
 
 	return WBERR_OK;
@@ -2351,7 +2415,7 @@ int WebsterFinish(
 	WebsterFlush(output);
 
 	// send the last marker if using chunked transfer encoding
-	if (output->flags & WBMF_CHUNKED)
+	if (output->body.flags & WBMF_CHUNKED)
 		output->client->config.net->send(output->channel, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	output->state = WBS_COMPLETE;
