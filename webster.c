@@ -1530,7 +1530,7 @@ int WebsterCommunicate(
     webster_handler_t *callback,
     void *data )
 {
-	int result;
+	int result = WBERR_OK;
 	if (client == NULL) return WBERR_INVALID_CLIENT;
 	if (callback == NULL) return WBERR_INVALID_ARGUMENT;
 
@@ -1556,7 +1556,8 @@ int WebsterCommunicate(
 	response.client = client;
 	response.header.target = url;
 
-	callback(&request, &response, data);
+	result = callback(&request, &response, data);
+	if (result > 0) result = 0;
 
 	if (request.header.target != url) http_free_target(request.header.target);
 	if (response.header.target != url) http_free_target(response.header.target);
@@ -1564,7 +1565,7 @@ int WebsterCommunicate(
 	message_terminate(&request);
 	message_terminate(&response);
 
-	return WBERR_OK;
+	return result;
 }
 
 
