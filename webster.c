@@ -350,7 +350,7 @@ static const char *get_field_by_id( webster_header_t *header, int id )
 static int grow_fields( webster_header_t *header )
 {
 	int total = header->fields.total + WBL_DEF_FIELD_GROW;
-	webster_field_t *tmp = memory.realloc(header->fields.head, (size_t) total * sizeof(webster_field_t));
+	webster_field_t *tmp = (webster_field_t*) memory.realloc(header->fields.head, (size_t) total * sizeof(webster_field_t));
 	if (tmp != NULL)
 	{
 		header->fields.head = tmp;
@@ -1408,7 +1408,7 @@ int WebsterInitialize(
 		memory.free = free;
 	}
 
-	#ifdef WB_WINDOWS
+	#if !defined(WEBSTER_NO_DEFAULT_NETWORK) && defined(WB_WINDOWS)
 	InitializeCriticalSection(&network_mutex);
 	#endif
 
@@ -1423,7 +1423,7 @@ int WebsterTerminate()
 	memory.realloc = NULL;
 	memory.free = NULL;
 
-	#ifdef WB_WINDOWS
+	#if !defined(WEBSTER_NO_DEFAULT_NETWORK) && defined(WB_WINDOWS)
 	DeleteCriticalSection(&network_mutex);
 	#endif
 
