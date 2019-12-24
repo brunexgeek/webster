@@ -1029,6 +1029,7 @@ int http_parse(
 
 #ifdef WB_WINDOWS
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 typedef SSIZE_T ssize_t;
 CRITICAL_SECTION network_mutex;
@@ -2349,11 +2350,13 @@ int WebsterWriteData(
 			get_field_by_id(&output->header, WBFI_HOST) == NULL &&
 			output->client != NULL)
 		{
-			static const size_t HOST_LEN = WBL_MAX_HOST_NAME + 1 + 5; // host + ':' + port
+			// Visual Studio have problems with 'const_expr' and 'static const'
+			#define HOST_LEN (WBL_MAX_HOST_NAME + 1 + 5) // host + ':' + port
 			char host[HOST_LEN + 1];
 			SNPRINTF(host, HOST_LEN, "%s:%d", output->client->target->host, output->client->target->port);
 			host[HOST_LEN] = 0;
 			WebsterSetStringField(output, "Host", host);
+			#undef HOST_LEN
 		}
 		webster_commitHeaderFields(output);
 	}
