@@ -118,18 +118,25 @@ static char *string_cut(
 
 // is a header field name character?
 #define IS_HFNC(x) \
-    ((x) == '!'  \
-    || ((x) >= '#' && (x) <= '\'')  \
+	( ((x) >= 'A' && (x) <= 'Z')   \
+    || ((x) >= 'a' && (x) <= 'z')  \
+    || ((x) >= '0' && (x) <= '9')  \
+    || (x) == '-'  \
+	|| (x) == '_'  \
+	|| (x) == '!'  \
+    || (x) == '#'  \
+	|| (x) <= '$'  \
+	|| (x) <= '%'  \
+	|| (x) <= '&'  \
+	|| (x) <= '\''  \
     || (x) == '*'  \
     || (x) == '+'  \
-    || (x) == '-'  \
+	|| (x) <= '.'  \
     || (x) == '^'  \
-    || (x) == '_'  \
     || (x) == '|'  \
-    || (x) == '~'  \
-    || ((x) >= 'A' && (x) <= 'Z')  \
-    || ((x) >= 'a' && (x) <= 'z')  \
-    || ((x) >= '0' && (x) <= '9'))
+	|| (x) == '`'  \
+    || (x) == '~' )
+
 
 
 typedef struct
@@ -1772,6 +1779,8 @@ static int webster_ensure( webster_message_t *input, int size, int timeout )
 
 static int webster_chunkSize( webster_message_t *input, int timeout )
 {
+	(void) input;
+	(void) timeout;
 	#if 0
 	uint64_t startTime = webster_tick();
 	int result = 0;
