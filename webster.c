@@ -1,5 +1,5 @@
 /*
- *   Copyright 2019 Bruno Ribeiro
+ *   Copyright 2020 Bruno Ribeiro
  *   <https://github.com/brunexgeek/webster>
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
