@@ -473,27 +473,21 @@ static int main_serverHandler(
 	if (result == WBERR_OK && info.st_mode & S_IFREG)
 	{
 		const char *accept = NULL;
-		if (WebsterGetStringField(request, WBFI_ACCEPT, NULL, &accept) == WBERR_OK)
+		const char *mime = main_getMime(fileName);
+		WebsterGetStringField(request, WBFI_ACCEPT, NULL, &accept);
+
+		// a very simple (and not recomended) way to check the accepted types
+		if (accept != NULL && strstr(accept, mime) == NULL && strstr(accept, "*/*") == NULL)
 		{
-			const char *mime = main_getMime(fileName);
-			// a very simple (and not recomended) way to check the accepted types
-			if (strstr(accept, mime) == NULL && strstr(accept, "*/*") == NULL)
-			{
-				WebsterSetStatus(response, 406);
-				WebsterSetStringField(response, "content-type", mime);
-				WebsterSetIntegerField(response, "content-length", (int) strlen(mime));
-				WebsterWriteString(response, mime);
-			}
-			else
-			{
-				WebsterSetStatus(response, 200);
-				main_downloadFile(response, fileName, (int) info.st_size);
-			}
+			WebsterSetStatus(response, 406);
+			WebsterSetStringField(response, "content-type", mime);
+			WebsterSetIntegerField(response, "content-length", (int) strlen(mime));
+			WebsterWriteString(response, mime);
 		}
 		else
 		{
-			WebsterSetStatus(response, 500);
-			WebsterSetIntegerField(response, "content-length", 0);
+			WebsterSetStatus(response, 200);
+			main_downloadFile(response, fileName, (int) info.st_size);
 		}
 	}
 	else

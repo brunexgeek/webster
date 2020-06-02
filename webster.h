@@ -193,6 +193,8 @@
 #define WBL_DEF_TIMEOUT        10000 // 10 sec
 #define WBL_MAX_TIMEOUT        120000 // 120 sec
 
+#define WBNF_IS_CLIENT         0x01
+#define WBNF_IS_SERVER         0x02
 
 struct webster_server_t_;
 typedef struct webster_server_t_ webster_server_t;
@@ -244,6 +246,10 @@ typedef struct
 typedef int webster_network_open(
 	void **channel );
 
+typedef int webster_network_open_ex(
+	void **channel,
+    int flags );
+
 typedef int webster_network_close(
 	void *channel );
 
@@ -283,6 +289,7 @@ typedef struct
 	webster_network_send *send;
 	webster_network_accept *accept;
 	webster_network_listen *listen;
+	webster_network_open_ex *open_ex;
 } webster_network_t;
 
 

@@ -1125,10 +1125,12 @@ static int network_initialize()
 	return result;
 }
 
-
-static int network_open(
-	void **channel )
+static int network_open_ex(
+	void **channel,
+	int flags )
 {
+	(void) flags;
+
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 
 	int result = network_initialize();
@@ -1151,6 +1153,11 @@ static int network_open(
 	return WBERR_OK;
 }
 
+static int network_open(
+	void **channel )
+{
+	return network_open_ex(channel, 0);
+}
 
 static int network_close(
 	void *channel )
@@ -1349,13 +1356,14 @@ static int network_listen(
 
 static webster_network_t DEFAULT_NETWORK =
 {
-	network_open,
+	NULL,
 	network_close,
 	network_connect,
 	network_receive,
 	network_send,
 	network_accept,
-	network_listen
+	network_listen,
+	network_open_ex,
 };
 
 #endif // !WEBSTER_NO_DEFAULT_NETWORK
@@ -1514,7 +1522,11 @@ int WebsterConnect(
 	copy_config(config, &(*client)->config);
 
 	// try to connect with the remote host
-	int result = (*client)->config.net->open( &(*client)->channel );
+	int result = 0;
+	if ((*client)->config.net->open != NULL)
+		result = (*client)->config.net->open( &(*client)->channel );
+	else
+		result = (*client)->config.net->open_ex( &(*client)->channel, WBNF_IS_CLIENT );
 	if (result != WBERR_OK) goto ESCAPE;
 	result = (*client)->config.net->connect((*client)->channel, target->scheme, target->host, target->port);
 	if (result != WBERR_OK) goto ESCAPE;
@@ -1634,7 +1646,11 @@ int WebsterStart(
 	if (target == NULL || (target->type & WBRT_AUTHORITY) == 0)
 		return WBERR_INVALID_TARGET;
 
-	int result = server->config.net->open(&server->channel);
+	int result = 0;
+	if (server->config.net->open != NULL)
+		server->config.net->open(&server->channel);
+	else
+		server->config.net->open_ex(&server->channel, WBNF_IS_SERVER);
 	if (result != WBERR_OK) return result;
 
 	return server->config.net->listen(server->channel, target->host, target->port, server->config.max_clients);

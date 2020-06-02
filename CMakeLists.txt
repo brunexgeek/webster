@@ -3,7 +3,7 @@ project(webster)
 cmake_minimum_required(VERSION 2.8)
 
 set(WEBSTER_MAJOR_VERSION 1)
-set(WEBSTER_MINOR_VERSION 0)
+set(WEBSTER_MINOR_VERSION 1)
 set(WEBSTER_PATCH_VERSION 0)
 
 set(LIBRARY_TYPE "SHARED" CACHE STRING "Specify the type of binary to be generated")
