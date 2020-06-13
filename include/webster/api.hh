@@ -37,7 +37,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
-
+#include <functional>
+#include <string>
+#include <atomic>
 
 #define WBERR_OK                         0
 #define WBERR_INVALID_ARGUMENT           -1
@@ -76,19 +78,10 @@
 #define WBT_BODY                         2
 #define WBT_EMPTY                        3
 
-#define WBM_NONE                         0
-#define WBM_GET                          1
-#define WBM_HEAD                         2
-#define WBM_POST                         3
-#define WBM_PUT                          4
-#define WBM_DELETE                       5
-#define WBM_CONNECT                      6
-#define WBM_OPTIONS                      7
-#define WBM_TRACE                        8
-#define WBM_PATCH                        9
-
-#define WBMT_REQUEST                     1
-#define WBMT_RESPONSE                    2
+#define WBMT_INBOUND                     1
+#define WBMT_OUTBOUND                    2
+#define WBMT_REQUEST                     4
+#define WBMT_RESPONSE                    8
 
 #define WBS_IDLE                         0
 #define WBS_HEADER                       1
@@ -193,112 +186,109 @@
 #define WBL_DEF_TIMEOUT        10000 // 10 sec
 #define WBL_MAX_TIMEOUT        120000 // 120 sec
 
-#define WBNF_IS_CLIENT         0x01
-#define WBNF_IS_SERVER         0x02
+#define WBMF_CHUNKED    0x01
 
-struct webster_server_t_;
-typedef struct webster_server_t_ webster_server_t;
+#include <memory>
+#include <map>
+#include <string>
 
-struct webster_client_t_;
-typedef struct webster_client_t_ webster_client_t;
+namespace webster {
 
-struct webster_message_t_;
-typedef struct webster_message_t_ webster_message_t;
-
-typedef struct
-{
-    /**
-     * Event type.
-     */
-    int type;
-
-    /**
-     * Size of the payload.
-     */
-    int size;
-} webster_event_t;
-
-typedef struct
+struct Target
 {
     int type;
     int scheme;
-    char *user;
-    char *host;
+    std::string user;
+    std::string host;
     int port;
-    char *path;
-    char *query;
-} webster_target_t;
+    std::string path;
+    std::string query;
 
-typedef int (webster_handler_t)(
-    webster_message_t *request,
-    webster_message_t *response,
-    void *data );
+    Target();
+    static int parse( const char *url, Target &target );
+};
 
-typedef struct
+enum Method
 {
-    void *(*malloc)(size_t size);
-    void *(*calloc)(size_t count, size_t size);
-    void *(*realloc)(void *ptr, size_t size);
-    void (*free)(void *ptr);
-} webster_memory_t;
+    WBM_NONE    = 0,
+    WBM_GET     = 1,
+    WBM_HEAD    = 2,
+    WBM_POST    = 3,
+    WBM_PUT     = 4,
+    WBM_DELETE  = 5,
+    WBM_CONNECT = 6,
+    WBM_OPTIONS = 7,
+    WBM_TRACE   = 8,
+    WBM_PATCH   = 9,
+};
 
+WEBSTER_PRIVATE int strcmpi(const char *s1, const char *s2);
 
-typedef int webster_network_open(
-	void **channel );
-
-typedef int webster_network_open_ex(
-	void **channel,
-    int flags );
-
-typedef int webster_network_close(
-	void *channel );
-
-typedef int webster_network_connect(
-	void *channel,
-    int scheme,
-	const char *host,
-    int port );
-
-typedef int webster_network_receive(
-	void *channel,
-	uint8_t *buffer,
-    uint32_t *size,
-	int timeout );
-
-typedef int webster_network_send(
-	void *channel,
-	const uint8_t *buffer,
-    uint32_t size );
-
-typedef int webster_network_accept(
-	void *channel,
-	void **client );
-
-typedef int webster_network_listen(
-	void *channel,
-	const char *host,
-    int port,
-	int maxClients );
-
-typedef struct
+struct less
 {
-	webster_network_open *open;
-	webster_network_close *close;
-	webster_network_connect *connect;
-	webster_network_receive *receive;
-	webster_network_send *send;
-	webster_network_accept *accept;
-	webster_network_listen *listen;
-	webster_network_open_ex *open_ex;
-} webster_network_t;
+    typedef std::string first_argument_type;
+    typedef std::string second_argument_type;
+    typedef bool result_type;
 
+    bool operator() (const std::string& x, const std::string& y) const
+    {
+        return strcmpi(x.c_str(), y.c_str()) < 0;
+    }
+};
 
-typedef struct
+struct Header
 {
+    int content_length;
+    Target target;
+    int status;
+    std::map<std::string, std::string, webster::less> fields;
+    Method method;
+
+    Header();
+};
+
+class Client;
+
+class Channel {};
+
+class Network
+{
+    public:
+        enum Type { CLIENT, SERVER };
+        virtual int open( Channel **channel, Type type ) = 0;
+        virtual int close( Channel *channel ) = 0;
+        virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
+        virtual int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout ) = 0;
+        virtual int send( Channel *channel, const uint8_t *buffer, uint32_t size ) = 0;
+        virtual int accept( Channel *channel, Channel **client ) = 0;
+        virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
+};
+
+#ifndef WEBSTER_NO_DEFAULT_NETWORK
+class SocketNetwork : public Network
+{
+    public:
+        SocketNetwork();
+        ~SocketNetwork() = default;
+        int open( Channel **channel, Type type );
+        int close( Channel *channel );
+        int connect( Channel *channel, int scheme, const char *host, int port );
+        int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout );
+        int send( Channel *channel, const uint8_t *buffer, uint32_t size );
+        int accept( Channel *channel, Channel **client );
+        int listen( Channel *channel, const char *host, int port, int maxClients );
+};
+#endif
+
+struct Parameters
+{
+    Parameters();
+    Parameters( const Parameters &that );
+
     /**
      * Pointer to custom network functions. If NULL uses the default implementation.
      */
-    webster_network_t *net;
+    std::shared_ptr<Network> network;
 
     /**
      * Maximum number of concurrent remote clients (server only).
@@ -314,169 +304,145 @@ typedef struct
      * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
     int read_timeout;
-} webster_config_t;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
-WEBSTER_EXPORTED int WebsterInitialize(
-    const webster_memory_t *mem );
-
-WEBSTER_EXPORTED int WebsterTerminate();
-
-WEBSTER_EXPORTED int WebsterParseURL(
-    const char *url,
-    webster_target_t **target );
-
-WEBSTER_EXPORTED int WebsterFreeURL(
-    webster_target_t *target );
-
+};
 /*
- * HTTP client API
- */
+class Message
+{
+    public:
+        Header header;
+        virtual ~Message() = default;
+        virtual int read( const uint8_t **buffer, int *size ) = 0;
+        virtual int read( const char **buffer ) = 0;
+        virtual int read( std::string &buffer ) = 0;
+        virtual int write( const uint8_t *buffer, int size ) = 0;
+        virtual int write( const char *buffer ) = 0;
+        virtual int write( const std::string &buffer ) = 0;
+        virtual void flush() = 0;
+};*/
 
-WEBSTER_EXPORTED int WebsterConnect(
-    webster_client_t **client,
-    const webster_target_t *target,
-    const webster_config_t *config );
+class Message
+{
+    public:
+        Header header;
+		Message(  int buffer_size = WBL_DEF_BUFFER_SIZE );
+        ~Message() = default;
+        int read( const uint8_t **buffer, int *size );
+        int read( const char **buffer );
+        int read( std::string &buffer );
+        int write( const uint8_t *buffer, int size );
+        int write( const char *buffer );
+        int write( const std::string &buffer );
+        int flush();
+        int finish();
 
-WEBSTER_EXPORTED int WebsterCommunicate(
-    webster_client_t *client,
-    webster_target_t *target,
-    webster_handler_t *callback,
-    void *data );
+    public:
+        /**
+         * @brief Current state of the message.
+         *
+         * The machine state if defined by @c WBS_* macros.
+         */
+        int state_;
 
-WEBSTER_EXPORTED int WebsterDisconnect(
-    webster_client_t *client );
+        /**
+         * @brief Message type (WBMT_INBOUND or WBMT_OUTBOUND).
+         */
+        int flags_;
 
+        struct
+        {
+            /**
+             * @brief Message expected size.
+             *
+             * This value is any negative if using chunked transfer encoding.
+             */
+            int expected;
 
-/*
- * HTTP server API
- */
+            /**
+             * @brief Number of chunks received.
+             */
+            int chunks;
 
+            int flags;
+        } body_;
 
-/**
- * Create a HTTP/HTTPS server.
- *
- * @param server Pointer to hold the server handler.
- * @param config Pointer to optional configuration object. Can be NULL.
- */
-WEBSTER_EXPORTED int WebsterCreate(
-    webster_server_t **server,
-    const webster_config_t *config );
+        struct
+        {
+            /**
+             *  Pointer to the buffer content.
+             */
+            uint8_t *data;
 
-WEBSTER_EXPORTED int WebsterDestroy(
-    webster_server_t *server );
+            /**
+             * Size of the buffer in bytes.
+             */
+            int size;
 
-WEBSTER_EXPORTED int WebsterStart(
-    webster_server_t *server,
-    const webster_target_t *target );
+            /**
+             * Pointer to the buffer position in the buffer content.
+             */
+            uint8_t *current;
 
-WEBSTER_EXPORTED int WebsterStop(
-    webster_server_t *server );
+            /**
+             * Amount of useful data from the current position.
+             */
+            int pending;
+        } buffer_;
+        Client *client_;
+        Channel *channel_;
 
-WEBSTER_EXPORTED int WebsterAccept(
-    webster_server_t *server,
-	webster_client_t **remote );
+        int receiveHeader( int timeout );
+        int chunkSize( int timeout );
+        int receiveBody( int timeout );
+        int writeData( const uint8_t *buffer, int size );
+        int writeString( const std::string &text );
+        int writeHeader();
+        int write_resource_line();
+};
 
+typedef std::function<int(Message&,Message&,void*)> Handler;
 
-/*
- * Request and response API
- */
+WEBSTER_EXPORTED class Server
+{
+    public:
+        Server();
+        Server( Parameters params );
+        virtual ~Server() = default;
+        virtual int bind( const std::string &path, Handler handler );
+        virtual int start( const Target &target );
+        virtual int stop();
+        virtual int accept( Client **remote );
+    protected:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+        Handler handler_;
+};
 
-WEBSTER_EXPORTED int WebsterWaitEvent(
-    webster_message_t *input,
-    webster_event_t *event );
+WEBSTER_EXPORTED class Client
+{
+    public:
+        Client();
+        Client( Parameters params );
+        virtual ~Client() = default;
+        virtual int connect( const Target &target );
+        virtual int communicate( const std::string &path, Handler handler, void *data = nullptr );
+        virtual int disconnect();
+    public:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+};
 
-WEBSTER_EXPORTED int WebsterGetStringField(
-    webster_message_t *input,
-    int id,
-    const char *name,
-    const char **value );
+class RemoteClient : public Client
+{
+    public:
+        RemoteClient( Parameters params ) : Client(params) {}
+        ~RemoteClient() = default;
+        int communicate( const std::string &path, Handler handler, void *data = nullptr ) override;
+};
 
-WEBSTER_EXPORTED int WebsterGetIntegerField(
-    webster_message_t *input,
-    int id,
-    const char *name,
-    int64_t *value );
+extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
 
-WEBSTER_EXPORTED int WebsterIterateField(
-    webster_message_t *input,
-    int index,
-    int *id,
-    const char **name,
-    const char **value );
-
-WEBSTER_EXPORTED int WebsterReadData(
-    webster_message_t *input,
-    const uint8_t **buffer,
-    int *size );
-
-WEBSTER_EXPORTED int WebsterReadString(
-    webster_message_t *input,
-    const char **buffer );
-
-WEBSTER_EXPORTED int WebsterSetStatus(
-    webster_message_t *output,
-    int status );
-
-WEBSTER_EXPORTED int WebsterSetMethod(
-    webster_message_t *output,
-    int method );
-
-WEBSTER_EXPORTED int WebsterGetStatus(
-    webster_message_t *output,
-    int *status );
-
-WEBSTER_EXPORTED int WebsterGetMethod(
-    webster_message_t *output,
-    int *method );
-
-WEBSTER_EXPORTED int WebsterGetTarget(
-    webster_message_t *output,
-    const webster_target_t **target );
-
-WEBSTER_EXPORTED int WebsterSetStringField(
-    webster_message_t *output,
-    const char *name,
-    const char *value );
-
-WEBSTER_EXPORTED int WebsterSetIntegerField(
-    webster_message_t *output,
-    const char *name,
-    int64_t value );
-
-WEBSTER_EXPORTED int WebsterRemoveField(
-    webster_message_t *output,
-    const char *name );
-
-// TODO: must fail if writing more data it's supposed to (content-length)
-WEBSTER_EXPORTED int WebsterWriteData(
-    webster_message_t *output,
-    const uint8_t *buffer,
-    int size );
-
-// TODO: must fail if writing more data it's supposed to (content-length)
-WEBSTER_EXPORTED int WebsterWriteString(
-    webster_message_t *output,
-    const char *text );
-
-WEBSTER_EXPORTED int WebsterFlush(
-	webster_message_t *output );
-
-WEBSTER_EXPORTED int WebsterFinish(
-	webster_message_t *output );
-
-WEBSTER_EXPORTED int WebsterGetState(
-	webster_message_t *message,
-    int *state );
-
-
-#ifdef __cplusplus
-}
-#endif
-
+} // namespace webster
 
 #endif // WEBSTER_API_H

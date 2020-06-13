@@ -1,6 +1,6 @@
 # Webster  ![GitHub](https://img.shields.io/github/license/brunexgeek/webster)
 
-Lightweight framework to create HTTP servers and clients in ANSI C99. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying custom network functions (check ``WebsterCreate`` and ``WebsterConnect`` functions). There is only two files to include in your projects: ``webster.c`` and ``webster.h``. Optionally, you can build Webster as shared or static library.
+Lightweight framework to create HTTP servers and clients in C++11. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying custom network functions (check ``WebsterCreate`` and ``WebsterConnect`` functions). There is only two files to include in your projects: ``webster.cc`` and ``webster.hh``. Optionally, you can build Webster as shared or static library.
 
 Webster enables you to communicate with HTTP servers or implement your own HTTP server. It automatically parses requests and also simplify creating responses. The input/output body data is handled as a stream: to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amount of data using less memory.
 
@@ -10,9 +10,9 @@ However, Webster do not:
 
 The repository also includes three programs in the ``examples`` directory:
 
-* ``client.c``: simple client program that send a request and print the response;
-* ``echo.c``: simple server program that echoes information about the request;
-* ``indexing.c``: more elaborated server program that implements directory indexing. Works only in GNU/Linux for now.
+* ``client.cc``: simple client program that send a request and print the response;
+* ``echo.cc``: simple server program that echoes information about the request;
+* ``indexing.cc``: more elaborated server program that implements directory indexing. Works only in GNU/Linux for now.
 
 ## Client implementation
 
