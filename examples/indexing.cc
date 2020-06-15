@@ -402,11 +402,8 @@ static void main_listDirectory(
 
 static int main_serverHandler(
     Message &request,
-    Message &response,
-    void *data )
+    Message &response  )
 {
-	(void) data;
-
 	request.finish();
 
 	Target target = request.header.target;
@@ -503,7 +500,7 @@ int main(int argc, char* argv[])
 			if (result == WBERR_OK)
 			{
 				// you problably should handle the client request in another thread
-				remote->communicate("", main_serverHandler, NULL);
+				remote->communicate("", main_serverHandler);
 				remote->disconnect();
 			}
 			else

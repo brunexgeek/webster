@@ -75,52 +75,52 @@ static void main_signalHandler(
 #endif
 
 
-static int main_serverHandler(
-    Message &request,
-    Message &response,
-    void *data )
+struct EchoHandler
 {
-	(void) data;
-
-	// discards the body
-	const uint8_t *buffer;
-	int size;
-	while (request.read(&buffer, &size) == WBERR_OK);
-std::cout << "Received everything!\n";
-	response.header.status = 200;
-    response.header.fields["Content-Type"] = "text/html";
-    response.write("<html><head><title>");
-    response.write(PROGRAM_TITLE);
-    response.write("</title></head><body>");
-
-    response.write("<p>Received <strong>");
-    response.write(HTTP_METHODS[request.header.method]);
-    response.write("</strong> request to <tt style='color: blue'>");
-    response.write(request.header.target.path);
-    response.write("</tt>");
-	if (!request.header.target.query.empty())
+	int operator()(
+		Message &request,
+		Message &response )
 	{
-		response.write(" with query <tt style='color: blue'>");
-		response.write(request.header.target.query);
+		// discards the body
+		const uint8_t *buffer;
+		int size;
+		while (request.read(&buffer, &size) == WBERR_OK);
+	std::cout << "Received everything!\n";
+		response.header.status = 200;
+		response.header.fields["Content-Type"] = "text/html";
+		response.write("<html><head><title>");
+		response.write(PROGRAM_TITLE);
+		response.write("</title></head><body>");
+
+		response.write("<p>Received <strong>");
+		response.write(HTTP_METHODS[request.header.method]);
+		response.write("</strong> request to <tt style='color: blue'>");
+		response.write(request.header.target.path);
 		response.write("</tt>");
-	}
-	response.write("</p>");
+		if (!request.header.target.query.empty())
+		{
+			response.write(" with query <tt style='color: blue'>");
+			response.write(request.header.target.query);
+			response.write("</tt>");
+		}
+		response.write("</p>");
 
-    response.write("<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
-    response.write("<table><tr><th>Header field</th><th>Value</th></tr>");
-	for (auto &item : request.header.fields)
-	{
-        response.write("<tr><td>");
-        response.write(item.first);
-        response.write("</td><td>");
-        response.write(item.second);
-        response.write("</td></tr>");
-	}
-	response.write("</body></table></html>");
+		response.write("<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
+		response.write("<table><tr><th>Header field</th><th>Value</th></tr>");
+		for (auto &item : request.header.fields)
+		{
+			response.write("<tr><td>");
+			response.write(item.first);
+			response.write("</td><td>");
+			response.write(item.second);
+			response.write("</td></tr>");
+		}
+		response.write("</body></table></html>");
 
-	response.finish();
-	return WBERR_OK;
-}
+		response.finish();
+		return WBERR_OK;
+	}
+};
 
 int main(int argc, char* argv[])
 {
@@ -153,13 +153,14 @@ int main(int argc, char* argv[])
 	target.port = 7000;
 	if (server.start(target) == WBERR_OK)
 	{
+		EchoHandler handler;
 		while (serverState == SERVER_RUNNING)
 		{
 			std::shared_ptr<Client> remote;
 			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
-				remote->communicate("", main_serverHandler, NULL);
+				remote->communicate("", handler);
 				remote->disconnect();
 			}
 			else

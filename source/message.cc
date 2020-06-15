@@ -215,7 +215,7 @@ char *http_removeTrailing( char *text )
     return text;
 }
 
-int http_parse( char *data, int type, Message &message )
+int MessageImpl::parse( char *data )
 {
     static const int STATE_FIRST_LINE = 1;
     static const int STATE_HEADER_FIELD = 2;
@@ -226,9 +226,8 @@ int http_parse( char *data, int type, Message &message )
     char *token = ptr;
     int result;
 
-    Header &header = message.header;
-    message.body_.expected = 0;
-    message.body_.chunks = 0;
+    body_.expected = 0;
+    body_.chunks = 0;
 
     while (state != STATE_COMPLETE || *ptr == 0)
     {
@@ -241,7 +240,7 @@ int http_parse( char *data, int type, Message &message )
 
             if (strcmp(token, "HTTP/1.1") == 0)
             {
-                if (!(type & WBMT_RESPONSE)) return WBERR_INVALID_HTTP_MESSAGE;
+                if (!(flags_ & WBMT_RESPONSE)) return WBERR_INVALID_HTTP_MESSAGE;
 
                 // HTTP status code
                 for (token = ptr; *ptr >= '0' && *ptr <= '9'; ++ptr);
@@ -259,7 +258,7 @@ int http_parse( char *data, int type, Message &message )
             }
             else
             {
-                if (!(type & WBMT_REQUEST)) return WBERR_INVALID_HTTP_MESSAGE;
+                if (!(flags_ & WBMT_REQUEST)) return WBERR_INVALID_HTTP_MESSAGE;
 
                 // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
                 if (strcmp(token, "GET") == 0)
@@ -334,18 +333,18 @@ int http_parse( char *data, int type, Message &message )
             // ignore trailing whitespaces in the value
             value = http_removeTrailing(value);
             header.fields.insert( std::pair<std::string, std::string>(name, value) );
-            if (STRCMPI(name, "Content-Length") == 0)
+            if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
             {
-                message.header.content_length = (int) strtol(value, nullptr, 10);
-                message.body_.expected = message.header.content_length;
+                header.content_length = (int) strtol(value, nullptr, 10);
+                body_.expected = header.content_length;
             }
             else
             if (STRCMPI(name, "Transfer-Encoding") == 0)
             {
                 if (strstr(value, "chunked"))
 				{
-					message.body_.flags |= WBMF_CHUNKED;
-                    message.body_.expected = -1;
+					body_.flags |= WBMF_CHUNKED;
+                    body_.expected = -1;
 				}
             }
         }
@@ -356,7 +355,7 @@ int http_parse( char *data, int type, Message &message )
     return WBERR_OK;
 }
 
-Message::Message( int buffer_size )
+MessageImpl::MessageImpl( int buffer_size )
 {
     if (buffer_size < WBL_MIN_BUFFER_SIZE)
         buffer_size = WBL_MIN_BUFFER_SIZE;
@@ -374,7 +373,7 @@ Message::Message( int buffer_size )
     buffer_.pending = 0;
 }
 
-Message::~Message()
+MessageImpl::~MessageImpl()
 {
     if (buffer_.data != nullptr) delete[] buffer_.data;
 }
@@ -393,7 +392,7 @@ static uint64_t webster_tick()
 /**
  * Read data until we find the header terminator or the internal buffer is full.
  */
-int Message::receiveHeader( int timeout )
+int MessageImpl::receiveHeader( int timeout )
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 	state_ = WBS_HEADER;
@@ -416,7 +415,7 @@ int Message::receiveHeader( int timeout )
 
 		// receive new data and adjust pending information
 		uint64_t startTime = webster_tick();
-		result = client_->params_.network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
+		result = client_->get_parameters().network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
 		if (timeout > 0) timeout = timeout - (int) (webster_tick() - startTime);
 
 		if (result == WBERR_OK)
@@ -440,7 +439,7 @@ int Message::receiveHeader( int timeout )
 	buffer_.current = (uint8_t*) ptr + 4;
 	buffer_.pending = buffer_.pending - (int) ( (uint8_t*) ptr + 4 - buffer_.data );
 	// parse HTTP header fields and retrieve the content length
-	result = http_parse((char*)buffer_.data, flags_, *this);
+	result = parse((char*)buffer_.data);
 	if (result != WBERR_OK) return result;
 	header.content_length = body_.expected;
 	body_.expected -= buffer_.pending;
@@ -448,7 +447,7 @@ int Message::receiveHeader( int timeout )
 	return WBERR_OK;
 }
 
-int Message::chunkSize( int timeout )
+int MessageImpl::chunkSize( int timeout )
 {
     (void) timeout;
 	#if 0
@@ -472,7 +471,7 @@ int Message::chunkSize( int timeout )
 /**
  * Read data until the internal buffer is full or there's no more data to read.
  */
-int Message::receiveBody( int timeout )
+int MessageImpl::receiveBody( int timeout )
 {
 	if (state_ != WBS_HEADER && state_ != WBS_BODY) return WBERR_INVALID_STATE;
 	state_ = WBS_BODY;
@@ -503,7 +502,7 @@ int Message::receiveBody( int timeout )
 		bytes = (uint32_t) body_.expected;
 
 	// receive new data and adjust pending information
-	int result = client_->params_.network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
+	int result = client_->get_parameters().network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
 	if (result == WBERR_OK)
 	{
 		body_.expected -= (int) bytes;
@@ -515,19 +514,19 @@ int Message::receiveBody( int timeout )
 	return result;
 }
 
-int Message::read( const uint8_t **buffer, int *size )
+int MessageImpl::read( const uint8_t **buffer, int *size )
 {
 	int result = WBERR_OK;
 	if (state_ == WBS_IDLE)
 	{
-		result = receiveHeader(client_->params_.read_timeout);
+		result = receiveHeader(client_->get_parameters().read_timeout);
 		if (result != WBERR_OK) return result;
 	}
 	if (buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (buffer_.pending <= 0 || buffer_.current == NULL)
 	{
-		result = receiveBody(client_->params_.read_timeout);
+		result = receiveBody(client_->get_parameters().read_timeout);
 		if (result != WBERR_OK) return result;
 	}
 	if (buffer_.pending <= 0 || buffer_.current == NULL) return WBERR_NO_DATA;
@@ -541,7 +540,7 @@ int Message::read( const uint8_t **buffer, int *size )
 	return WBERR_OK;
 }
 
-int Message::read( const char **buffer )
+int MessageImpl::read( const char **buffer )
 {
 	const uint8_t *ptr = nullptr;
 	int size = 0;
@@ -550,7 +549,7 @@ int Message::read( const char **buffer )
 	return result;
 }
 
-int Message::read( std::string &buffer )
+int MessageImpl::read( std::string &buffer )
 {
 	const char *ptr;
 	int result = read(&ptr);
@@ -558,7 +557,7 @@ int Message::read( std::string &buffer )
 	return result;
 }
 
-int Message::writeData( const uint8_t *buffer, int size )
+int MessageImpl::writeData( const uint8_t *buffer, int size )
 {
 	if (size == 0 || buffer == NULL) return WBERR_OK;
 
@@ -588,25 +587,25 @@ int Message::writeData( const uint8_t *buffer, int size )
 	// send pending data if the buffer is full
 	if (buffer_.current >= buffer_.data + buffer_.size)
 	{
-		result = client_->params_.network->send(channel_, buffer_.data, (uint32_t) buffer_.size);
+		result = client_->get_parameters().network->send(channel_, buffer_.data, (uint32_t) buffer_.size);
 		buffer_.current = buffer_.data;
 	}
 
 	return result;
 }
 
-int Message::writeString( const std::string &text )
+int MessageImpl::writeString( const std::string &text )
 {
 	return writeData((uint8_t*) text.c_str(), (int) text.length());
 }
 
-static int compute_resource_line( const Message &message, std::stringstream &ss )
+int MessageImpl::compute_resource_line( std::stringstream &ss ) const
 {
-	if (message.state_ != WBS_IDLE) return WBERR_INVALID_STATE;
+	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 
-	Method method = message.header.method;
+	Method method = header.method;
 	if (!WB_IS_VALID_METHOD(method)) method = WBM_GET;
-	const Target &target = message.header.target;
+	const Target &target = header.target;
 
 	ss << HTTP_METHODS[method] << ' ';
 	switch (target.type)
@@ -637,16 +636,16 @@ static int compute_resource_line( const Message &message, std::stringstream &ss 
 	return WBERR_OK;
 }
 
-static int compute_status_line( const Message &message, std::stringstream &ss )
+int MessageImpl::compute_status_line( std::stringstream &ss ) const
 {
-	int status = message.header.status;
+	int status = header.status;
 	if (status == 0) status = 200;
 	const char *desc = http_statusMessage(status);
 	ss << "HTTP/1.1 " << status << ' ' << desc << "\r\n";
 	return WBERR_OK;
 }
 
-int Message::writeHeader()
+int MessageImpl::writeHeader()
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 
@@ -654,9 +653,9 @@ int Message::writeHeader()
 
 	// first line
 	if (flags_ & WBMT_RESPONSE)
-		compute_status_line(*this, ss);
+		compute_status_line(ss);
 	else
-		compute_resource_line(*this, ss);
+		compute_resource_line(ss);
 
 	// set 'tranfer-encoding' to chunked if required
 	auto it = header.fields.find("Content-Length");
@@ -667,7 +666,7 @@ int Message::writeHeader()
 		header.fields["Transfer-Encoding"] = "chunked";
 	}
 	if (flags_ & WBMT_REQUEST && header.fields.count("Host") == 0)
-		header.fields["Host"] = client_->target_.host + ':' + std::to_string(client_->target_.port);
+		header.fields["Host"] = client_->get_target().host + ':' + std::to_string(client_->get_target().port);
 
 	for (auto item : header.fields)
 		ss << item.first << ": " << item.second << "\r\n";
@@ -678,7 +677,7 @@ int Message::writeHeader()
 	return WBERR_OK;
 }
 
-int Message::write( const uint8_t *buffer, int size )
+int MessageImpl::write( const uint8_t *buffer, int size )
 {
 	if (state_ == WBS_IDLE) writeHeader();
 	if (buffer == nullptr || size == 0) return WBERR_OK;
@@ -700,17 +699,17 @@ int Message::write( const uint8_t *buffer, int size )
 
 }
 
-int Message::write( const char *buffer )
+int MessageImpl::write( const char *buffer )
 {
 	return write((const uint8_t*) buffer, (int) strlen(buffer));
 }
 
-int Message::write( const std::string &text )
+int MessageImpl::write( const std::string &text )
 {
 	return write((const uint8_t*) text.c_str(), (int) text.length());
 }
 
-int Message::flush()
+int MessageImpl::flush()
 {
 	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
 
@@ -719,13 +718,13 @@ int Message::flush()
 	// send all remaining body data
 	if (buffer_.current > buffer_.data)
 	{
-		client_->params_.network->send(channel_, buffer_.data, (uint32_t) (buffer_.current - buffer_.data));
+		client_->get_parameters().network->send(channel_, buffer_.data, (uint32_t) (buffer_.current - buffer_.data));
 		buffer_.current = buffer_.data;
 	}
 	return WBERR_OK;
 }
 
-int Message::finish()
+int MessageImpl::finish()
 {
 	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
 	if (flags_ & WBMT_INBOUND)
@@ -743,7 +742,7 @@ int Message::finish()
 
 	// send the last marker if using chunked transfer encoding
 	if (body_.flags & WBMF_CHUNKED)
-		client_->params_.network->send(channel_, (const uint8_t*) "0\r\n\r\n", 5);
+		client_->get_parameters().network->send(channel_, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	state_ = WBS_COMPLETE;
 

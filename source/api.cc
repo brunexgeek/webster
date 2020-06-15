@@ -139,8 +139,8 @@ int Target::parse( const char *url, Target &target )
             target.path = std::string(url);
         }
 
-        Target::decode(target.path);
-        Target::decode(target.query);
+        target.path = Target::decode(target.path);
+        target.query = Target::decode(target.query);
     }
     else
     // handle absolute form
@@ -218,8 +218,8 @@ int Target::parse( const char *url, Target &target )
 		else
 			target.path = "/";
 
-		Target::decode(target.path);
-        Target::decode(target.query);
+		target.path = Target::decode(target.path);
+        target.query = Target::decode(target.query);
 	}
     else
     // handle authority form
@@ -359,6 +359,16 @@ int Server::accept( std::shared_ptr<Client> &remote )
 	return WBERR_OK;
 }
 
+const Parameters &Server::get_parameters() const
+{
+	return params_;
+}
+
+const Target &Server::get_target() const
+{
+	return target_;
+}
+
 Client::Client() : channel_(nullptr)
 {
 }
@@ -393,13 +403,13 @@ int Client::connect( const Target &target )
 	return WBERR_OK;
 }
 
-int Client::communicate( const std::string &path, Handler handler, void *data )
+int Client::communicate( const std::string &path, Handler handler )
 {
 	int result = WBERR_OK;
 	if (handler == NULL) return WBERR_INVALID_ARGUMENT;
 
-	Message request;
-	Message response;
+	MessageImpl request;
+	MessageImpl response;
 
 	request.flags_ = WBMT_OUTBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
@@ -412,22 +422,32 @@ int Client::communicate( const std::string &path, Handler handler, void *data )
 	response.client_ = this;
 	response.header.target = request.header.target;
 
-	result = handler(request, response, data);
+	result = handler(request, response);
 	if (result > 0) result = 0;
 	result = response.finish();
 
 	return result;
 }
 
-int RemoteClient::communicate( const std::string &path, Handler handler, void *data )
+const Parameters &Client::get_parameters() const
+{
+	return params_;
+}
+
+const Target &Client::get_target() const
+{
+	return target_;
+}
+
+int RemoteClient::communicate( const std::string &path, Handler handler )
 {
 	(void) path;
 
 	int result = WBERR_OK;
 	if (handler == NULL) return WBERR_INVALID_ARGUMENT;
 
-	Message request;
-	Message response;
+	MessageImpl request;
+	MessageImpl response;
 
 	request.flags_ = WBMT_INBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
@@ -441,7 +461,7 @@ int RemoteClient::communicate( const std::string &path, Handler handler, void *d
 	response.client_ = this;
 	response.header.target = request.header.target;
 
-	result = handler(request, response, nullptr);
+	result = handler(request, response);
 	if (result > 0) result = 0;
 	result = response.finish();
 

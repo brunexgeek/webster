@@ -205,6 +205,9 @@ struct Target
     std::string query;
 
     Target();
+    Target( const Target &that ) = default;
+    Target( Target &&that ) = default;
+    Target &operator=( const Target &that ) = default;
     static int parse( const char *url, Target &target );
     static std::string encode( const std::string & value );
     static std::string decode( const std::string & value );
@@ -307,7 +310,7 @@ struct Parameters
      */
     int read_timeout;
 };
-/*
+
 class Message
 {
     public:
@@ -319,15 +322,60 @@ class Message
         virtual int write( const uint8_t *buffer, int size ) = 0;
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
-        virtual void flush() = 0;
-};*/
+        virtual int flush() = 0;
+        virtual int finish() = 0;
+};
 
-class Message
+typedef std::function<int(Message&,Message&)> Handler;
+
+WEBSTER_EXPORTED class Server
 {
     public:
-        Header header;
-		Message(  int buffer_size = WBL_DEF_BUFFER_SIZE );
-        ~Message();
+        Server();
+        Server( Parameters params );
+        virtual ~Server();
+        virtual int start( const Target &target );
+        virtual int stop();
+        virtual int accept( std::shared_ptr<Client> &remote );
+        virtual const Parameters &get_parameters() const;
+        virtual const Target &get_target() const;
+    protected:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+};
+
+WEBSTER_EXPORTED class Client
+{
+    public:
+        friend Server;
+        Client();
+        Client( Parameters params );
+        virtual ~Client();
+        virtual int connect( const Target &target );
+        virtual int communicate( const std::string &path, Handler handler );
+        virtual int disconnect();
+        virtual const Parameters &get_parameters() const;
+        virtual const Target &get_target() const;
+    protected:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+};
+
+class RemoteClient : public Client
+{
+    public:
+        RemoteClient( Parameters params ) : Client(params) {}
+        ~RemoteClient() = default;
+        int communicate( const std::string &path, Handler handler ) override;
+};
+
+class MessageImpl : public Message
+{
+    public:
+		MessageImpl(  int buffer_size = WBL_DEF_BUFFER_SIZE );
+        ~MessageImpl();
         int read( const uint8_t **buffer, int *size );
         int read( const char **buffer );
         int read( std::string &buffer );
@@ -337,7 +385,7 @@ class Message
         int flush();
         int finish();
 
-    public:
+    protected:
         /**
          * @brief Current state of the message.
          *
@@ -399,47 +447,12 @@ class Message
         int writeString( const std::string &text );
         int writeHeader();
         int write_resource_line();
-};
+        int parse( char *data );
+        int compute_resource_line( std::stringstream &ss ) const;
+        int compute_status_line( std::stringstream &ss ) const;
 
-typedef std::function<int(Message&,Message&,void*)> Handler;
-
-WEBSTER_EXPORTED class Server
-{
-    public:
-        Server();
-        Server( Parameters params );
-        virtual ~Server();
-        virtual int start( const Target &target );
-        virtual int stop();
-        virtual int accept( std::shared_ptr<Client> &remote );
-    protected:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
-        Handler handler_;
-};
-
-WEBSTER_EXPORTED class Client
-{
-    public:
-        Client();
-        Client( Parameters params );
-        virtual ~Client();
-        virtual int connect( const Target &target );
-        virtual int communicate( const std::string &path, Handler handler, void *data = nullptr );
-        virtual int disconnect();
-    public:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
-};
-
-class RemoteClient : public Client
-{
-    public:
-        RemoteClient( Parameters params ) : Client(params) {}
-        ~RemoteClient() = default;
-        int communicate( const std::string &path, Handler handler, void *data = nullptr ) override;
+        friend Client;
+        friend RemoteClient;
 };
 
 extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;

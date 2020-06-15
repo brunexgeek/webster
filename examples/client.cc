@@ -28,12 +28,8 @@ using webster::Method;
 
 static int main_clientHandler(
     Message &request,
-    Message &response,
-    void *data )
+    Message &response )
 {
-    (void) data;
-    (void) response;
-
     std::cout << "Request to " << request.header.target.path << std::endl;
     request.header.fields["Content-Length"] = "0";
     request.finish();
@@ -42,10 +38,8 @@ static int main_clientHandler(
     while (true)
     {
         int result = response.read(&ptr);
-        std::cerr << "read is " << result << std::endl;
         if (result != WBERR_OK) break;
-        std::cout << "received " << strlen(ptr) << std::endl;
-        //std::cout << ptr << std::endl;
+        std::cout << ptr << std::endl;
     }
 
     return WBERR_OK;
