@@ -318,6 +318,11 @@ Server::Server( Parameters params ) : Server()
 	params_ = params;
 }
 
+Server::~Server()
+{
+	stop();
+}
+
 int Server::start( const Target &target )
 {
 	if ((target.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
@@ -331,26 +336,25 @@ int Server::start( const Target &target )
 
 int Server::stop()
 {
+	if (channel_ == nullptr) return WBERR_OK;
 	params_.network->close(channel_);
 	channel_ = nullptr;
 	return WBERR_OK;
 }
 
-int Server::accept( Client **remote )
+int Server::accept( std::shared_ptr<Client> &remote )
 {
-	if (remote == NULL) return WBERR_INVALID_CLIENT;
-
 	Channel *channel = NULL;
 	int result = params_.network->accept(channel_, &channel);
 	if (result != WBERR_OK) return result;
 
-	*remote = new (std::nothrow) RemoteClient(params_);
-	if (*remote == NULL)
+	remote = std::shared_ptr<Client>(new (std::nothrow) RemoteClient(params_));
+	if (remote == NULL)
 	{
 		params_.network->close(channel);
 		return WBERR_MEMORY_EXHAUSTED;
 	}
-	(*remote)->channel_ = channel;
+	remote->channel_ = channel;
 
 	return WBERR_OK;
 }
@@ -362,6 +366,11 @@ Client::Client() : channel_(nullptr)
 Client::Client( Parameters params ) : Client()
 {
 	params_ = params;
+}
+
+Client::~Client()
+{
+	disconnect();
 }
 
 int Client::connect( const Target &target )
@@ -423,9 +432,10 @@ int RemoteClient::communicate( const std::string &path, Handler handler, void *d
 	request.flags_ = WBMT_INBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
 	request.client_ = this;
+
 	result = request.receiveHeader(params_.read_timeout);
 	if (result != WBERR_OK) return result;
-std::cerr << "Got hreaders\n";
+
 	response.flags_ = WBMT_OUTBOUND | WBMT_RESPONSE;
 	response.channel_ = channel_;
 	response.client_ = this;
@@ -440,7 +450,9 @@ std::cerr << "Got hreaders\n";
 
 int Client::disconnect()
 {
+	if (channel_ == nullptr) return WBERR_OK;
 	params_.network->close(channel_);
+	channel_ = nullptr;
 	return WBERR_OK;
 }
 

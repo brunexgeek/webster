@@ -327,7 +327,7 @@ class Message
     public:
         Header header;
 		Message(  int buffer_size = WBL_DEF_BUFFER_SIZE );
-        ~Message() = default;
+        ~Message();
         int read( const uint8_t **buffer, int *size );
         int read( const char **buffer );
         int read( std::string &buffer );
@@ -408,10 +408,10 @@ WEBSTER_EXPORTED class Server
     public:
         Server();
         Server( Parameters params );
-        virtual ~Server() = default;
+        virtual ~Server();
         virtual int start( const Target &target );
         virtual int stop();
-        virtual int accept( Client **remote );
+        virtual int accept( std::shared_ptr<Client> &remote );
     protected:
         Parameters params_;
         Channel *channel_;
@@ -424,7 +424,7 @@ WEBSTER_EXPORTED class Client
     public:
         Client();
         Client( Parameters params );
-        virtual ~Client() = default;
+        virtual ~Client();
         virtual int connect( const Target &target );
         virtual int communicate( const std::string &path, Handler handler, void *data = nullptr );
         virtual int disconnect();

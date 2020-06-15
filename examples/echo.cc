@@ -150,13 +150,13 @@ int main(int argc, char* argv[])
 	Target target;
 	target.type = WBRT_AUTHORITY;
 	target.host = "localhost";
-	target.port = 8080;
+	target.port = 7000;
 	if (server.start(target) == WBERR_OK)
 	{
 		while (serverState == SERVER_RUNNING)
 		{
-			Client *remote = NULL;
-			int result = server.accept(&remote);
+			std::shared_ptr<Client> remote;
+			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
 				remote->communicate("", main_serverHandler, NULL);

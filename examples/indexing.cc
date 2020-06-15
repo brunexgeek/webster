@@ -25,7 +25,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <iostream>
-
+#include <memory>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -498,8 +498,8 @@ int main(int argc, char* argv[])
 	{
 		while (serverState == SERVER_RUNNING)
 		{
-			Client *remote = nullptr;
-			int result = server.accept(&remote);
+			std::shared_ptr<Client> remote;
+			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
 				// you problably should handle the client request in another thread

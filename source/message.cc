@@ -374,6 +374,11 @@ Message::Message( int buffer_size )
     buffer_.pending = 0;
 }
 
+Message::~Message()
+{
+    if (buffer_.data != nullptr) delete[] buffer_.data;
+}
+
 static uint64_t webster_tick()
 {
 	#ifdef WB_WINDOWS
@@ -439,7 +444,6 @@ int Message::receiveHeader( int timeout )
 	if (result != WBERR_OK) return result;
 	header.content_length = body_.expected;
 	body_.expected -= buffer_.pending;
-	std::cout << "Expected " <<  header.content_length << std::endl;
 
 	return WBERR_OK;
 }
@@ -497,7 +501,7 @@ int Message::receiveBody( int timeout )
 	// prevent reading more that's supposed to
 	if (body_.expected >= 0 && bytes > (uint32_t) body_.expected)
 		bytes = (uint32_t) body_.expected;
-std::cout << "Receiving " << bytes << " bytes of data [expected " << body_.expected << std::endl;
+
 	// receive new data and adjust pending information
 	int result = client_->params_.network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
 	if (result == WBERR_OK)
@@ -517,7 +521,6 @@ int Message::read( const uint8_t **buffer, int *size )
 	if (state_ == WBS_IDLE)
 	{
 		result = receiveHeader(client_->params_.read_timeout);
-		std::cout << "Got header!\n";
 		if (result != WBERR_OK) return result;
 	}
 	if (buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
@@ -669,7 +672,7 @@ int Message::writeHeader()
 	for (auto item : header.fields)
 		ss << item.first << ": " << item.second << "\r\n";
 	ss << "\r\n";
-std::cerr << ss.str() << std::endl;
+
 	writeString(ss.str());
 	state_ = WBS_BODY;
 	return WBERR_OK;
