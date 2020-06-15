@@ -15,7 +15,7 @@
  *   limitations under the License.
  */
 
-#include <webster.h>
+#include <webster/api.hh>
 #include <limits.h>
 #include <stdio.h>
 #include <signal.h>
@@ -24,18 +24,19 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <iostream>
 
 
 #ifdef _WIN32
 #include <Windows.h>
 #define PATH_LENGTH  MAX_PATH
-#define STRCMPI      _strcmpi
+#define STRCMPI      webster::strcmpi
 #else
 #include <unistd.h>
 #include <linux/limits.h>
 #include <dirent.h>
 #define PATH_LENGTH  PATH_MAX
-#define STRCMPI      strcmpi
+#define STRCMPI      webster::strcmpi
 #endif
 
 
@@ -130,6 +131,7 @@ static const struct mime_t MIME_TABLE[] =
 };
 #define MIME_COUNT   sizeof(MIME_TABLE) / sizeof(struct mime_t)
 
+using namespace webster;
 
 static int serverState = SERVER_RUNNING;
 
@@ -171,26 +173,6 @@ static void main_signalHandler(
 
 #endif
 
-
-#ifndef _WIN32
-
-static int strcmpi(const char *s1, const char *s2)
-{
-   if (s1 == NULL) return s2 == NULL ? 0 : -(*s2);
-   if (s2 == NULL) return *s1;
-
-   char c1, c2;
-   while ((c1 = (char) tolower(*s1)) == (c2 = (char) tolower(*s2)))
-   {
-     if (*s1 == '\0') break;
-     ++s1; ++s2;
-   }
-
-   return c1 - c2;
-}
-
-#endif
-
 static const char *main_getMime(
 	const char *fileName )
 {
@@ -218,7 +200,7 @@ static const char *main_getMime(
 
 
 static void main_downloadFile(
-	webster_message_t *response,
+	Message &response,
 	const char *fileName,
 	int contentLength )
 {
@@ -229,12 +211,12 @@ static void main_downloadFile(
 	const char *mime = main_getMime(fileName);
 	printf("Requested '%s' (%s) with %d bytes\n", fileName, mime, contentLength);
 
-	WebsterSetStatus(response, 200);
-	WebsterSetIntegerField(response, "Content-Length", contentLength);
-	WebsterSetStringField(response, "Content-Type", mime);
-	WebsterSetStringField(response, "Cache-Control", "max-age=10, must-revalidate");
-	WebsterSetStringField(response, "Content-Encoding", "identity");
-	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
+	response.header.status= 200;
+	response.header.fields["Content-Length"] = std::to_string(contentLength);
+	response.header.fields["Content-Type"] = mime;
+	response.header.fields["Cache-Control"] = "max-age=10, must-revalidate";
+	response.header.fields["Content-Encoding"] = "identity";
+	response.header.fields["Server"] = PROGRAM_TITLE;
 
 	size_t sent = 0;
 	FILE *fp = fopen(fileName, "rb");
@@ -245,7 +227,7 @@ static void main_downloadFile(
 			read = fread(buffer, 1, sizeof(buffer), fp);
 			if (read > 0)
 			{
-				if (WebsterWriteData(response, (uint8_t*) buffer, (int) read) == WBERR_OK) sent += read;
+				if (response.write( (uint8_t*) buffer, (int) read) == WBERR_OK) sent += read;
 			}
 		} while (read > 0);
 		fclose(fp);
@@ -329,27 +311,27 @@ static void enumerateFiles(
 
 
 static void main_listDirectory(
-	webster_message_t *response,
+	Message &response,
 	const char *path )
 {
 	char temp[2048];
 	size_t length = strlen(rootDirectory);
 
-	WebsterSetStringField(response, "Server", PROGRAM_TITLE);
-	WebsterWriteString(response, HTML_BEGIN);
-	WebsterWriteString(response, "<h1>Index of ");
+	response.header.fields["Server"] = PROGRAM_TITLE;
+	response.write( HTML_BEGIN);
+	response.write( "<h1>Index of ");
 	if (*(path + length) == 0)
-		WebsterWriteString(response, "/");
+		response.write("/");
 	else
-		WebsterWriteString(response, path + length);
-	WebsterWriteString(response, "</h1><table>");
+		response.write(path + length);
+	response.write("</h1><table>");
 
 	// parent directory
 	if (*(path + length) != 0)
 	{
 		temp[0] = 0;
 		snprintf(temp, sizeof(temp) - 1, PAR_FORMAT, path + length);
-		WebsterWriteString(response, temp);
+		response.write(temp);
 	}
 
 	struct dir_entry *entries = NULL;
@@ -407,170 +389,80 @@ static void main_listDirectory(
 				continue;
 			}
 			temp[sizeof(temp) - 1] = 0;
-			WebsterWriteString(response, temp);
+			response.write(temp);
 			free(entries[i].fileName);
 		}
 		free(entries);
 	}
 
-	WebsterWriteString(response, "</table><hr/>");
-	WebsterWriteString(response, HTML_END);
+	response.write("</table><hr/>");
+	response.write(HTML_END);
 }
 
 
 static int main_serverHandler(
-    webster_message_t *request,
-    webster_message_t *response,
+    Message &request,
+    Message &response,
     void *data )
 {
 	(void) data;
 
-	webster_event_t event;
-	const webster_target_t *target = NULL;
-	int result = 0;
+	request.finish();
 
-	do
-	{
-		// wait for some request data
-		result = WebsterWaitEvent(request, &event);
-		if (result == WBERR_COMPLETE) break;
-		if (result == WBERR_NO_DATA) continue;
-		if (result != WBERR_OK) return 0;
-
-		if (result == WBERR_OK)
-		{
-			// check if received the HTTP header
-			if (event.type ==  WBT_HEADER)
-			{
-				int method = 0;
-				WebsterGetMethod(request, &method);
-				WebsterGetTarget(request, &target);
-				printf("%s %s\n", HTTP_METHODS[method], target->path);
-				// print all HTTP header fields
-				const char *name;
-				const char *value;
-				int index = 0;
-				while (WebsterIterateField(request, index++, NULL, &name, &value) == WBERR_OK)
-					printf("  %s: '%s'\n", name, value);
-			}
-		}
-	} while (1);
-
-	// doing it again, but not necessary if the first call succeed
-
-	result = WebsterGetTarget(request, &target);
-	if (result != WBERR_OK) return result;
+	Target target = request.header.target;
 	// build the local file name
-	char *fileName = NULL;
-	char temp[512];
-	strncpy(temp, rootDirectory, sizeof(temp) - 1);
-	strncat(temp, target->path, sizeof(temp) - 1);
-	fileName = realpath(temp, NULL);
+	char *fileName = nullptr;
+	{
+		std::string temp;
+		temp += rootDirectory;
+		temp += target.path;
+		temp = Target::decode(temp);
+		fileName = realpath(temp.c_str(), nullptr);
+	}
 
-	result = WBERR_OK;
+	int result = WBERR_OK;
 	struct stat info;
 	if (fileName == NULL || stat(fileName, &info) != 0) result = WBERR_INVALID_ARGUMENT;
 	if (result == WBERR_OK && info.st_mode & S_IFREG)
 	{
-		const char *accept = NULL;
+		const std::string accept;
 		const char *mime = main_getMime(fileName);
-		WebsterGetStringField(request, WBFI_ACCEPT, NULL, &accept);
+		auto it = request.header.fields.find("Accept");
 
 		// a very simple (and not recomended) way to check the accepted types
-		if (accept != NULL && strstr(accept, mime) == NULL && strstr(accept, "*/*") == NULL)
+		if (it != request.header.fields.end() && (it->second.find(mime) == std::string::npos && it->second.find("*/*") == std::string::npos))
 		{
-			WebsterSetStatus(response, 406);
-			WebsterSetStringField(response, "content-type", mime);
-			WebsterSetIntegerField(response, "content-length", (int) strlen(mime));
-			WebsterWriteString(response, mime);
+			response.header.status = 406;
+			response.header.fields["Content-Type"] = mime;
+			response.header.fields["Content-Length"] = std::to_string(strlen(mime));
+			response.write(mime);
 		}
 		else
 		{
-			WebsterSetStatus(response, 200);
+			response.header.status = 200;
 			main_downloadFile(response, fileName, (int) info.st_size);
 		}
 	}
 	else
 	if (result == WBERR_OK && info.st_mode & S_IFDIR)
 	{
-		WebsterSetStatus(response, 200);
+		response.header.status = 200;
 		main_listDirectory(response, fileName);
 	}
 	else
 	{
-		WebsterSetStatus(response, 404);
-		WebsterSetIntegerField(response, "Content-Length", 18);
-		WebsterWriteString(response, "<h1>Not found</h1>");
+		response.header.status = 404;
+		response.header.fields["Content-Length"] = "18";
+		response.write("<h1>Not found</h1>");
 	}
 
-	WebsterFinish(response);
+	response.finish();
 	if (fileName != NULL) free(fileName);
 	printf("\n");
 	return result;
 }
 
 #include <sys/time.h>
-
-//#define ENABLE_MEM_TEST
-
-#ifdef ENABLE_MEM_TEST
-
-static size_t total = 0;
-static size_t top = 0;
-
-static void *custom_malloc( size_t size )
-{
-	void *ptr = malloc(size + sizeof(size_t));
-	if (ptr)
-	{
-		*((size_t*)ptr) = size;
-		total += size;
-		if (total > top) top = total;
-	}
-	return (void*) ((uint8_t*) ptr + sizeof(size_t));
-}
-
-static void *custom_calloc( size_t num, size_t size )
-{
-	void *ptr = calloc(1, num * size + sizeof(size_t));
-	if (ptr)
-	{
-		*((size_t*)ptr) = num * size;
-		total += size * num;
-		if (total > top) top = total;
-	}
-	return (void*) ((uint8_t*) ptr + sizeof(size_t));
-}
-
-static void *custom_realloc( void *ptr, size_t size )
-{
-	if (ptr == NULL) return custom_malloc(size);
-
-	ptr = (uint8_t*) ptr - sizeof(size_t);
-	size_t bytes = *((size_t*)ptr);
-	void *nptr = realloc(ptr, size + sizeof(size_t));
-	if (nptr)
-	{
-		*((size_t*)nptr) = size;
-		total -= bytes;
-		total += size;
-		if (total > top) top = total;
-	}
-	return (void*) ((uint8_t*) nptr + sizeof(size_t));
-}
-
-static void custom_free( void *ptr )
-{
-	if (ptr == NULL) return;
-	ptr = (uint8_t*) ptr - sizeof(size_t);
-	size_t bytes = *((size_t*)ptr);
-	free(ptr);
-	total -= bytes;
-}
-
-webster_memory_t MEM_TEST_FUNCTIONS = {custom_malloc, custom_calloc, custom_realloc, custom_free};
-
-#endif
 
 int main(int argc, char* argv[])
 {
@@ -595,48 +487,31 @@ int main(int argc, char* argv[])
 	else
 		realpath(".", rootDirectory);
 
-	webster_server_t *server = NULL;
 
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
-	#ifdef ENABLE_MEM_TEST
-	webster_memory_t *mem = &MEM_TEST_FUNCTIONS;
-	#else
-	webster_memory_t *mem = NULL;
-	#endif
-
-	if (WebsterInitialize(mem) == WBERR_OK)
+	Server server;
+	Target target;
+	if (Target::parse("0.0.0.0:7000", target) != WBERR_OK) return 1;
+	if (server.start(target) == WBERR_OK)
 	{
-		if (WebsterCreate(&server, NULL) == WBERR_OK)
+		while (serverState == SERVER_RUNNING)
 		{
-			webster_target_t *target;
-			WebsterParseURL("0.0.0.0:7000", &target);
-			if (WebsterStart(server, target) == WBERR_OK)
+			Client *remote = nullptr;
+			int result = server.accept(&remote);
+			if (result == WBERR_OK)
 			{
-				while (serverState == SERVER_RUNNING)
-				{
-					webster_client_t *remote = NULL;
-					int result = WebsterAccept(server, &remote);
-					if (result == WBERR_OK)
-					{
-						// you problably should handle the client request in another thread
-						WebsterCommunicate(remote, NULL, main_serverHandler, NULL);
-						WebsterDisconnect(remote);
-					}
-					else
-					if (result != WBERR_TIMEOUT) break;
-				}
+				// you problably should handle the client request in another thread
+				remote->communicate("", main_serverHandler, NULL);
+				remote->disconnect();
 			}
-			WebsterFreeURL(target);
-			WebsterDestroy(server);
+			else
+			if (result != WBERR_TIMEOUT) break;
 		}
-		WebsterTerminate();
 	}
+	server.stop();
 
-	#ifdef ENABLE_MEM_TEST
-	printf("Memory peak: %lu bytes!\n", top);
-	#endif
 	printf("Server terminated!\n");
 
     return 0;

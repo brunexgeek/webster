@@ -725,7 +725,15 @@ int Message::flush()
 int Message::finish()
 {
 	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
-	if (!(flags_ & WBMT_OUTBOUND)) return WBERR_OK;
+	if (flags_ & WBMT_INBOUND)
+    {
+        int result = WBERR_OK;
+        const uint8_t *ptr;
+        int size;
+        while ((result = read(&ptr, &size)) == WBERR_OK);
+        if (result != WBERR_COMPLETE) return result;
+        return WBERR_OK;
+    }
 
 	int result = flush();
 	if (result != WBERR_OK) return result;

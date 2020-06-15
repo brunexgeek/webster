@@ -55,8 +55,7 @@ static std::string string_cut(
     return output;
 }
 
-static int hexDigit(
-    uint8_t digit )
+static int hex_digit( uint8_t digit )
 {
     if (digit >= '0' && digit <= '9')
         return digit - '0';
@@ -67,7 +66,7 @@ static int hexDigit(
     return 0;
 }
 
-static std::string http_decodeUrl( std::string input )
+std::string Target::decode( const std::string &input )
 {
     const uint8_t *i = (const uint8_t*) input.c_str();
     std::string out;
@@ -76,7 +75,7 @@ static std::string http_decodeUrl( std::string input )
     {
         if (*i == '%' && isxdigit(*(i + 1)) && isxdigit(*(i + 2)))
         {
-            out += (uint8_t) (hexDigit(*(i + 1)) * 16 + hexDigit(*(i + 2)));
+            out += (uint8_t) (hex_digit(*(i + 1)) * 16 + hex_digit(*(i + 2)));
             i += 3;
         }
         else
@@ -87,6 +86,30 @@ static std::string http_decodeUrl( std::string input )
     }
 
     return out;
+}
+
+std::string Target::encode( const std::string &input )
+{
+	const char *SYMBOLS = "0123456789abcdef";
+	std::string out;
+
+	for (char i : input)
+	{
+		uint8_t c = (uint8_t) i;
+		if ((c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') ||
+			c == '-' || c == '_' ||
+			c == '.' || c == '~')
+			out += i;
+		else
+		{
+			out += '%';
+			out += SYMBOLS[c >> 4];
+			out += SYMBOLS[c & 0x0F];
+		}
+	}
+	return out;
 }
 
 int Target::parse( const char *url, Target &target )
@@ -116,8 +139,8 @@ int Target::parse( const char *url, Target &target )
             target.path = std::string(url);
         }
 
-        http_decodeUrl(target.path);
-        http_decodeUrl(target.query);
+        Target::decode(target.path);
+        Target::decode(target.query);
     }
     else
     // handle absolute form
@@ -195,8 +218,8 @@ int Target::parse( const char *url, Target &target )
 		else
 			target.path = "/";
 
-		http_decodeUrl(target.path);
-        http_decodeUrl(target.query);
+		Target::decode(target.path);
+        Target::decode(target.query);
 	}
     else
     // handle authority form
@@ -247,15 +270,52 @@ Header::Header() : content_length(0), status(200), method(WBM_GET) {}
 Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
 	read_timeout(WBL_DEF_TIMEOUT)
 {
+    #ifdef WEBSTER_NO_DEFAULT_NETWORK
+	network = nullptr;
+	#else
+	network = DEFAULT_NETWORK;
+	#endif
 }
 
-Server::Server( Parameters params ) : params_(params), channel_(nullptr)
+Parameters::Parameters( const Parameters &that )
+{
+    #ifdef WEBSTER_NO_DEFAULT_NETWORK
+	network = nullptr;
+	#else
+	network = DEFAULT_NETWORK;
+	#endif
+
+    if (that.network) network = that.network;
+    max_clients = that.max_clients;
+    buffer_size = (uint32_t) (that.buffer_size + 3) & (uint32_t) (~3);
+    read_timeout = that.read_timeout;
+
+	if (max_clients <= 0)
+		max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if (max_clients > WBL_MAX_CONNECTIONS)
+		max_clients = WBL_MAX_CONNECTIONS;
+
+	if (buffer_size == 0)
+		buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if (buffer_size > WBL_MAX_BUFFER_SIZE)
+		buffer_size = WBL_MAX_BUFFER_SIZE;
+
+	if (read_timeout <= 0)
+		read_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (read_timeout > WBL_MAX_TIMEOUT)
+		read_timeout = WBL_MAX_TIMEOUT;
+}
+
+Server::Server() : channel_(nullptr)
 {
 }
 
-int Server::bind( const std::string &path, Handler handler )
+Server::Server( Parameters params ) : Server()
 {
-	return 0;
+	params_ = params;
 }
 
 int Server::start( const Target &target )
@@ -295,8 +355,13 @@ int Server::accept( Client **remote )
 	return WBERR_OK;
 }
 
-Client::Client( Parameters params ) : params_(params), channel_(nullptr)
+Client::Client() : channel_(nullptr)
 {
+}
+
+Client::Client( Parameters params ) : Client()
+{
+	params_ = params;
 }
 
 int Client::connect( const Target &target )
@@ -377,38 +442,6 @@ int Client::disconnect()
 {
 	params_.network->close(channel_);
 	return WBERR_OK;
-}
-
-Parameters::Parameters( const Parameters &that )
-{
-    #ifdef WEBSTER_NO_DEFAULT_NETWORK
-	network = nullptr;
-	#else
-	network = DEFAULT_NETWORK;
-	#endif
-
-    if (that.network) network = that.network;
-    max_clients = that.max_clients;
-    buffer_size = (uint32_t) (that.buffer_size + 3) & (uint32_t) (~3);
-    read_timeout = that.read_timeout;
-
-	if (max_clients <= 0)
-		max_clients = WBL_DEF_CONNECTIONS;
-	else
-	if (max_clients > WBL_MAX_CONNECTIONS)
-		max_clients = WBL_MAX_CONNECTIONS;
-
-	if (buffer_size == 0)
-		buffer_size = WBL_DEF_BUFFER_SIZE;
-	else
-	if (buffer_size > WBL_MAX_BUFFER_SIZE)
-		buffer_size = WBL_MAX_BUFFER_SIZE;
-
-	if (read_timeout <= 0)
-		read_timeout = WBL_DEF_TIMEOUT;
-	else
-	if (read_timeout > WBL_MAX_TIMEOUT)
-		read_timeout = WBL_MAX_TIMEOUT;
 }
 
 } // namespace webster

@@ -84,11 +84,11 @@ set_target_properties(example_client PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
 
-#add_executable(example_indexing "examples/indexing.c")
-#target_link_libraries(example_indexing libwebster)
-#target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
-#set_target_properties(example_indexing PROPERTIES
-#    OUTPUT_NAME "example_indexing"
-#    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-#    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-#    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
+add_executable(example_indexing "examples/indexing.cc")
+target_link_libraries(example_indexing libwebster_static)
+target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
+set_target_properties(example_indexing PROPERTIES
+    OUTPUT_NAME "example_indexing"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )

@@ -206,6 +206,8 @@ struct Target
 
     Target();
     static int parse( const char *url, Target &target );
+    static std::string encode( const std::string & value );
+    static std::string decode( const std::string & value );
 };
 
 enum Method
@@ -407,7 +409,6 @@ WEBSTER_EXPORTED class Server
         Server();
         Server( Parameters params );
         virtual ~Server() = default;
-        virtual int bind( const std::string &path, Handler handler );
         virtual int start( const Target &target );
         virtual int stop();
         virtual int accept( Client **remote );
