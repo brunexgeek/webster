@@ -73,6 +73,7 @@
 #define WBERR_SIGNAL                     -30
 #define WBERR_INVALID_TARGET             -31
 #define WBERR_INVALID_VALUE              -32
+#define WBERR_INVALID_HANDLER            -33
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -208,7 +209,7 @@ struct Target
     Target( const Target &that ) = default;
     Target( Target &&that ) = default;
     Target &operator=( const Target &that ) = default;
-    static int parse( const char *url, Target &target );
+    static int parse( const char *url, Target &target ); // TODO: make this dynamic
     static std::string encode( const std::string & value );
     static std::string decode( const std::string & value );
 };
@@ -246,7 +247,7 @@ struct Header
     int content_length;
     Target target;
     int status;
-    std::map<std::string, std::string, webster::less> fields;
+    std::map<std::string, std::string, webster::less> fields; // TODO: add 'get' and 'set' for integers and strings
     Method method;
 
     Header();
@@ -326,7 +327,20 @@ class Message
         virtual int finish() = 0;
 };
 
-typedef std::function<int(Message&,Message&)> Handler;
+//typedef std::function<int(Message&,Message&)> Handler;
+class Handler
+{
+    public:
+        Handler() = default;
+        Handler( const Handler & ) = default;
+        Handler( Handler && ) = default;
+        Handler( std::function<int(Message&,Message&)> );
+        Handler( int (&func)(Message&,Message&) );
+        virtual int operator()(Message&, Message&);
+        bool operator==( std::nullptr_t ) const;
+    protected:
+        std::function<int(Message&,Message&)> func_;
+};
 
 WEBSTER_EXPORTED class Server
 {
@@ -353,7 +367,7 @@ WEBSTER_EXPORTED class Client
         Client( Parameters params );
         virtual ~Client();
         virtual int connect( const Target &target );
-        virtual int communicate( const std::string &path, Handler handler );
+        virtual int communicate( const std::string &path, Handler &handler ); // TODO: create version which receives 'Target' instead of string
         virtual int disconnect();
         virtual const Parameters &get_parameters() const;
         virtual const Target &get_target() const;
@@ -368,7 +382,7 @@ class RemoteClient : public Client
     public:
         RemoteClient( Parameters params ) : Client(params) {}
         ~RemoteClient() = default;
-        int communicate( const std::string &path, Handler handler ) override;
+        int communicate( const std::string &path, Handler &handler ) override;
 };
 
 class MessageImpl : public Message

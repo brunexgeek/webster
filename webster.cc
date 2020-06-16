@@ -306,6 +306,26 @@ Parameters::Parameters( const Parameters &that )
 		read_timeout = WBL_MAX_TIMEOUT;
 }
 
+Handler::Handler( std::function<int(Message&,Message&)> func ) : func_(func)
+{
+}
+
+Handler::Handler( int (&func)(Message&,Message&) )
+{
+	func_ = std::function<int(Message&,Message&)>(func);
+}
+
+int Handler::operator()( Message &request, Message &response )
+{
+	if (func_ ==  nullptr) return WBERR_INVALID_HANDLER;
+	return func_(request, response);
+}
+
+bool Handler::operator==( std::nullptr_t ) const
+{
+	return func_ == nullptr;
+}
+
 Server::Server() : channel_(nullptr)
 {
 }
@@ -400,18 +420,15 @@ int Client::connect( const Target &target )
 	return WBERR_OK;
 }
 
-int Client::communicate( const std::string &path, Handler handler )
+int Client::communicate( const std::string &path, Handler &handler )
 {
-	int result = WBERR_OK;
-	if (handler == NULL) return WBERR_INVALID_ARGUMENT;
-
 	MessageImpl request;
 	MessageImpl response;
 
 	request.flags_ = WBMT_OUTBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
 	request.client_ = this;
-	result = Target::parse(path.c_str(), request.header.target);
+	int result = Target::parse(path.c_str(), request.header.target);
 	if (result != WBERR_OK) return result;
 
 	response.flags_ = WBMT_INBOUND | WBMT_RESPONSE;
@@ -436,12 +453,9 @@ const Target &Client::get_target() const
 	return target_;
 }
 
-int RemoteClient::communicate( const std::string &path, Handler handler )
+int RemoteClient::communicate( const std::string &path, Handler &handler )
 {
 	(void) path;
-
-	int result = WBERR_OK;
-	if (handler == NULL) return WBERR_INVALID_ARGUMENT;
 
 	MessageImpl request;
 	MessageImpl response;
@@ -450,7 +464,7 @@ int RemoteClient::communicate( const std::string &path, Handler handler )
 	request.channel_ = channel_;
 	request.client_ = this;
 
-	result = request.receiveHeader(params_.read_timeout);
+	int result = request.receiveHeader(params_.read_timeout);
 
 	if (result != WBERR_OK) return result;
 	response.flags_ = WBMT_OUTBOUND | WBMT_RESPONSE;

@@ -488,6 +488,7 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
+	Handler handler(main_serverHandler);
 	Server server;
 	Target target;
 	if (Target::parse("0.0.0.0:7000", target) != WBERR_OK) return 1;
@@ -499,9 +500,8 @@ int main(int argc, char* argv[])
 			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
-				std::cout << "Client accepted\n";
 				// you problably should handle the client request in another thread
-				remote->communicate("", main_serverHandler);
+				remote->communicate("", handler);
 				remote->disconnect();
 			}
 			else

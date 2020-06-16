@@ -75,11 +75,9 @@ static void main_signalHandler(
 #endif
 
 
-struct EchoHandler
+struct EchoHandler : public Handler
 {
-	int operator()(
-		Message &request,
-		Message &response )
+	int operator()( Message &request, Message &response )
 	{
 		// discards the body
 		const uint8_t *buffer;

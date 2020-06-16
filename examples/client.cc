@@ -55,10 +55,11 @@ int main( int argc, char **argv )
     Parameters params;
     Client client(params);
     Target target;
+    Handler handler(main_clientHandler);
     if (Target::parse("http://duckduckgo.com:80/", target) != WBERR_OK) return 1;
     if (client.connect(target) == WBERR_OK)
     {
-        client.communicate("/", main_clientHandler);
+        client.communicate("/", handler);
         client.disconnect();
     }
     else
