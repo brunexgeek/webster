@@ -49,9 +49,9 @@ endif()
 #    PREFIX "lib" )
 
 
-add_library(libwebster_static STATIC "source/api.cc" "source/message.cc" "source/network.cc")
+add_library(libwebster_static STATIC "webster.cc")
 target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
-target_include_directories(libwebster_static PUBLIC "include/")
+target_include_directories(libwebster_static PUBLIC ".")
 set_target_properties(libwebster_static PROPERTIES
     OUTPUT_NAME "webster"
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"

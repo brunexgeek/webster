@@ -15,7 +15,7 @@
  *   limitations under the License.
  */
 
-#include <webster/api.hh>
+#include <webster.hh>
 #include <limits.h>
 #include <stdio.h>
 #include <signal.h>
@@ -85,7 +85,7 @@ struct EchoHandler
 		const uint8_t *buffer;
 		int size;
 		while (request.read(&buffer, &size) == WBERR_OK);
-	std::cout << "Received everything!\n";
+
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";
 		response.write("<html><head><title>");

@@ -15,7 +15,7 @@
  *   limitations under the License.
  */
 
-#include <webster/api.hh>
+#include <webster.hh>
 #include <limits.h>
 #include <stdio.h>
 #include <signal.h>
@@ -499,6 +499,7 @@ int main(int argc, char* argv[])
 			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
+				std::cout << "Client accepted\n";
 				// you problably should handle the client request in another thread
 				remote->communicate("", main_serverHandler);
 				remote->disconnect();

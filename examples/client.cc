@@ -15,7 +15,7 @@
  *   limitations under the License.
  */
 
-#include <webster/api.hh>
+#include <webster.hh>
 #include <iostream>
 #include <cstring>
 
