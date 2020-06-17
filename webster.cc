@@ -869,7 +869,7 @@ MessageImpl::~MessageImpl()
     if (buffer_.data != nullptr) delete[] buffer_.data;
 }
 
-static uint64_t webster_tick()
+uint64_t tick()
 {
 	#ifdef WB_WINDOWS
 	return GetTickCount64();
@@ -899,16 +899,14 @@ int MessageImpl::receiveHeader( int timeout )
 	// Note: when reading input data we leave room in the buffer for a null-terminator
 	//       so we can manipulate its content as a string.
 
+	uint64_t start = tick();
 	while (true)
 	{
 		uint32_t bytes = (uint32_t) buffer_.size - (uint32_t) buffer_.pending - 1;
-		if (bytes == 0) return WBERR_TOO_LONG;
+		if (bytes == 0) return WBERR_TOO_LONG; // header do not fit in the buffer
 
 		// receive new data and adjust pending information
-		uint64_t startTime = webster_tick();
 		result = client_->get_parameters().network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
-		if (timeout > 0) timeout = timeout - (int) (webster_tick() - startTime);
-
 		if (result == WBERR_OK)
 		{
 			buffer_.pending += (int) bytes;
@@ -919,10 +917,9 @@ int MessageImpl::receiveHeader( int timeout )
 			if (ptr != NULL) break;
 		}
 		else
-		if (result != WBERR_TIMEOUT && result != WBERR_SIGNAL)
-			return result;
+		if (result != WBERR_NO_DATA && result != WBERR_SIGNAL) return result;
 
-		if (timeout <= 0) return WBERR_TIMEOUT;
+		if (tick() - start > (uint64_t) timeout) return WBERR_TIMEOUT;
 	}
 
 	*(ptr + 3) = 0;

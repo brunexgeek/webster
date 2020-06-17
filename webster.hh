@@ -195,6 +195,8 @@
 
 namespace webster {
 
+uint64_t tick();
+
 struct Target
 {
     int type;
