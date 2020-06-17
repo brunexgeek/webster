@@ -362,7 +362,7 @@ int Server::stop()
 int Server::accept( std::shared_ptr<Client> &remote )
 {
 	Channel *channel = NULL;
-	int result = params_.network->accept(channel_, &channel);
+	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
 	if (result != WBERR_OK) return result;
 
 	remote = std::shared_ptr<Client>(new (std::nothrow) RemoteClient(params_));
@@ -1297,7 +1297,6 @@ int MessageImpl::finish()
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 typedef SSIZE_T ssize_t;
-CRITICAL_SECTION network_mutex;
 #else
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -1424,8 +1423,12 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	network_lookupIPv4(host, &address);
 
 	address.sin_port = htons( (uint16_t) port );
-	if (::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
+	int result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
+	if (result < 0)
+	{
+		if (errno == ETIMEDOUT) return WBERR_TIMEOUT;
 		return WBERR_SOCKET;
+	}
 
 	return WBERR_OK;
 }
@@ -1451,14 +1454,14 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, uint32_t *size, i
 	if (result == EINTR) return WBERR_SIGNAL;
 	if (result < 0) return WBERR_SOCKET;
 
-	ssize_t bytes = ::recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
-	if (bytes == ECONNRESET || bytes == EPIPE || bytes == ENOTCONN || bytes == 0)
-		return WBERR_NOT_CONNECTED;
-	else
-	if (bytes < 0)
+	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
+	if (bytes == 0 || bytes < 0)
 	{
 		*size = 0;
-		if (bytes == EWOULDBLOCK || bytes == EAGAIN) return WBERR_NO_DATA;
+		if (bytes == 0 || errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
+			return WBERR_NOT_CONNECTED;
+		if (errno == EWOULDBLOCK || errno == EAGAIN)
+			return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
 	*size = (uint32_t) bytes;
@@ -1479,26 +1482,28 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, uint32_t size 
 	int flags = MSG_NOSIGNAL;
 	#endif
 	ssize_t result = ::send(chann->socket, (const char *) buffer, (size_t) size, flags);
-	if (result == ECONNRESET || result == EPIPE || result == ENOTCONN)
-		return WBERR_NOT_CONNECTED;
-	else
 	if (result < 0)
+	{
+		if (errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
+			return WBERR_NOT_CONNECTED;
 		return WBERR_SOCKET;
+	}
 
 	return WBERR_OK;
 }
 
-int SocketNetwork::accept( Channel *channel, Channel **client )
+int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
 	if (client == NULL) return WBERR_INVALID_ARGUMENT;
+	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
 	#ifdef WB_WINDOWS
-	int result = WSAPoll(&chann->poll, 1, 10000);
+	int result = WSAPoll(&chann->poll, 1, timeout);
 	#else
-	int result = poll(&chann->poll, 1, 10000);
+	int result = poll(&chann->poll, 1, timeout);
 	#endif
 	if (result == 0) return WBERR_TIMEOUT;
 	if (result == EINTR) return WBERR_SIGNAL;
@@ -1517,20 +1522,25 @@ int SocketNetwork::accept( Channel *channel, Channel **client )
 	#endif
 	addressLength = sizeof(address);
 	socket = ::accept(chann->socket, (struct sockaddr *) &address, &addressLength);
-
 	if (socket < 0)
 	{
 		delete (SocketChannel*)*client;
 		*client = NULL;
-		if (socket == EAGAIN || socket == EWOULDBLOCK)
-			return WBERR_NO_CLIENT;
-		else
-			return WBERR_SOCKET;
+		if (errno == EMFILE || errno == ENFILE)
+			return WBERR_NO_RESOURCES;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return WBERR_TIMEOUT;
+		if (errno == ENOBUFS || errno == ENOMEM)
+			return WBERR_MEMORY_EXHAUSTED;
+		return WBERR_SOCKET;
 	}
-
 	((SocketChannel*)*client)->socket = socket;
 	((SocketChannel*)*client)->poll.fd = socket;
 	((SocketChannel*)*client)->poll.events = POLLIN;
+
+	// allow socket descriptor to be reuseable
+	int on = 1;
+	::setsockopt(chann->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
 
 	return WBERR_OK;
 }

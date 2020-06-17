@@ -75,6 +75,7 @@
 #define WBERR_INVALID_VALUE              -32
 #define WBERR_INVALID_HANDLER            -33
 #define WBERR_NOT_IMPLEMENTED            -34
+#define WBERR_NO_RESOURCES               -35
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
@@ -308,7 +309,7 @@ class Network
         virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
         virtual int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout ) = 0;
         virtual int send( Channel *channel, const uint8_t *buffer, uint32_t size ) = 0;
-        virtual int accept( Channel *channel, Channel **client ) = 0;
+        virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
 };
 
@@ -323,7 +324,7 @@ class SocketNetwork : public Network
         int connect( Channel *channel, int scheme, const char *host, int port );
         int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout );
         int send( Channel *channel, const uint8_t *buffer, uint32_t size );
-        int accept( Channel *channel, Channel **client );
+        int accept( Channel *channel, Channel **client, int timeout );
         int listen( Channel *channel, const char *host, int port, int maxClients );
 };
 #endif
