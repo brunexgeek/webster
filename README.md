@@ -1,6 +1,6 @@
 # Webster  ![GitHub](https://img.shields.io/github/license/brunexgeek/webster)
 
-Lightweight framework to create HTTP servers and clients in C++11. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying custom network functions (check ``WebsterCreate`` and ``WebsterConnect`` functions). There is only two files to include in your projects: ``webster.cc`` and ``webster.hh``. Optionally, you can build Webster as shared or static library.
+Lightweight framework to create HTTP servers and clients in C++11. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying custom network stack. There is only two files to include in your projects: ``webster.cc`` and ``webster.hh``.
 
 Webster enables you to communicate with HTTP servers or implement your own HTTP server. It automatically parses requests and also simplify creating responses. The input/output body data is handled as a stream: to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amount of data using less memory.
 
@@ -16,107 +16,86 @@ The repository also includes three programs in the ``examples`` directory:
 
 ## Client implementation
 
-To send a message to a HTTP server, just create a client entity and start the communication:
+To send a message to a HTTP server, just create a client object and start the communication:
 
-``` c
-webster_client_t client;
-// connect to duckduckgo.com:80
-webster_target_t *url;
-WebsterParseURL("http://duckduckgo.com:80/", &url);
-
-if (WebsterConnect(&client, url, NULL) == WBERR_OK)
+``` c++
+// parse the URL
+Target target;
+Target::parse("http://duckduckgo.com:80/", target);
+// create the handler using a function
+Handler handler(my_client_handler);
+Client client;
+if (client.connect(target) == WBERR_OK)
 {
-    // start the communication with path "/"
-    WebsterCommunicate(&client, url, clientHandler, NULL);
-    WebsterDisconnect(&client);
+    // use the handler to send a request to "/"
+    client.communicate("/", handler);
+    client.disconnect();
 }
 ```
 
-In the example above, the ``clientHandler`` is the function which send the request and receive the response. That function looks like this:
+In the example above, the ``my_client_handler`` is the function which send the request and receive the response. That function looks like this:
 
-``` c
-int clientHandler(
-    webster_message_t *request,
-    webster_message_t *response,
-    void *data )
+``` c++
+int my_client_handler( Message &request, Message &response )
 {
     // send a HTTP request
-    WebsterSetIntegerField(request, "content-length", 0);
-    WebsterSetStringField(request, "connection", "close");
-    WebsterFinish(request);
+    request.header.fields["Connection"] = "close";
+    request.header.fields.set(WBFI_CONTENT_LENGTH, 0);
+    request.finish();
 
-    webster_event_t event;
-    const webster_header_t *header;
-    do
-    {
-        // wait for response data
-        int result = WebsterWaitEvent(response, &event);
-        if (result == WBERR_COMPLETE) break;
-        if (result == WBERR_NO_DATA) continue;
-        if (result != WBERR_OK) break;
-
-        if (result == WBERR_OK)
-        {
-            // check if received the HTTP header
-            if (event.type ==  WBT_HEADER)
-            {
-                printf("Waiting for body\n");
-            }
-            else
-            // check if we received the HTTP body (or part of it)
-            if (event.type == WBT_BODY)
-            {
-                const uint8_t *ptr = NULL;
-                int size = 0;
-                WebsterReadData(response, &ptr, &size);
-                for (int i = 0; i < size; ++i)
-                {
-                    if (i != 0 && i % 32 == 0) printf("\n");
-                    printf("%02X ", ptr[i]);
-                }
-            }
-        }
-    } while (1);
-
-    WebsterFinish(response);
+    // wait for response headers
+    response.wait();
+    // read response body as text
+    const char *ptr = nullptr;
+    while (response.read(&ptr) == WBERR_OK)
+        std::cout << ptr << std::endl;
 
     return WBERR_OK;
 }
 ```
 
-The source file ``examples/client.c`` contains a complete example of a client program.
+It's also possible to implement a handler by specializing the class ``Handler`` with a new implementation for ``operator()``.
+
+``` c++
+struct MyHandler : public Handler
+{
+	int operator()( Message &request, Message &response )
+	{
+        ...
+    }
+};
+```
+
+The directory ``examples`` contains some example programs for client and server.
 
 ## Server implementation
 
 The server keeps listening for connections and handle each one of them. To start the server, do something like:
 
-``` c
-webster_server_t server;
-if (WebsterCreate(&server, NULL) == WBERR_OK)
+``` c++
+Target target;
+Target::parse("localhost:7000", target);
+Server server;
+if (server.start(target) == WBERR_OK)
 {
-    webster_target_t *target;
-	WebsterParseURL("0.0.0.0:7000", &target);
-    if (WebsterStart(&server, target) == WBERR_OK)
+    EchoHandler handler(my_server_handler);
+    while (is_running)
     {
-        while (serverState == SERVER_RUNNING)
+        std::shared_ptr<Client> remote;
+        int result = server.accept(remote);
+        if (result == WBERR_OK)
         {
-            webster_client_t *remote = NULL;
-            int result = WebsterAccept(server, &remote);
-            if (result == WBERR_OK)
-            {
-                // you problably should handle the client request in another thread
-                WebsterCommunicate(remote, NULL, serverHandler, NULL);
-                WebsterDisconnect(remote);
-            }
-            else
-            if (result != WBERR_TIMEOUT) break;
+            remote->communicate("", handler);
+            remote->disconnect();
         }
+        else
+        if (result != WBERR_TIMEOUT) break;
     }
-    WebsterDestroy(&server);
 }
+server.stop();
 ```
 
-Note that the server also uses ``WebsterCommunicate`` since remote connections are client entities. In the example above, the ``serverHandler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler. For more details in the server implementation, see the file ``examples/echo.c`` or ``examples/indexing.c``.
+In the example above, the ``my_server_handler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler, however the request must be read not written. For more details in the server implementation, see the file ``examples/echo.cc`` or ``examples/indexing.cc``.
 
 ## Features
 

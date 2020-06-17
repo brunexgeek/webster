@@ -358,6 +358,7 @@ class Message
         virtual int write( const uint8_t *buffer, int size ) = 0;
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
+        virtual int wait() = 0;
         virtual int flush() = 0;
         virtual int finish() = 0;
 };
@@ -431,6 +432,7 @@ class MessageImpl : public Message
         int write( const uint8_t *buffer, int size );
         int write( const char *buffer );
         int write( const std::string &buffer );
+        int wait();
         int flush();
         int finish();
 

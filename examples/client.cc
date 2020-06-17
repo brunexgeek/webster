@@ -35,12 +35,8 @@ static int main_clientHandler(
     request.finish();
 
     const char *ptr = nullptr;
-    while (true)
-    {
-        int result = response.read(&ptr);
-        if (result != WBERR_OK) break;
+    while (response.read(&ptr) == WBERR_OK)
         std::cout << ptr << std::endl;
-    }
 
     return WBERR_OK;
 }

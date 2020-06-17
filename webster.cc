@@ -927,7 +927,8 @@ uint64_t tick()
  */
 int MessageImpl::receive_header( int timeout )
 {
-	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
+	if (state_ != WBS_IDLE || !(flags_ & WBMT_INBOUND))
+		return WBERR_INVALID_STATE;
 	state_ = WBS_HEADER;
 
 	char *ptr = NULL;
@@ -1003,7 +1004,8 @@ int MessageImpl::chunk_size( int timeout )
  */
 int MessageImpl::receive_body( int timeout )
 {
-	if (state_ != WBS_HEADER && state_ != WBS_BODY) return WBERR_INVALID_STATE;
+	if ((state_ != WBS_HEADER && state_ != WBS_BODY) || !(flags_ & WBMT_INBOUND))
+		return WBERR_INVALID_STATE;
 	state_ = WBS_BODY;
 	if (timeout < 0) timeout = 0;
 
@@ -1084,6 +1086,13 @@ int MessageImpl::read( std::string &buffer )
 	const char *ptr;
 	int result = read(&ptr);
 	buffer = ptr;
+	return result;
+}
+
+int MessageImpl::wait()
+{
+	int result = read(nullptr, nullptr);
+	if (result == WBERR_INVALID_ARGUMENT) result = WBERR_OK;
 	return result;
 }
 
