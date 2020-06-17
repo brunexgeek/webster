@@ -92,74 +92,77 @@
 
 #define WBO_BUFFER_SIZE                  1
 
-#define WBFI_NON_STANDARD                               0
-#define WBFI_ACCEPT                                    10
-#define WBFI_ACCEPT_CHARSET                            20
-#define WBFI_ACCEPT_ENCODING                           30
-#define WBFI_ACCEPT_LANGUAGE                           40
-#define WBFI_ACCEPT_PATCH                              50
-#define WBFI_ACCEPT_RANGES                             60
-#define WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS          70
-#define WBFI_ACCESS_CONTROL_ALLOW_HEADERS              80
-#define WBFI_ACCESS_CONTROL_ALLOW_METHODS              90
-#define WBFI_ACCESS_CONTROL_ALLOW_ORIGIN              100
-#define WBFI_ACCESS_CONTROL_EXPOSE_HEADERS            110
-#define WBFI_ACCESS_CONTROL_MAX_AGE                   120
-#define WBFI_ACCESS_CONTROL_REQUEST_HEADERS           130
-#define WBFI_ACCESS_CONTROL_REQUEST_METHOD            140
-#define WBFI_AGE                                      150 // RFC-7234
-#define WBFI_ALLOW                                    160
-#define WBFI_ALT_SVC                                  170
-#define WBFI_AUTHORIZATION                            180
-#define WBFI_CACHE_CONTROL                            190
-#define WBFI_CONNECTION                               200
-#define WBFI_CONTENT_DISPOSITION                      210
-#define WBFI_CONTENT_ENCODING                         220
-#define WBFI_CONTENT_LANGUAGE                         230
-#define WBFI_CONTENT_LENGTH                           240
-#define WBFI_CONTENT_LOCATION                         250
-#define WBFI_CONTENT_RANGE                            260
-#define WBFI_CONTENT_TYPE                             270
-#define WBFI_COOKIE                                   280
-#define WBFI_DATE                                     290
-#define WBFI_DNT                                      300
-#define WBFI_ETAG                                     310
-#define WBFI_EXPECT                                   320
-#define WBFI_EXPIRES                                  330
-#define WBFI_FORWARDED                                340
-#define WBFI_FROM                                     350
-#define WBFI_HOST                                     360
-#define WBFI_IF_MATCH                                 370
-#define WBFI_IF_MODIFIED_SINCE                        380
-#define WBFI_IF_NONE_MATCH                            390
-#define WBFI_IF_RANGE                                 400
-#define WBFI_IF_UNMODIFIED_SINCE                      410
-#define WBFI_LAST_MODIFIED                            420
-#define WBFI_LINK                                     430
-#define WBFI_LOCATION                                 440
-#define WBFI_MAX_FORWARDS                             450
-#define WBFI_ORIGIN                                   470
-#define WBFI_PRAGMA                                   480
-#define WBFI_PROXY_AUTHENTICATE                       490
-#define WBFI_PROXY_AUTHORIZATION                      500
-#define WBFI_PUBLIC_KEY_PINS                          510
-#define WBFI_RANGE                                    520
-#define WBFI_REFERER                                  530
-#define WBFI_RETRY_AFTER                              540
-#define WBFI_SERVER                                   550
-#define WBFI_SET_COOKIE                               560
-#define WBFI_STRICT_TRANSPORT_SECURITY                570
-#define WBFI_TE                                       580
-#define WBFI_TK                                       590
-#define WBFI_TRAILER                                  600
-#define WBFI_TRANSFER_ENCODING                        610
-#define WBFI_UPGRADE                                  620
-#define WBFI_UPGRADE_INSECURE_REQUESTS                630
-#define WBFI_USER_AGENT                               640
-#define WBFI_VARY                                     650
-#define WBFI_VIA                                      660
-#define WBFI_WARNING                                  670
-#define WBFI_WWW_AUTHENTICATE                         680
+enum FieldID
+{
+    WBFI_NON_STANDARD = 0,
+    WBFI_ACCEPT,
+    WBFI_ACCEPT_CHARSET,
+    WBFI_ACCEPT_ENCODING,
+    WBFI_ACCEPT_LANGUAGE,
+    WBFI_ACCEPT_PATCH,
+    WBFI_ACCEPT_RANGES,
+    WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS,
+    WBFI_ACCESS_CONTROL_ALLOW_HEADERS,
+    WBFI_ACCESS_CONTROL_ALLOW_METHODS,
+    WBFI_ACCESS_CONTROL_ALLOW_ORIGIN,
+    WBFI_ACCESS_CONTROL_EXPOSE_HEADERS,
+    WBFI_ACCESS_CONTROL_MAX_AGE,
+    WBFI_ACCESS_CONTROL_REQUEST_HEADERS,
+    WBFI_ACCESS_CONTROL_REQUEST_METHOD,
+    WBFI_AGE, // RFC-7234
+    WBFI_ALLOW,
+    WBFI_ALT_SVC,
+    WBFI_AUTHORIZATION,
+    WBFI_CACHE_CONTROL,
+    WBFI_CONNECTION,
+    WBFI_CONTENT_DISPOSITION,
+    WBFI_CONTENT_ENCODING,
+    WBFI_CONTENT_LANGUAGE,
+    WBFI_CONTENT_LENGTH,
+    WBFI_CONTENT_LOCATION,
+    WBFI_CONTENT_RANGE,
+    WBFI_CONTENT_TYPE,
+    WBFI_COOKIE,
+    WBFI_DATE,
+    WBFI_DNT,
+    WBFI_ETAG,
+    WBFI_EXPECT,
+    WBFI_EXPIRES,
+    WBFI_FORWARDED,
+    WBFI_FROM,
+    WBFI_HOST,
+    WBFI_IF_MATCH,
+    WBFI_IF_MODIFIED_SINCE,
+    WBFI_IF_NONE_MATCH,
+    WBFI_IF_RANGE,
+    WBFI_IF_UNMODIFIED_SINCE,
+    WBFI_LAST_MODIFIED,
+    WBFI_LINK,
+    WBFI_LOCATION,
+    WBFI_MAX_FORWARDS,
+    WBFI_ORIGIN,
+    WBFI_PRAGMA,
+    WBFI_PROXY_AUTHENTICATE,
+    WBFI_PROXY_AUTHORIZATION,
+    WBFI_PUBLIC_KEY_PINS,
+    WBFI_RANGE,
+    WBFI_REFERER,
+    WBFI_RETRY_AFTER,
+    WBFI_SERVER,
+    WBFI_SET_COOKIE,
+    WBFI_STRICT_TRANSPORT_SECURITY,
+    WBFI_TE,
+    WBFI_TK,
+    WBFI_TRAILER,
+    WBFI_TRANSFER_ENCODING,
+    WBFI_UPGRADE,
+    WBFI_UPGRADE_INSECURE_REQUESTS,
+    WBFI_USER_AGENT,
+    WBFI_VARY,
+    WBFI_VIA,
+    WBFI_WARNING,
+    WBFI_WWW_AUTHENTICATE,
+};
 
 #define WBRT_ORIGIN      0x01
 #define WBRT_AUTHORITY   0x02
@@ -245,12 +248,48 @@ struct less
     }
 };
 
+class HeaderFields : public std::map<std::string, std::string, webster::less>
+{
+    public:
+        using std::map<std::string, std::string, webster::less>::count;
+        std::string get( const std::string &name )  const;
+        std::string get( FieldID id )  const;
+        std::string get( const std::string &name, const std::string &value )  const;
+        std::string get( FieldID id, const std::string &value )  const;
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+        T get( const std::string &name, T value )  const
+        {
+            auto it = find(name);
+            if (it == end()) return value;
+            return (T) strtol(it->second.c_str(), nullptr, 10);
+        }
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+        T get( FieldID id, T value ) const
+        {
+            return get(get_name(id), value);
+        }
+        void set( const std::string &name, const std::string &value );
+        void set( FieldID id, const std::string &value );
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+        void set( const std::string &name, T value )
+        {
+            set(name, std::to_string(value));
+        }
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+        void set( FieldID id, T value )
+        {
+            set(get_name(id), std::to_string(value));
+        }
+        size_t count( FieldID id ) const;
+        static const char *get_name( FieldID id );
+};
+
 struct Header
 {
     int content_length;
     Target target;
     int status;
-    std::map<std::string, std::string, webster::less> fields; // TODO: add 'get' and 'set' for integers and strings
+    HeaderFields fields;
     Method method;
 
     Header();

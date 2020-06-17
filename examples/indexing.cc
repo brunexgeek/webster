@@ -137,20 +137,6 @@ static int serverState = SERVER_RUNNING;
 
 static char rootDirectory[PATH_LENGTH];
 
-static const char *HTTP_METHODS[] =
-{
-    "",
-    "GET",
-    "HEAD",
-    "POST",
-    "PUT",
-    "DELETE",
-    "CONNECT",
-    "OPTIONS",
-    "TRACE"
-};
-
-
 #if defined(_WIN32) || defined(WIN32)
 
 static BOOL WINAPI main_signalHandler(

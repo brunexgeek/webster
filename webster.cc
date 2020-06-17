@@ -623,78 +623,120 @@ const char *http_statusMessage( int status )
     }
     return "";
 }
-/*
-webster_field_info_t HTTP_HEADER_FIELDS[] =
+
+static const char* HTTP_HEADER_FIELDS[] =
 {
-    { "Accept"                          , WBFI_ACCEPT },
-    { "Accept-Charset"                  , WBFI_ACCEPT_CHARSET },
-    { "Accept-Encoding"                 , WBFI_ACCEPT_ENCODING },
-    { "Accept-Language"                 , WBFI_ACCEPT_LANGUAGE },
-    { "Accept-Patch"                    , WBFI_ACCEPT_PATCH },
-    { "Accept-Ranges"                   , WBFI_ACCEPT_RANGES },
-    { "Access-Control-Allow-Credentials", WBFI_ACCESS_CONTROL_ALLOW_CREDENTIALS },
-    { "Access-Control-Allow-Headers"    , WBFI_ACCESS_CONTROL_ALLOW_HEADERS },
-    { "Access-Control-Allow-Methods"    , WBFI_ACCESS_CONTROL_ALLOW_METHODS },
-    { "Access-Control-Allow-Origin"     , WBFI_ACCESS_CONTROL_ALLOW_ORIGIN },
-    { "Access-Control-Expose-Headers"   , WBFI_ACCESS_CONTROL_EXPOSE_HEADERS },
-    { "Access-Control-Max-Age"          , WBFI_ACCESS_CONTROL_MAX_AGE },
-    { "Access-Control-Request-Headers"  , WBFI_ACCESS_CONTROL_REQUEST_HEADERS },
-    { "Access-Control-Request-Method"   , WBFI_ACCESS_CONTROL_REQUEST_METHOD },
-    { "Age"                             , WBFI_AGE },
-    { "Allow"                           , WBFI_ALLOW },
-    { "Alt-Svc"                         , WBFI_ALT_SVC },
-    { "Authorization"                   , WBFI_AUTHORIZATION },
-    { "Cache-Control"                   , WBFI_CACHE_CONTROL },
-    { "Connection"                      , WBFI_CONNECTION },
-    { "Content-Disposition"             , WBFI_CONTENT_DISPOSITION },
-    { "Content-Encoding"                , WBFI_CONTENT_ENCODING },
-    { "Content-Language"                , WBFI_CONTENT_LANGUAGE },
-    { "Content-Length"                  , WBFI_CONTENT_LENGTH },
-    { "Content-Location"                , WBFI_CONTENT_LOCATION },
-    { "Content-Range"                   , WBFI_CONTENT_RANGE },
-    { "Content-Type"                    , WBFI_CONTENT_TYPE },
-    { "Cookie"                          , WBFI_COOKIE },
-    { "Date"                            , WBFI_DATE },
-    { "DNT"                             , WBFI_DNT },
-    { "ETag"                            , WBFI_ETAG },
-    { "Expect"                          , WBFI_EXPECT },
-    { "Expires"                         , WBFI_EXPIRES },
-    { "Forwarded"                       , WBFI_FORWARDED },
-    { "From"                            , WBFI_FROM },
-    { "Host"                            , WBFI_HOST },
-    { "If-Match"                        , WBFI_IF_MATCH },
-    { "If-Modified-Since"               , WBFI_IF_MODIFIED_SINCE },
-    { "If-None-Match"                   , WBFI_IF_NONE_MATCH },
-    { "If-Range"                        , WBFI_IF_RANGE },
-    { "If-Unmodified-Since"             , WBFI_IF_UNMODIFIED_SINCE },
-    { "Last-Modified"                   , WBFI_LAST_MODIFIED },
-    { "Link"                            , WBFI_LINK },
-    { "Location"                        , WBFI_LOCATION },
-    { "Max-Forwards"                    , WBFI_MAX_FORWARDS },
-    { "Origin"                          , WBFI_ORIGIN },
-    { "Pragma"                          , WBFI_PRAGMA },
-    { "Proxy-Authenticate"              , WBFI_PROXY_AUTHENTICATE },
-    { "Proxy-Authorization"             , WBFI_PROXY_AUTHORIZATION },
-    { "Public-Key-Pins"                 , WBFI_PUBLIC_KEY_PINS },
-    { "Range"                           , WBFI_RANGE },
-    { "Referer"                         , WBFI_REFERER },
-    { "Retry-After"                     , WBFI_RETRY_AFTER },
-    { "Server"                          , WBFI_SERVER },
-    { "Set-Cookie"                      , WBFI_SET_COOKIE },
-    { "Strict-Transport-Security"       , WBFI_STRICT_TRANSPORT_SECURITY },
-    { "TE"                              , WBFI_TE },
-    { "Tk"                              , WBFI_TK },
-    { "Trailer"                         , WBFI_TRAILER },
-    { "Transfer-Encoding"               , WBFI_TRANSFER_ENCODING },
-    { "Upgrade"                         , WBFI_UPGRADE },
-    { "Upgrade-Insecure-Requests"       , WBFI_UPGRADE_INSECURE_REQUESTS },
-    { "User-Agent"                      , WBFI_USER_AGENT },
-    { "Vary"                            , WBFI_VARY },
-    { "Via"                             , WBFI_VIA },
-    { "Warning"                         , WBFI_WARNING },
-    { "WWW-Authenticate"                , WBFI_WWW_AUTHENTICATE },
+	"",
+    "Accept",
+    "Accept-Charset",
+    "Accept-Encoding",
+    "Accept-Language",
+    "Accept-Patch",
+    "Accept-Ranges",
+    "Access-Control-Allow-Credentials",
+    "Access-Control-Allow-Headers",
+    "Access-Control-Allow-Methods",
+    "Access-Control-Allow-Origin",
+    "Access-Control-Expose-Headers",
+    "Access-Control-Max-Age",
+    "Access-Control-Request-Headers",
+    "Access-Control-Request-Method",
+    "Age",
+    "Allow",
+    "Alt-Svc",
+    "Authorization",
+    "Cache-Control",
+    "Connection",
+    "Content-Disposition",
+    "Content-Encoding",
+    "Content-Language",
+    "Content-Length",
+    "Content-Location",
+    "Content-Range",
+    "Content-Type",
+    "Cookie",
+    "Date",
+    "DNT",
+    "ETag",
+    "Expect",
+    "Expires",
+    "Forwarded",
+    "From",
+    "Host",
+    "If-Match",
+    "If-Modified-Since",
+    "If-None-Match",
+    "If-Range",
+    "If-Unmodified-Since",
+    "Last-Modified",
+    "Link",
+    "Location",
+    "Max-Forwards",
+    "Origin",
+    "Pragma",
+    "Proxy-Authenticate",
+    "Proxy-Authorization",
+    "Public-Key-Pins",
+    "Range",
+    "Referer",
+    "Retry-After",
+    "Server",
+    "Set-Cookie",
+    "Strict-Transport-Security",
+    "TE",
+    "Tk",
+    "Trailer",
+    "Transfer-Encoding",
+    "Upgrade",
+    "Upgrade-Insecure-Requests",
+    "User-Agent",
+    "Vary",
+    "Via",
+    "Warning",
+    "WWW-Authenticate",
 };
-*/
+
+std::string HeaderFields::get( const std::string &name )  const
+{
+	return get(name, "");
+}
+
+std::string HeaderFields::get( const std::string &name, const std::string &value )  const
+{
+	auto it = find(name);
+	if (it == end()) return value;
+	return it->second;
+}
+
+std::string HeaderFields::get( FieldID id )  const
+{
+	return get(get_name(id), "");
+}
+
+std::string HeaderFields::get( FieldID id, const std::string &value )  const
+{
+	return get(get_name(id), value);
+}
+
+void HeaderFields::set( const std::string &name, const std::string &value )
+{
+	(*this)[name] = value;
+}
+void HeaderFields::set( FieldID id, const std::string &value )
+{
+	set(get_name(id), value);
+}
+
+HeaderFields::size_type HeaderFields::count( FieldID id ) const
+{
+	return count(get_name(id));
+}
+
+const char *HeaderFields::get_name( FieldID id )
+{
+	if (id < WBFI_ACCEPT || id > WBFI_WWW_AUTHENTICATE) return "";
+	return HTTP_HEADER_FIELDS[(int)id];
+}
 
 char *http_removeTrailing( char *text )
 {
@@ -823,7 +865,7 @@ int MessageImpl::parse( char *data )
 
             // ignore trailing whitespaces in the value
             value = http_removeTrailing(value);
-            header.fields.insert( std::pair<std::string, std::string>(name, value) );
+            header.fields.set(name, value);
             if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
             {
                 header.content_length = (int) strtol(value, nullptr, 10);
@@ -1146,15 +1188,19 @@ int MessageImpl::writeHeader()
 		compute_resource_line(ss);
 
 	// set 'tranfer-encoding' to chunked if required
-	auto it = header.fields.find("Content-Length");
-	if (it == header.fields.end())
+	if (header.fields.count(WBFI_CONTENT_LENGTH) == 0)
 	{
 		body_.flags |= WBMF_CHUNKED;
 		// TODO: merge with previously set value, if any
-		header.fields["Transfer-Encoding"] = "chunked";
+		header.fields.set(WBFI_TRANSFER_ENCODING, "chunked");
 	}
-	if (flags_ & WBMT_REQUEST && header.fields.count("Host") == 0)
-		header.fields["Host"] = client_->get_target().host + ':' + std::to_string(client_->get_target().port);
+	if (flags_ & WBMT_REQUEST && header.fields.count(WBFI_HOST) == 0)
+	{
+		std::string host = client_->get_target().host;
+		host += ':';
+		host += std::to_string(client_->get_target().port);
+		header.fields.set(WBFI_HOST, host);
+	}
 
 	for (auto item : header.fields)
 		ss << item.first << ": " << item.second << "\r\n";
