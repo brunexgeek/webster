@@ -53,26 +53,18 @@
 #define WBERR_BAD_RESPONSE               -10
 #define WBERR_TIMEOUT                    -11
 #define WBERR_INVALID_STATE              -12
-#define WBERR_MAX_CLIENTS                -13
 #define WBERR_INVALID_HTTP_METHOD        -14
-#define WBERR_INVALID_HEADER_FIELD       -15
 #define WBERR_INVALID_HTTP_VERSION       -16
 #define WBERR_INVALID_HTTP_MESSAGE       -17
-#define WBERR_INVALID_URL                -18
+#define WBERR_INVALID_TARGET             -18
 #define WBERR_INVALID_SCHEME             -19
 #define WBERR_INVALID_HOST               -20
 #define WBERR_INVALID_PORT               -21
 #define WBERR_INVALID_CHANNEL            -22
-#define WBERR_INVALID_RESOURCE           -23
-#define WBERR_INVALID_CLIENT             -24
-#define WBERR_INVALID_SERVER             -25
-#define WBERR_INVALID_MESSAGE            -26
-#define WBERR_TOO_MANY_FIELDS            -27
 #define WBERR_INVALID_CHUNK              -28
 #define WBERR_NOT_CONNECTED              -29
 #define WBERR_SIGNAL                     -30
-#define WBERR_INVALID_TARGET             -31
-#define WBERR_INVALID_VALUE              -32
+#define WBERR_INVALID_HTTP_FIELD         -32
 #define WBERR_INVALID_HANDLER            -33
 #define WBERR_NOT_IMPLEMENTED            -34
 #define WBERR_NO_RESOURCES               -35
@@ -497,12 +489,12 @@ class MessageImpl : public Message
         Client *client_;
         Channel *channel_;
 
-        int receiveHeader( int timeout );
-        int chunkSize( int timeout );
-        int receiveBody( int timeout );
-        int writeData( const uint8_t *buffer, int size );
-        int writeString( const std::string &text );
-        int writeHeader();
+        int receive_header( int timeout );
+        int chunk_size( int timeout );
+        int receive_body( int timeout );
+        int buffered_write( const uint8_t *buffer, int size );
+        int buffered_write( const std::string &text );
+        int write_header();
         int write_resource_line();
         int parse( char *data );
         int compute_resource_line( std::stringstream &ss ) const;

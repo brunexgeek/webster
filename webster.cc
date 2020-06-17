@@ -111,7 +111,7 @@ std::string Target::encode( const std::string &input )
 
 int Target::parse( const char *url, Target &target )
 {
-    if (url == nullptr || url[0] == 0) return WBERR_INVALID_URL;
+    if (url == nullptr || url[0] == 0) return WBERR_INVALID_TARGET;
 
     // handle asterisk form
     if (url[0] == '*' && url[1] == 0)
@@ -151,11 +151,11 @@ int Target::parse( const char *url, Target &target )
 
 		// extract the host name
 		const char *hb = strstr(url, "://");
-		if (hb == NULL) return WBERR_INVALID_URL;
+		if (hb == NULL) return WBERR_INVALID_TARGET;
 		hb += 3;
 		const char *he = hb;
 		while (*he != ':' && *he != '/' && *he != 0) ++he;
-		if (hb == he) return WBERR_INVALID_URL;
+		if (hb == he) return WBERR_INVALID_TARGET;
 
 		const char *rb = he;
 		const char *re = NULL;
@@ -167,7 +167,7 @@ int Target::parse( const char *url, Target &target )
 		{
 			pe = ++pb;
 			while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
-			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_URL;
+			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_TARGET;
 			rb = pe;
 		}
 
@@ -177,7 +177,7 @@ int Target::parse( const char *url, Target &target )
 			re = rb;
 			while (*re != 0) ++re;
 		}
-		if (re != NULL && *re != 0) return WBERR_INVALID_URL;
+		if (re != NULL && *re != 0) return WBERR_INVALID_TARGET;
 
 		// return the scheme
 		if (url[4] == ':')
@@ -196,7 +196,7 @@ int Target::parse( const char *url, Target &target )
 				mult *= 10;
 			}
 			if (target.port > 65535 || target.port < 0)
-                return WBERR_INVALID_URL;
+                return WBERR_INVALID_TARGET;
 		}
 		else
 		{
@@ -241,7 +241,7 @@ int Target::parse( const char *url, Target &target )
             const char *pb = he + 1;
             const char *pe = pb;
             while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
-            if (*pe != 0) return WBERR_INVALID_URL;
+            if (*pe != 0) return WBERR_INVALID_TARGET;
 
 			int mult = 1;
 			while (--pe >= pb)
@@ -250,7 +250,7 @@ int Target::parse( const char *url, Target &target )
 				mult *= 10;
 			}
 			if (target.port > 65535 || target.port < 0)
-                return WBERR_INVALID_URL;
+                return WBERR_INVALID_TARGET;
         }
         else
         {
@@ -464,7 +464,7 @@ int RemoteClient::communicate( const std::string &path, Handler &handler )
 	request.channel_ = channel_;
 	request.client_ = this;
 
-	int result = request.receiveHeader(params_.read_timeout);
+	int result = request.receive_header(params_.read_timeout);
 
 	if (result != WBERR_OK) return result;
 	response.flags_ = WBMT_OUTBOUND | WBMT_RESPONSE;
@@ -859,7 +859,7 @@ int MessageImpl::parse( char *data )
             char *value = ptr;
             for (; *ptr != '\r' && *ptr != 0; ++ptr);
             if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_HTTP_MESSAGE;
-            if ((size_t)(ptr - value) > WBL_MAX_FIELD_VALUE) return WBERR_INVALID_VALUE;
+            if ((size_t)(ptr - value) > WBL_MAX_FIELD_VALUE) return WBERR_INVALID_HTTP_FIELD;
             *ptr++ = 0;
             ++ptr;
 
@@ -925,7 +925,7 @@ uint64_t tick()
 /**
  * Read data until we find the header terminator or the internal buffer is full.
  */
-int MessageImpl::receiveHeader( int timeout )
+int MessageImpl::receive_header( int timeout )
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 	state_ = WBS_HEADER;
@@ -977,7 +977,7 @@ int MessageImpl::receiveHeader( int timeout )
 	return WBERR_OK;
 }
 
-int MessageImpl::chunkSize( int timeout )
+int MessageImpl::chunk_size( int timeout )
 {
     (void) timeout;
 	#if 0
@@ -1001,7 +1001,7 @@ int MessageImpl::chunkSize( int timeout )
 /**
  * Read data until the internal buffer is full or there's no more data to read.
  */
-int MessageImpl::receiveBody( int timeout )
+int MessageImpl::receive_body( int timeout )
 {
 	if (state_ != WBS_HEADER && state_ != WBS_BODY) return WBERR_INVALID_STATE;
 	state_ = WBS_BODY;
@@ -1014,7 +1014,7 @@ int MessageImpl::receiveBody( int timeout )
 			return WBERR_COMPLETE;
 		else
 		{
-			int result = chunkSize(timeout);
+			int result = receive_body(timeout);
 			if (result != WBERR_OK) return result;
 			if (body_.expected == 0) return WBERR_COMPLETE;
 		}
@@ -1049,14 +1049,14 @@ int MessageImpl::read( const uint8_t **buffer, int *size )
 	int result = WBERR_OK;
 	if (state_ == WBS_IDLE)
 	{
-		result = receiveHeader(client_->get_parameters().read_timeout);
+		result = receive_header(client_->get_parameters().read_timeout);
 		if (result != WBERR_OK) return result;
 	}
 	if (buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
 
 	if (buffer_.pending <= 0 || buffer_.current == NULL)
 	{
-		result = receiveBody(client_->get_parameters().read_timeout);
+		result = receive_body(client_->get_parameters().read_timeout);
 		if (result != WBERR_OK) return result;
 	}
 	if (buffer_.pending <= 0 || buffer_.current == NULL) return WBERR_NO_DATA;
@@ -1087,9 +1087,10 @@ int MessageImpl::read( std::string &buffer )
 	return result;
 }
 
-int MessageImpl::writeData( const uint8_t *buffer, int size )
+int MessageImpl::buffered_write( const uint8_t *buffer, int size )
 {
 	if (size == 0 || buffer == NULL) return WBERR_OK;
+	if (size < 0 || size > 0x3FFFFFFF) return WBERR_TOO_LONG;
 
 	// ensures the current pointer is valid
 	if (buffer_.current == NULL)
@@ -1104,7 +1105,7 @@ int MessageImpl::writeData( const uint8_t *buffer, int size )
 	int fit = buffer_.size - (int)(buffer_.current - buffer_.data);
 	while (size > fit)
 	{
-		result = writeData(buffer + offset, fit);
+		result = buffered_write(buffer + offset, fit);
 		size -= fit;
 		offset += fit;
 		fit = buffer_.size - (int)(buffer_.current - buffer_.data);
@@ -1124,9 +1125,9 @@ int MessageImpl::writeData( const uint8_t *buffer, int size )
 	return result;
 }
 
-int MessageImpl::writeString( const std::string &text )
+int MessageImpl::buffered_write( const std::string &text )
 {
-	return writeData((uint8_t*) text.c_str(), (int) text.length());
+	return buffered_write((uint8_t*) text.c_str(), (int) text.length());
 }
 
 int MessageImpl::compute_resource_line( std::stringstream &ss ) const
@@ -1160,7 +1161,7 @@ int MessageImpl::compute_resource_line( std::stringstream &ss ) const
 			ss << target.host << ':' << target.port;
 			break;
 		default:
-			return WBERR_INVALID_RESOURCE;
+			return WBERR_INVALID_TARGET;
 	}
 	ss << " HTTP/1.1\r\n";
 	return WBERR_OK;
@@ -1175,7 +1176,7 @@ int MessageImpl::compute_status_line( std::stringstream &ss ) const
 	return WBERR_OK;
 }
 
-int MessageImpl::writeHeader()
+int MessageImpl::write_header()
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 
@@ -1206,14 +1207,14 @@ int MessageImpl::writeHeader()
 		ss << item.first << ": " << item.second << "\r\n";
 	ss << "\r\n";
 
-	writeString(ss.str());
+	buffered_write(ss.str());
 	state_ = WBS_BODY;
 	return WBERR_OK;
 }
 
 int MessageImpl::write( const uint8_t *buffer, int size )
 {
-	if (state_ == WBS_IDLE) writeHeader();
+	if (state_ == WBS_IDLE) write_header();
 	if (buffer == nullptr || size == 0) return WBERR_OK;
 
 	int result = WBERR_OK;
@@ -1222,13 +1223,13 @@ int MessageImpl::write( const uint8_t *buffer, int size )
 		char temp[16];
 		SNPRINTF(temp, sizeof(temp)-1, "%X\r\n", size);
 		temp[15] = 0;
-		result = writeData((const uint8_t*) temp, (int) strlen(temp));
+		result = buffered_write((const uint8_t*) temp, (int) strlen(temp));
 		if (result != WBERR_OK) return result;
 	}
-	result = writeData(buffer, size);
+	result = buffered_write(buffer, size);
 	if (result != WBERR_OK) return result;
 	if (body_.flags && WBMF_CHUNKED)
-		result = writeData((const uint8_t*) "\r\n", 2);
+		result = buffered_write((const uint8_t*) "\r\n", 2);
 	return result;
 
 }
@@ -1491,6 +1492,16 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, uint32_t size 
 
 	return WBERR_OK;
 }
+
+#if 0
+static std::string get_address( struct sockaddr_in &addr )
+{
+	char output[16] = {0};
+	uint8_t *octets = (uint8_t*) &addr.sin_addr;
+	snprintf(output, sizeof(output) - 1, "%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
+	return output;
+}
+#endif
 
 int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 {
