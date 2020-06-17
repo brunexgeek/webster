@@ -26,6 +26,7 @@
 #include <ctype.h>
 #include <iostream>
 #include <memory>
+#include "ctpl.hh"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -447,6 +448,12 @@ static int main_serverHandler(
 
 #include <sys/time.h>
 
+static void process( int id, std::shared_ptr<Client> remote, Handler &handler )
+{
+	remote->communicate("", handler);
+	remote->disconnect();
+}
+
 int main(int argc, char* argv[])
 {
 	#if defined(_WIN32) || defined(WIN32)
@@ -470,9 +477,10 @@ int main(int argc, char* argv[])
 	else
 		realpath(".", rootDirectory);
 
-
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
+
+	ctpl::thread_pool pool(2);
 
 	Handler handler(main_serverHandler);
 	Server server;
@@ -485,16 +493,13 @@ int main(int argc, char* argv[])
 			std::shared_ptr<Client> remote;
 			int result = server.accept(remote);
 			if (result == WBERR_OK)
-			{
-				// you problably should handle the client request in another thread
-				remote->communicate("", handler);
-				remote->disconnect();
-			}
+				pool.push(process, remote, handler);
 			else
 			if (result != WBERR_TIMEOUT) break;
 		}
 	}
 	server.stop();
+	pool.stop();
 
 	printf("Server terminated!\n");
 

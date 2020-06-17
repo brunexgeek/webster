@@ -34,25 +34,10 @@ if (UNIX)
     set(CMAKE_CXX_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 endif()
 
-
-#add_library(libwebster SHARED "source/api.cc" "source/http11.cc" "source/network.cc")
-#target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
-#target_compile_definitions(libwebster PRIVATE BUILDING_DYNAMIC=1)
-#target_include_directories(libwebster PUBLIC "include/")
-#set_target_properties(libwebster PROPERTIES
-#    OUTPUT_NAME "webster"
-#    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-#    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-#    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-#    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-#    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-#    PREFIX "lib" )
-
-
-add_library(libwebster_static STATIC "webster.cc")
-target_compile_definitions(libwebster_static PRIVATE BUILDING_WEBSTER=1)
-target_include_directories(libwebster_static PUBLIC ".")
-set_target_properties(libwebster_static PROPERTIES
+add_library(libwebster STATIC "webster.cc")
+target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
+target_include_directories(libwebster PUBLIC ".")
+set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
     SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
@@ -65,7 +50,7 @@ set_target_properties(libwebster_static PROPERTIES
 find_package(Threads REQUIRED)
 
 add_executable(example_echo "examples/echo.cc")
-target_link_libraries(example_echo libwebster_static)
+target_link_libraries(example_echo libwebster)
 target_compile_definitions(example_echo PRIVATE _DEFAULT_SOURCE)
 set_target_properties(example_echo PROPERTIES
     OUTPUT_NAME "example_echo"
@@ -75,7 +60,7 @@ set_target_properties(example_echo PROPERTIES
 
 
 add_executable(example_client "examples/client.cc")
-target_link_libraries(example_client libwebster_static)
+target_link_libraries(example_client libwebster)
 target_compile_definitions(example_client PRIVATE _DEFAULT_SOURCE)
 set_target_properties(example_client PROPERTIES
     OUTPUT_NAME "example_client"
@@ -85,7 +70,11 @@ set_target_properties(example_client PROPERTIES
 
 
 add_executable(example_indexing "examples/indexing.cc")
-target_link_libraries(example_indexing libwebster_static)
+if (UNIX)
+    target_link_libraries(example_indexing libwebster pthread)
+else()
+    target_link_libraries(example_indexing libwebster)
+endif()
 target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
 set_target_properties(example_indexing PROPERTIES
     OUTPUT_NAME "example_indexing"
