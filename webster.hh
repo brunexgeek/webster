@@ -74,6 +74,7 @@
 #define WBERR_INVALID_TARGET             -31
 #define WBERR_INVALID_VALUE              -32
 #define WBERR_INVALID_HANDLER            -33
+#define WBERR_NOT_IMPLEMENTED            -34
 
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
