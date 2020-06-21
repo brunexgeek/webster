@@ -413,6 +413,7 @@ int Client::connect( const Target &target )
 	if (result != WBERR_OK)
     {
         params_.network->close(this->channel_);
+        this->channel_ = nullptr;
         return result;
     }
 	target_ = target;
