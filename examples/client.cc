@@ -34,8 +34,8 @@ static int main_clientHandler(
     request.header.fields["Content-Length"] = "0";
     request.finish();
 
-    const char *ptr = nullptr;
-    while (response.read(&ptr) == WBERR_OK)
+    char ptr[1024];
+    while (response.read(ptr, sizeof(ptr)) == WBERR_OK)
         std::cout << ptr << std::endl;
 
     return WBERR_OK;
@@ -48,14 +48,17 @@ int main( int argc, char **argv )
     (void) argc;
     (void) argv;
 
+    const char *url = "http://duckduckgo.com:80/";
+    if (argc > 1) url = argv[1];
+
     Parameters params;
     Client client(params);
     Target target;
     Handler handler(main_clientHandler);
-    if (Target::parse("http://duckduckgo.com:80/", target) != WBERR_OK) return 1;
+    if (Target::parse(url, target) != WBERR_OK) return 1;
     if (client.connect(target) == WBERR_OK)
     {
-        client.communicate("/", handler);
+        client.communicate(target.path, handler);
         client.disconnect();
     }
     else

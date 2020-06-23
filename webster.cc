@@ -33,6 +33,117 @@ namespace webster {
 
 std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>();
 
+HttpStream::HttpStream( NetworkPtr net, Channel *chann, int type, int size ) : pending_(0), size_(size),
+	channel_(chann), net_(net), data_(nullptr)
+{
+	if (size_ < WBL_MIN_BUFFER_SIZE)
+		size_ = WBL_MIN_BUFFER_SIZE;
+	else
+	if (size_ > WBL_MAX_BUFFER_SIZE)
+		size_ = WBL_MAX_BUFFER_SIZE;
+
+	if (type == WBMT_OUTBOUND)
+		data_ = current_ = new(std::nothrow) uint8_t[size];
+}
+
+HttpStream::~HttpStream()
+{
+	delete[] data_;
+}
+
+int HttpStream::write( const uint8_t *buffer, int size )
+{
+	if (size == 0 || buffer == NULL) return WBERR_OK;
+	if (size < 0 || size > 0x3FFFFFFF) return WBERR_TOO_LONG;
+
+	// ensures the current pointer is valid
+	if (current_ == NULL)
+	{
+		current_ = data_;
+		pending_ = 0;
+	}
+
+	// fragment input data through recursive call until the data size fits the internal buffer
+	int offset = 0;
+	int result = WBERR_OK;
+	int fit = size_ - (int)(current_ - data_);
+	while (size > fit)
+	{
+		result = write(buffer + offset, fit);
+		size -= fit;
+		offset += fit;
+		fit = size_ - (int)(current_ - data_);
+		if (result != WBERR_OK) return result;
+	}
+
+	memcpy(current_, buffer + offset, (size_t) size);
+	current_ += size;
+
+	// send pending data if the buffer is full
+	if (current_ >= data_ + size_)
+	{
+		int tmp = size_;
+		result = net_->send(channel_, data_, &tmp, 10000);
+		current_ = data_;
+	}
+
+	return result;
+}
+
+int HttpStream::write( const char *text )
+{
+	return write((uint8_t*) text, (int) strlen(text));
+}
+
+int HttpStream::write( const std::string &text )
+{
+	return write((uint8_t*) text.c_str(), (int) text.length());
+}
+
+int HttpStream::read( uint8_t *data, int *size )
+{
+	return net_->receive(channel_, data, size, 10000);
+}
+
+int HttpStream::read_line( char *data, int size )
+{
+	if (data == nullptr || size < 2) return WBERR_INVALID_ARGUMENT;
+	char *p = data;
+	int s;
+	uint8_t c;
+
+	do
+	{
+		s = 1;
+		int result = read(&c, &s);
+		if (result != WBERR_OK) return result;
+		if (c == '\r') continue;
+		if (c == '\n') break;
+		*p = (char) c;
+		++p;
+	} while (p < data + size - 1);
+	*p = 0;
+
+	return WBERR_OK;
+}
+
+int HttpStream::pending() const
+{
+	return pending_;
+}
+
+int HttpStream::flush()
+{
+	// send all remaining body data
+	if (current_ > data_)
+	{
+		int size = (int) (current_ - data_);
+		net_->send(channel_, data_, &size, 10000);
+		current_ = data_;
+	}
+	return WBERR_OK;
+}
+
 Target::Target() : type(0), scheme(WBP_HTTP), port(80)
 {
 }
@@ -423,8 +534,10 @@ int Client::connect( const Target &target )
 
 int Client::communicate( const std::string &path, Handler &handler )
 {
-	MessageImpl request;
-	MessageImpl response;
+	HttpStream os(params_.network, channel_, WBMT_OUTBOUND);
+	MessageImpl request(os);
+	HttpStream is(params_.network, channel_, WBMT_INBOUND);
+	MessageImpl response(is);
 
 	request.flags_ = WBMT_OUTBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
@@ -458,8 +571,10 @@ int RemoteClient::communicate( const std::string &path, Handler &handler )
 {
 	(void) path;
 
-	MessageImpl request;
-	MessageImpl response;
+	HttpStream is(params_.network, channel_, WBMT_INBOUND);
+	MessageImpl request(is);
+	HttpStream os(params_.network, channel_, WBMT_OUTBOUND);
+	MessageImpl response(os);
 
 	request.flags_ = WBMT_INBOUND | WBMT_REQUEST;
 	request.channel_ = channel_;
@@ -749,167 +864,121 @@ char *http_removeTrailing( char *text )
     return text;
 }
 
-int MessageImpl::parse( char *data )
+int MessageImpl::parse_first_line( const char *data )
 {
-    static const int STATE_FIRST_LINE = 1;
-    static const int STATE_HEADER_FIELD = 2;
-    static const int STATE_COMPLETE = 3;
-
-    int state = STATE_FIRST_LINE;
-    char *ptr = data;
-    char *token = ptr;
+    const char *ptr = data;
     int result;
 
-    body_.expected = 0;
-    body_.chunks = 0;
+	if (strncmp(data, "HTTP/1.1", 8) == 0)
+	{
+		if (!(flags_ & WBMT_RESPONSE)) return WBERR_INVALID_HTTP_MESSAGE;
 
-    while (state != STATE_COMPLETE || *ptr == 0)
-    {
-        // process the first line
-        if (state == STATE_FIRST_LINE)
-        {
-            for (token = ptr; *ptr != ' ' && *ptr != 0; ++ptr);
-            if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
-            *ptr++ = 0;
+		// HTTP status code
+		ptr += 8;
+		header.status = (int) strtol(ptr, (char**) &ptr, 10);
+	}
+	else
+	{
+		if (!(flags_ & WBMT_REQUEST)) return WBERR_INVALID_HTTP_MESSAGE;
 
-            if (strcmp(token, "HTTP/1.1") == 0)
-            {
-                if (!(flags_ & WBMT_RESPONSE)) return WBERR_INVALID_HTTP_MESSAGE;
+		// find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
+		if (strncmp(ptr, "GET", 3) == 0)
+			header.method = WBM_GET;
+		else
+		if (strncmp(ptr, "POST", 4) == 0)
+			header.method = WBM_POST;
+		else
+		if (strncmp(ptr, "HEAD", 4) == 0)
+			header.method = WBM_HEAD;
+		else
+		if (strncmp(ptr, "PUT", 3) == 0)
+			header.method = WBM_PUT;
+		else
+		if (strncmp(ptr, "DELETE", 6) == 0)
+			header.method = WBM_DELETE;
+		else
+		if (strncmp(ptr, "CONNECT", 7) == 0)
+			header.method = WBM_CONNECT;
+		else
+		if (strncmp(ptr, "OPTIONS", 7) == 0)
+			header.method = WBM_OPTIONS;
+		else
+		if (strncmp(ptr, "TRACE", 5) == 0)
+			header.method = WBM_TRACE;
+		else
+		if (strncmp(ptr, "PATCH", 5) == 0)
+			header.method = WBM_PATCH;
+		else
+			return WBERR_INVALID_HTTP_METHOD;
+		while (*ptr != ' ' && *ptr != 0) ++ptr;
+		if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
+		while (*ptr == ' ') ++ptr;
 
-                // HTTP status code
-                for (token = ptr; *ptr >= '0' && *ptr <= '9'; ++ptr);
-                if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
-                *ptr++ = 0;
-                header.status = (int) strtol(token, nullptr, 10);
-                // HTTP status message
-                for (token = ptr; *ptr != '\r' && *ptr != 0; ++ptr);
-                if (ptr[0] != '\r' || ptr[1] != '\n')
-                    return WBERR_INVALID_HTTP_MESSAGE;
-                *ptr++ = 0;
-                ++ptr;
+		// target
+		std::string url;
+		while (*ptr != ' ' && *ptr != 0)
+		{
+			url += *ptr;
+			++ptr;
+		}
+		result = Target::parse(url.c_str(), header.target);
+		if (result != WBERR_OK) return result;
 
-                state = STATE_HEADER_FIELD;
-            }
-            else
-            {
-                if (!(flags_ & WBMT_REQUEST)) return WBERR_INVALID_HTTP_MESSAGE;
-
-                // find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
-                if (strcmp(token, "GET") == 0)
-                    header.method = WBM_GET;
-                else
-                if (strcmp(token, "POST") == 0)
-                    header.method = WBM_POST;
-                else
-                if (strcmp(token, "HEAD") == 0)
-                    header.method = WBM_HEAD;
-                else
-                if (strcmp(token, "PUT") == 0)
-                    header.method = WBM_PUT;
-                else
-                if (strcmp(token, "DELETE") == 0)
-                    header.method = WBM_DELETE;
-                else
-                if (strcmp(token, "CONNECT") == 0)
-                    header.method = WBM_CONNECT;
-                else
-                if (strcmp(token, "OPTIONS") == 0)
-                    header.method = WBM_OPTIONS;
-                else
-                if (strcmp(token, "TRACE") == 0)
-                    header.method = WBM_TRACE;
-                else
-                if (strcmp(token, "PATCH") == 0)
-                    header.method = WBM_PATCH;
-                else
-                    return WBERR_INVALID_HTTP_METHOD;
-
-                // target
-                for (token = ptr; *ptr != ' ' && *ptr != 0; ++ptr);
-                if (*ptr != ' ') return WBERR_INVALID_HTTP_MESSAGE;
-                *ptr++ = 0;
-                result = Target::parse(token, header.target);
-                if (result != WBERR_OK) return result;
-
-                // HTTP version
-                for (token = ptr; *ptr != '\r' && *ptr != 0; ++ptr);
-                if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_HTTP_MESSAGE;
-                *ptr++ = 0;
-                ++ptr;
-                if (strcmp(token, "HTTP/1.1") != 0) return WBERR_INVALID_HTTP_VERSION;
-
-                state = STATE_HEADER_FIELD;
-            }
-        }
-        else
-        // process each header field
-        if (state == STATE_HEADER_FIELD)
-        {
-            if (ptr[0] == '\r' && ptr[1] == 0)
-            {
-                state = STATE_COMPLETE;
-                continue;
-            }
-
-            // header field name
-            char *name = ptr;
-            for (; IS_HFNC(*ptr); ++ptr);
-            if (*ptr != ':') return WBERR_INVALID_HTTP_MESSAGE;
-            *ptr++ = 0;
-            // header field value
-            char *value = ptr;
-            for (; *ptr != '\r' && *ptr != 0; ++ptr);
-            if (ptr[0] != '\r' || ptr[1] != '\n') return WBERR_INVALID_HTTP_MESSAGE;
-            if ((size_t)(ptr - value) > WBL_MAX_FIELD_VALUE) return WBERR_INVALID_HTTP_FIELD;
-            *ptr++ = 0;
-            ++ptr;
-
-            // ignore trailing whitespaces in the value
-            value = http_removeTrailing(value);
-            header.fields.set(name, value);
-            if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
-            {
-                header.content_length = (int) strtol(value, nullptr, 10);
-                body_.expected = header.content_length;
-            }
-            else
-            if (STRCMPI(name, "Transfer-Encoding") == 0)
-            {
-                if (strstr(value, "chunked"))
-				{
-					body_.flags |= WBMF_CHUNKED;
-                    body_.expected = -1;
-				}
-            }
-        }
-        else
-            break;
-    }
-
-    return WBERR_OK;
+		// HTTP version
+		while (*ptr == ' ') ++ptr;
+		if (strncmp(ptr, "HTTP/1.1", 8) != 0) return WBERR_INVALID_HTTP_VERSION;
+	}
+	return WBERR_OK;
 }
 
-MessageImpl::MessageImpl( int buffer_size )
+int MessageImpl::parse_header_field( char *data )
+{
+	char *ptr = data;
+
+	// header field name
+	char *name = ptr;
+	for (; IS_HFNC(*ptr); ++ptr);
+	if (*ptr != ':') return WBERR_INVALID_HTTP_MESSAGE;
+	*ptr++ = 0;
+	// header field value
+	char *value = ptr;
+
+	// ignore trailing whitespaces in the value
+	value = http_removeTrailing(value);
+	header.fields.set(name, value);
+	if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
+	{
+		header.content_length = (int) strtol(value, nullptr, 10);
+		body_.expected = header.content_length;
+	}
+	else
+	if (STRCMPI(name, "Transfer-Encoding") == 0)
+	{
+		if (strstr(value, "chunked"))
+		{
+			body_.flags |= WBMF_CHUNKED;
+			body_.expected = 0;
+		}
+	}
+	return WBERR_OK;
+}
+
+MessageImpl::MessageImpl( HttpStream &stream, int buffer_size ) : stream_(stream)
 {
     if (buffer_size < WBL_MIN_BUFFER_SIZE)
         buffer_size = WBL_MIN_BUFFER_SIZE;
     else
     if (buffer_size > WBL_MAX_BUFFER_SIZE)
         buffer_size = WBL_MAX_BUFFER_SIZE;
-    size_t size = (buffer_size + 3) & (uint32_t) (~3);
+    buffer_size = (buffer_size + 3) & (uint32_t) (~3);
 
     state_ = WBS_IDLE;
 	flags_ = 0;
     body_.expected = body_.chunks = body_.flags = 0;
-    buffer_.data = buffer_.current = (uint8_t*) new(std::nothrow) uint8_t[size]();
-	//if (!message->buffer.data) return WBERR_MEMORY_EXHAUSTED;
-    buffer_.size = (int) size;
-    buffer_.pending = 0;
 }
 
 MessageImpl::~MessageImpl()
 {
-    if (buffer_.data != nullptr) delete[] buffer_.data;
 }
 
 uint64_t tick()
@@ -923,58 +992,41 @@ uint64_t tick()
 	#endif
 }
 
-/**
- * Read data until we find the header terminator or the internal buffer is full.
- */
+#define IS_HEX_DIGIT(x) \
+	( ( (x) >= 'a' && (x) <= 'f') || \
+	  ( (x) >= 'A' && (x) <= 'F') || \
+	  ( (x) >= '0' && (x) <= '9') )
+
 int MessageImpl::receive_header( int timeout )
 {
 	if (state_ != WBS_IDLE || !(flags_ & WBMT_INBOUND))
 		return WBERR_INVALID_STATE;
 	state_ = WBS_HEADER;
 
-	char *ptr = NULL;
-	int result = 0;
-
-	if (timeout < 0) timeout = 0;
-
-	// ignore any pending data
-	buffer_.pending = 0;
-
-	// Note: when reading input data we leave room in the buffer for a null-terminator
-	//       so we can manipulate its content as a string.
-
-	uint64_t start = tick();
-	while (true)
+	char line[1024] = {0};
+	bool first = true;
+	auto start = tick();
+	do
 	{
-		uint32_t bytes = (uint32_t) buffer_.size - (uint32_t) buffer_.pending - 1;
-		if (bytes == 0) return WBERR_TOO_LONG; // header do not fit in the buffer
+		int result = stream_.read_line(line, sizeof(line));
+		if (result != WBERR_OK) return result;
 
-		// receive new data and adjust pending information
-		result = client_->get_parameters().network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
-		if (result == WBERR_OK)
+		if (*line != 0)
 		{
-			buffer_.pending += (int) bytes;
-			buffer_.current = buffer_.data;
-			// ensure we have a null-terminator at the end
-			*(buffer_.current + buffer_.pending) = 0;
-			ptr = (char*) strstr((const char*)buffer_.current, "\r\n\r\n");
-			if (ptr != NULL) break;
+			result = (first) ? parse_first_line(line) : parse_header_field(line);
+			if (result != WBERR_OK) return result;
 		}
 		else
-		if (result != WBERR_NO_DATA && result != WBERR_SIGNAL) return result;
+		{
+			if (first) return WBERR_INVALID_HTTP_MESSAGE;
+			break;
+		}
+		first = false;
 
-		if (tick() - start > (uint64_t) timeout) return WBERR_TIMEOUT;
-	}
+	} while ( (int) (tick() - start) < timeout);
 
-	*(ptr + 3) = 0;
-	// remember the last position
-	buffer_.current = (uint8_t*) ptr + 4;
-	buffer_.pending = buffer_.pending - (int) ( (uint8_t*) ptr + 4 - buffer_.data );
 	// parse HTTP header fields and retrieve the content length
-	result = parse((char*)buffer_.data);
-	if (result != WBERR_OK) return result;
 	header.content_length = body_.expected;
-	body_.expected -= buffer_.pending;
 
 	return WBERR_OK;
 }
@@ -982,111 +1034,63 @@ int MessageImpl::receive_header( int timeout )
 int MessageImpl::chunk_size( int timeout )
 {
     (void) timeout;
-	#if 0
-	uint64_t startTime = webster_tick();
-	int result = 0;
-	uint8_t buffer[64];
-	uint32_t bytes = 0;
 
+	char line[64];
+	char *ptr = nullptr;
+	// discard the previous chunk terminator
 	if (body_.chunks > 0)
 	{
-		// receive the terminator of the previous chunk
-		bytes = 2;
-		result = input->client->config.net->receive(input->channel, buffer, &bytes, timeout);
-		if (timeout > 0) timeout = timeout - (int) (webster_tick() - startTime);
+		std::cout << "Skiping chunk terminator\n";
+		int result = stream_.read_line(line, sizeof(line));
+		if (result != WBERR_OK) return result;
+		if (*line != 0) return WBERR_INVALID_CHUNK;
 	}
+	// read the next chunk size
+	int result = stream_.read_line(line, sizeof(line));
+	if (result != WBERR_OK) return result;
+	auto count = strtol(line, &ptr, 16);
+	std::cout << "Found chunk of " << count << " bytes\n";
+	if (*ptr != 0) return WBERR_INVALID_CHUNK;
+	++body_.chunks;
+	body_.expected = (int) count;
 	return WBERR_OK;
-	#endif
-	return WBERR_INVALID_CHUNK;
 }
 
-/**
- * Read data until the internal buffer is full or there's no more data to read.
- */
-int MessageImpl::receive_body( int timeout )
-{
-	if ((state_ != WBS_HEADER && state_ != WBS_BODY) || !(flags_ & WBMT_INBOUND))
-		return WBERR_INVALID_STATE;
-	state_ = WBS_BODY;
-	if (timeout < 0) timeout = 0;
 
-	// if not expecting any data, just return success
+int MessageImpl::read( uint8_t *buffer, int *size )
+{
+	if (state_ == WBS_IDLE) receive_header(10000);
+	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
+
+	int result;
 	if (body_.expected == 0)
 	{
-		if ((body_.flags & WBMF_CHUNKED) == 0)
-			return WBERR_COMPLETE;
+		if (body_.flags & WBMF_CHUNKED)
+		{
+			result = chunk_size(10000);
+			if (result != WBERR_OK) return result;
+		}
 		else
 		{
-			int result = receive_body(timeout);
-			if (result != WBERR_OK) return result;
-			if (body_.expected == 0) return WBERR_COMPLETE;
+			state_ = WBS_COMPLETE;
+			return WBERR_COMPLETE;
 		}
 	}
-	// if we still have data in the buffer, just return success
-	if (buffer_.pending > 0) return WBERR_OK;
 
-	buffer_.pending = 0;
-
-	// Note: when reading input data we leave room in the buffer for a null-terminator
-	//       so we can manipulate its content as a string.
-	uint32_t bytes = (uint32_t) buffer_.size - (uint32_t) buffer_.pending - 1;
-	// prevent reading more that's supposed to
-	if (body_.expected >= 0 && bytes > (uint32_t) body_.expected)
-		bytes = (uint32_t) body_.expected;
-
-	// receive new data and adjust pending information
-	int result = client_->get_parameters().network->receive(channel_, buffer_.data + buffer_.pending, &bytes, timeout);
-	if (result == WBERR_OK)
-	{
-		body_.expected -= (int) bytes;
-		buffer_.pending += (int) bytes;
-		buffer_.current = buffer_.data;
-		// ensure we have a null-terminator at the end
-		*(buffer_.current + buffer_.pending) = 0;
-	}
+	if (*size > body_.expected) *size = body_.expected;
+	result = stream_.read(buffer, size);
+	if (result != WBERR_OK) return result;
+	body_.expected -= *size;
 	return result;
 }
 
-int MessageImpl::read( const uint8_t **buffer, int *size )
+int MessageImpl::read( char *buffer, int size )
 {
-	int result = WBERR_OK;
-	if (state_ == WBS_IDLE)
-	{
-		result = receive_header(client_->get_parameters().read_timeout);
-		if (result != WBERR_OK) return result;
-	}
-	if (buffer == NULL || size == NULL) return WBERR_INVALID_ARGUMENT;
-
-	if (buffer_.pending <= 0 || buffer_.current == NULL)
-	{
-		result = receive_body(client_->get_parameters().read_timeout);
-		if (result != WBERR_OK) return result;
-	}
-	if (buffer_.pending <= 0 || buffer_.current == NULL) return WBERR_NO_DATA;
-
-	*buffer = buffer_.current;
-	*size = buffer_.pending;
-
-	buffer_.current = NULL;
-	buffer_.pending = 0;
-
-	return WBERR_OK;
-}
-
-int MessageImpl::read( const char **buffer )
-{
-	const uint8_t *ptr = nullptr;
-	int size = 0;
-	int result = read(&ptr, &size);
-	*buffer = (const char *) ptr;
-	return result;
-}
-
-int MessageImpl::read( std::string &buffer )
-{
-	const char *ptr;
-	int result = read(&ptr);
-	buffer = ptr;
+	if (size <= 1) return WBERR_INVALID_ARGUMENT;
+	--size;
+	int result = read( (uint8_t*) buffer, &size);
+	if (result != WBERR_OK) return result;
+	buffer[size] = 0;
 	return result;
 }
 
@@ -1095,49 +1099,6 @@ int MessageImpl::wait()
 	int result = read(nullptr, nullptr);
 	if (result == WBERR_INVALID_ARGUMENT) result = WBERR_OK;
 	return result;
-}
-
-int MessageImpl::buffered_write( const uint8_t *buffer, int size )
-{
-	if (size == 0 || buffer == NULL) return WBERR_OK;
-	if (size < 0 || size > 0x3FFFFFFF) return WBERR_TOO_LONG;
-
-	// ensures the current pointer is valid
-	if (buffer_.current == NULL)
-	{
-		buffer_.current = buffer_.data;
-		buffer_.pending = 0;
-	}
-
-	// fragment input data through recursive call until the data size fits the internal buffer
-	int offset = 0;
-	int result = WBERR_OK;
-	int fit = buffer_.size - (int)(buffer_.current - buffer_.data);
-	while (size > fit)
-	{
-		result = buffered_write(buffer + offset, fit);
-		size -= fit;
-		offset += fit;
-		fit = buffer_.size - (int)(buffer_.current - buffer_.data);
-		if (result != WBERR_OK) return result;
-	}
-
-	memcpy(buffer_.current, buffer + offset, (size_t) size);
-	buffer_.current += size;
-
-	// send pending data if the buffer is full
-	if (buffer_.current >= buffer_.data + buffer_.size)
-	{
-		result = client_->get_parameters().network->send(channel_, buffer_.data, (uint32_t) buffer_.size);
-		buffer_.current = buffer_.data;
-	}
-
-	return result;
-}
-
-int MessageImpl::buffered_write( const std::string &text )
-{
-	return buffered_write((uint8_t*) text.c_str(), (int) text.length());
 }
 
 int MessageImpl::compute_resource_line( std::stringstream &ss ) const
@@ -1217,7 +1178,7 @@ int MessageImpl::write_header()
 		ss << item.first << ": " << item.second << "\r\n";
 	ss << "\r\n";
 
-	buffered_write(ss.str());
+	stream_.write(ss.str());
 	state_ = WBS_BODY;
 	return WBERR_OK;
 }
@@ -1233,15 +1194,14 @@ int MessageImpl::write( const uint8_t *buffer, int size )
 		char temp[16];
 		SNPRINTF(temp, sizeof(temp)-1, "%X\r\n", size);
 		temp[15] = 0;
-		result = buffered_write((const uint8_t*) temp, (int) strlen(temp));
+		result = stream_.write((const uint8_t*) temp, (int) strlen(temp));
 		if (result != WBERR_OK) return result;
 	}
-	result = buffered_write(buffer, size);
+	result = stream_.write(buffer, size);
 	if (result != WBERR_OK) return result;
 	if (body_.flags && WBMF_CHUNKED)
-		result = buffered_write((const uint8_t*) "\r\n", 2);
+		result = stream_.write((const uint8_t*) "\r\n", 2);
 	return result;
-
 }
 
 int MessageImpl::write( const char *buffer )
@@ -1256,17 +1216,9 @@ int MessageImpl::write( const std::string &text )
 
 int MessageImpl::flush()
 {
-	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
-
-	// ensure we are done with the HTTP header
-	if (state_ != WBS_BODY) write(nullptr, 0);
-	// send all remaining body data
-	if (buffer_.current > buffer_.data)
-	{
-		client_->get_parameters().network->send(channel_, buffer_.data, (uint32_t) (buffer_.current - buffer_.data));
-		buffer_.current = buffer_.data;
-	}
-	return WBERR_OK;
+	int result = write(nullptr, 0);
+	if (result != WBERR_OK) return result;
+	return stream_.flush();
 }
 
 int MessageImpl::finish()
@@ -1274,20 +1226,16 @@ int MessageImpl::finish()
 	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
 	if (flags_ & WBMT_INBOUND)
     {
-        int result = WBERR_OK;
-        const uint8_t *ptr;
-        int size;
-        while ((result = read(&ptr, &size)) == WBERR_OK);
-        if (result != WBERR_COMPLETE) return result;
+        // TODO: discard remaining body data?
         return WBERR_OK;
     }
 
+	// send the last marker if using chunked transfer encoding
+	if (body_.flags & WBMF_CHUNKED)
+		stream_.write((const uint8_t*) "0\r\n\r\n", 5);
 	int result = flush();
 	if (result != WBERR_OK) return result;
 
-	// send the last marker if using chunked transfer encoding
-	if (body_.flags & WBMF_CHUNKED)
-		client_->get_parameters().network->send(channel_, (const uint8_t*) "0\r\n\r\n", 5);
 	// we are done sending data now
 	state_ = WBS_COMPLETE;
 
@@ -1314,6 +1262,7 @@ typedef SSIZE_T ssize_t;
 #include <netdb.h>
 #include <unistd.h>
 #include <poll.h>
+#include <fcntl.h>
 #endif
 
 #include <string.h>
@@ -1332,12 +1281,12 @@ struct SocketChannel : public Channel
 	struct pollfd poll;
 };
 
-static int network_lookupIPv4( const char *host, struct sockaddr_in *address )
+int SocketNetwork::resolve( const char *host, void *address )
 {
 	int result = 0;
 
 	if (address == NULL) return WBERR_INVALID_ARGUMENT;
-	if (host == NULL || host[0] == 0) host = "127.0.0.1";
+	if (host == NULL || *host == 0) host = "127.0.0.1";
 
     // get an IPv4 address from hostname
 	struct addrinfo aiHints, *aiInfo;
@@ -1372,6 +1321,19 @@ SocketNetwork::SocketNetwork()
 		if (err == 0) WSACleanup();
 	}
 	#endif
+}
+
+int SocketNetwork::set_non_blocking( Channel *channel )
+{
+	SocketChannel *chann = (SocketChannel*) channel;
+#ifdef _WIN32
+	long flags = 1;
+	int result = ioctlsocket(chann->socket, FIONBIO, &flags);
+#else
+	int flags = fcntl(chann->socket, F_GETFL, 0);
+	int result = fcntl(chann->socket, F_SETFL, flags | O_NONBLOCK);
+#endif
+	return (result == 0) ? WBERR_OK : WBERR_SOCKET;
 }
 
 int SocketNetwork::open( Channel **channel, Type type )
@@ -1431,27 +1393,30 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	SocketChannel *chann = (SocketChannel*) channel;
 
 	struct sockaddr_in address;
-	network_lookupIPv4(host, &address);
+	int result = resolve(host, &address);
+	if (result != WBERR_OK) return result;
 
 	address.sin_port = htons( (uint16_t) port );
-	int result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
+	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
 	if (result < 0)
 	{
 		if (errno == ETIMEDOUT) return WBERR_TIMEOUT;
 		return WBERR_SOCKET;
 	}
+	result = set_non_blocking(chann);
+	if (result == WBERR_OK) return result;
 
 	return WBERR_OK;
 }
 
-int SocketNetwork::receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout )
+int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int timeout )
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
-	if (buffer == NULL || size == NULL || *size == 0) return WBERR_INVALID_ARGUMENT;
+	if (buffer == NULL || size == NULL || *size <= 0) return WBERR_INVALID_ARGUMENT;
 	if (timeout < 0) timeout = -1;
 
 	SocketChannel *chann = (SocketChannel*) channel;
-	uint32_t bufferSize = *size;
+	int bufferSize = *size;
 	*size = 0;
 	chann->poll.revents = 0;
 
@@ -1475,15 +1440,15 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, uint32_t *size, i
 			return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
-	*size = (uint32_t) bytes;
+	*size = (int) bytes;
 
 	return WBERR_OK;
 }
 
-int SocketNetwork::send( Channel *channel, const uint8_t *buffer, uint32_t size )
+int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int timeout )
 {
 	if (channel == NULL) return WBERR_INVALID_CHANNEL;
-	if (buffer == NULL || size == 0) return WBERR_INVALID_ARGUMENT;
+	if (buffer == NULL || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
@@ -1492,13 +1457,20 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, uint32_t size 
 	#else
 	int flags = MSG_NOSIGNAL;
 	#endif
-	ssize_t result = ::send(chann->socket, (const char *) buffer, (size_t) size, flags);
-	if (result < 0)
-	{
-		if (errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
-			return WBERR_NOT_CONNECTED;
-		return WBERR_SOCKET;
-	}
+	ssize_t result = 0;
+	uint64_t start = tick();
+	do {
+		result = ::send(chann->socket, (const char *) buffer, (size_t) *size, flags);
+		if (result < 0)
+		{
+			if (errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
+				return WBERR_NOT_CONNECTED;
+			if (errno == EWOULDBLOCK || errno == EAGAIN)
+				continue;
+			return WBERR_SOCKET;
+		}
+	} while (result < 0 && (int) (tick() - start) < timeout);
+	*size = (int) result;
 
 	return WBERR_OK;
 }
@@ -1560,8 +1532,12 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	((SocketChannel*)*client)->poll.events = POLLIN;
 
 	// allow socket descriptor to be reuseable
+#ifdef WB_WINDOWS
 	int on = 1;
 	::setsockopt(chann->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
+#endif
+	result = set_non_blocking(chann);
+	if (result == WBERR_OK) return result;
 
 	return WBERR_OK;
 }
@@ -1578,7 +1554,8 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 	SocketChannel *chann = (SocketChannel*) channel;
 
 	struct sockaddr_in address;
-	network_lookupIPv4(host, &address);
+	int result = resolve(host, &address);
+	if (result != WBERR_OK) return result;
 
 	address.sin_port = htons( (uint16_t) port );
 	if (::bind(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)

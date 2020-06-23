@@ -299,8 +299,8 @@ class Network
         virtual int open( Channel **channel, Type type ) = 0;
         virtual int close( Channel *channel ) = 0;
         virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
-        virtual int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout ) = 0;
-        virtual int send( Channel *channel, const uint8_t *buffer, uint32_t size ) = 0;
+        virtual int receive( Channel *channel, uint8_t *buffer, int *size, int timeout ) = 0;
+        virtual int send( Channel *channel, const uint8_t *buffer, int *size, int timeout ) = 0;
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
 };
@@ -314,10 +314,13 @@ class SocketNetwork : public Network
         int open( Channel **channel, Type type );
         int close( Channel *channel );
         int connect( Channel *channel, int scheme, const char *host, int port );
-        int receive( Channel *channel, uint8_t *buffer, uint32_t *size, int timeout );
-        int send( Channel *channel, const uint8_t *buffer, uint32_t size );
+        int receive( Channel *channel, uint8_t *buffer, int *size, int timeout );
+        int send( Channel *channel, const uint8_t *buffer, int *size, int timeout );
         int accept( Channel *channel, Channel **client, int timeout );
         int listen( Channel *channel, const char *host, int port, int maxClients );
+    protected:
+        int set_non_blocking( Channel *channel );
+        int resolve( const char *host, void *address );
 };
 #endif
 
@@ -352,9 +355,9 @@ class Message
     public:
         Header header;
         virtual ~Message() = default;
-        virtual int read( const uint8_t **buffer, int *size ) = 0;
-        virtual int read( const char **buffer ) = 0;
-        virtual int read( std::string &buffer ) = 0;
+        virtual int read( uint8_t *buffer, int *size ) = 0;
+        virtual int read( char *buffer, int size ) = 0;
+        //virtual int read( std::string &buffer ) = 0;
         virtual int write( const uint8_t *buffer, int size ) = 0;
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
@@ -421,14 +424,39 @@ class RemoteClient : public Client
         int communicate( const std::string &path, Handler &handler ) override;
 };
 
+typedef std::shared_ptr<Network> NetworkPtr;
+
+class HttpStream
+{
+	public:
+		HttpStream( NetworkPtr net, Channel *chann, int type, int size = WBL_DEF_BUFFER_SIZE );
+		~HttpStream();
+		int write( const uint8_t *data, int size );
+		int write( const char *data );
+		int write( const std::string &text );
+		int read( uint8_t *data, int *size );
+        int read_line( char *data, int size );
+        int pending() const;
+        int flush();
+	protected:
+		uint8_t *current_;
+		int pending_;
+		int size_;
+		Channel *channel_;
+		NetworkPtr net_;
+		uint8_t *data_;
+};
+
+typedef std::shared_ptr<HttpStream> HttpStreamPtr;
+
 class MessageImpl : public Message
 {
     public:
-		MessageImpl(  int buffer_size = WBL_DEF_BUFFER_SIZE );
+		MessageImpl( HttpStream &stream, int buffer_size = WBL_DEF_BUFFER_SIZE );
         ~MessageImpl();
-        int read( const uint8_t **buffer, int *size );
-        int read( const char **buffer );
-        int read( std::string &buffer );
+        int read( uint8_t *buffer, int *size );
+        int read( char *buffer, int size );
+        //int read( std::string &buffer );
         int write( const uint8_t *buffer, int size );
         int write( const char *buffer );
         int write( const std::string &buffer );
@@ -436,7 +464,7 @@ class MessageImpl : public Message
         int flush();
         int finish();
 
-    protected:
+    public:
         /**
          * @brief Current state of the message.
          *
@@ -466,41 +494,18 @@ class MessageImpl : public Message
             int flags;
         } body_;
 
-        struct
-        {
-            /**
-             *  Pointer to the buffer content.
-             */
-            uint8_t *data;
-
-            /**
-             * Size of the buffer in bytes.
-             */
-            int size;
-
-            /**
-             * Pointer to the buffer position in the buffer content.
-             */
-            uint8_t *current;
-
-            /**
-             * Amount of useful data from the current position.
-             */
-            int pending;
-        } buffer_;
+        HttpStream &stream_;
         Client *client_;
         Channel *channel_;
 
         int receive_header( int timeout );
         int chunk_size( int timeout );
-        int receive_body( int timeout );
-        int buffered_write( const uint8_t *buffer, int size );
-        int buffered_write( const std::string &text );
         int write_header();
         int write_resource_line();
-        int parse( char *data );
         int compute_resource_line( std::stringstream &ss ) const;
         int compute_status_line( std::stringstream &ss ) const;
+        int parse_first_line( const char *data );
+        int parse_header_field( char *data );
 
         friend Client;
         friend RemoteClient;

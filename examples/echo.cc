@@ -80,9 +80,9 @@ struct EchoHandler : public Handler
 	int operator()( Message &request, Message &response )
 	{
 		// discards the body
-		const uint8_t *buffer;
-		int size;
-		while (request.read(&buffer, &size) == WBERR_OK);
+		uint8_t buffer[128];
+		int size = sizeof(buffer);
+		while (request.read(buffer, &size) == WBERR_OK) size = sizeof(buffer);
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";

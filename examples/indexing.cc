@@ -450,6 +450,7 @@ static int main_serverHandler(
 
 static void process( int id, std::shared_ptr<Client> remote, Handler &handler )
 {
+	(void) id;
 	remote->communicate("", handler);
 	remote->disconnect();
 }
