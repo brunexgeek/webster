@@ -320,6 +320,7 @@ class SocketNetwork : public Network
         int listen( Channel *channel, const char *host, int port, int maxClients );
     protected:
         int set_non_blocking( Channel *channel );
+        int set_reusable( Channel *channel );
         int resolve( const char *host, void *address );
 };
 #endif

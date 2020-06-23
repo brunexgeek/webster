@@ -1337,6 +1337,19 @@ int SocketNetwork::set_non_blocking( Channel *channel )
 	return (result == 0) ? WBERR_OK : WBERR_SOCKET;
 }
 
+int SocketNetwork::set_reusable( Channel *channel )
+{
+	SocketChannel *chann = (SocketChannel*) channel;
+#ifdef WB_WINDOWS
+	int opt = SO_EXCLUSIVEADDRUSE;
+#else
+	int opt = SO_REUSEADDR;
+#endif
+	int value = 1;
+	value = ::setsockopt(chann->socket, SOL_SOCKET,  opt, (char *)&value, sizeof(int));
+	return (value == 0) ? WBERR_OK : WBERR_SOCKET;
+}
+
 int SocketNetwork::open( Channel **channel, Type type )
 {
 	(void) type;
@@ -1353,9 +1366,11 @@ int SocketNetwork::open( Channel **channel, Type type )
 	chann->poll.fd = chann->socket;
 	chann->poll.events = POLLIN;
 
-	// allow socket descriptor to be reuseable
-	int on = 1;
-	::setsockopt(chann->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
+	if (type == Network::SERVER)
+	{
+		// allow socket descriptor to be reusable
+		set_reusable(chann);
+	}
 
 	return WBERR_OK;
 }
@@ -1532,11 +1547,9 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	((SocketChannel*)*client)->poll.fd = socket;
 	((SocketChannel*)*client)->poll.events = POLLIN;
 
-	// allow socket descriptor to be reuseable
-#ifdef WB_WINDOWS
-	int on = 1;
-	::setsockopt(chann->socket, SOL_SOCKET,  SO_REUSEADDR, (char *)&on, sizeof(int));
-#endif
+	// allow socket descriptor to be reusable
+	set_reusable(chann);
+	// use non-blocking operations
 	result = set_non_blocking(chann);
 	if (result == WBERR_OK) return result;
 
