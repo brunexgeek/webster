@@ -1061,6 +1061,7 @@ int MessageImpl::read( uint8_t *buffer, int *size )
 {
 	if (state_ == WBS_IDLE) receive_header(10000);
 	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
+	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
 
 	int result;
 	if (body_.expected == 0)
