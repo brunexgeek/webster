@@ -1040,7 +1040,6 @@ int MessageImpl::chunk_size( int timeout )
 	// discard the previous chunk terminator
 	if (body_.chunks > 0)
 	{
-		std::cout << "Skiping chunk terminator\n";
 		int result = stream_.read_line(line, sizeof(line));
 		if (result != WBERR_OK) return result;
 		if (*line != 0) return WBERR_INVALID_CHUNK;
@@ -1049,7 +1048,6 @@ int MessageImpl::chunk_size( int timeout )
 	int result = stream_.read_line(line, sizeof(line));
 	if (result != WBERR_OK) return result;
 	auto count = strtol(line, &ptr, 16);
-	std::cout << "Found chunk of " << count << " bytes\n";
 	if (*ptr != 0) return WBERR_INVALID_CHUNK;
 	++body_.chunks;
 	body_.expected = (int) count;
@@ -1224,7 +1222,7 @@ int MessageImpl::flush()
 
 int MessageImpl::finish()
 {
-	if (state_ == WBS_COMPLETE) return WBERR_INVALID_STATE;
+	if (state_ == WBS_COMPLETE) return WBERR_OK;
 	if (flags_ & WBMT_INBOUND)
     {
         // TODO: discard remaining body data?
