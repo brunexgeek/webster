@@ -211,6 +211,8 @@ struct Target
     static int parse( const char *url, Target &target ); // TODO: make this dynamic
     static std::string encode( const std::string & value );
     static std::string decode( const std::string & value );
+    void swap( Target &that );
+    void clear();
 };
 
 enum Method
@@ -286,6 +288,11 @@ struct Header
     Method method;
 
     Header();
+    Header( const Header & ) = default;
+    Header( Header && ) = default;
+    Header &operator=( const Header & ) = default;
+    void swap( Header &that );
+    void clear();
 };
 
 class Client;

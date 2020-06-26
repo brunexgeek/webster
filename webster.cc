@@ -144,8 +144,9 @@ int HttpStream::flush()
 	return WBERR_OK;
 }
 
-Target::Target() : type(0), scheme(WBP_HTTP), port(80)
+Target::Target()
 {
+	clear();
 }
 
 static std::string string_cut(
@@ -373,7 +374,47 @@ int Target::parse( const char *url, Target &target )
     return WBERR_OK;
 }
 
-Header::Header() : content_length(0), status(200), method(WBM_GET) {}
+void Target::swap( Target &that )
+{
+	std::swap(type, that.type);
+	std::swap(scheme, that.scheme);
+	user.swap(that.user);
+	host.swap(that.path);
+	std::swap(port, that.port);
+	path.swap(that.path);
+	query.swap(that.query);
+}
+
+void Target::clear()
+{
+	type = port = 0;
+	scheme = WBP_HTTP;
+	user.clear();
+	host.clear();
+	path.clear();
+	query.clear();
+}
+
+Header::Header()
+{
+	clear();
+}
+
+void Header::swap( Header &that )
+{
+	std::swap(status, that.status);
+	std::swap(method, that.method);
+	fields.swap(that.fields);
+	target.swap(that.target);
+}
+
+void Header::clear()
+{
+	status = 200;
+	method = WBM_GET;
+	fields.clear();
+	target.clear();
+}
 
 Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
 	read_timeout(WBL_DEF_TIMEOUT)
