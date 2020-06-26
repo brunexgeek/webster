@@ -988,10 +988,7 @@ int MessageImpl::parse_header_field( char *data )
 	value = http_removeTrailing(value);
 	header.fields.set(name, value);
 	if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
-	{
-		header.content_length = (int) strtol(value, nullptr, 10);
-		body_.expected = header.content_length;
-	}
+		body_.expected = (int) strtol(value, nullptr, 10);
 	else
 	if (STRCMPI(name, "Transfer-Encoding") == 0)
 	{
@@ -1065,9 +1062,6 @@ int MessageImpl::receive_header( int timeout )
 		first = false;
 
 	} while ( (int) (tick() - start) < timeout);
-
-	// parse HTTP header fields and retrieve the content length
-	header.content_length = body_.expected;
 
 	return WBERR_OK;
 }

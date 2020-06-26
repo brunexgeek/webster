@@ -281,7 +281,6 @@ class HeaderFields : public std::map<std::string, std::string, webster::less>
 
 struct Header
 {
-    int content_length;
     Target target;
     int status;
     HeaderFields fields;
