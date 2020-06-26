@@ -136,7 +136,7 @@ using namespace webster;
 
 static int serverState = SERVER_RUNNING;
 
-static char rootDirectory[PATH_LENGTH];
+static char *rootDirectory;
 
 #if defined(_WIN32) || defined(WIN32)
 
@@ -474,9 +474,14 @@ int main(int argc, char* argv[])
 	#endif
 
 	if (argc == 2)
-		realpath(argv[1], rootDirectory);
+		rootDirectory = realpath(argv[1], nullptr);
 	else
-		realpath(".", rootDirectory);
+		rootDirectory = realpath(".", nullptr);
+	if (rootDirectory == nullptr)
+	{
+		std::cerr << "ERROR: Invalid path" << std::endl;
+		return 1;
+	}
 
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
