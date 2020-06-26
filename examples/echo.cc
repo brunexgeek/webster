@@ -79,10 +79,7 @@ struct EchoHandler : public Handler
 {
 	int operator()( Message &request, Message &response )
 	{
-		// discards the body
-		uint8_t buffer[128];
-		int size = sizeof(buffer);
-		while (request.read(buffer, &size) == WBERR_OK) size = sizeof(buffer);
+		request.finish();
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";

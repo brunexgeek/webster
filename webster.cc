@@ -15,8 +15,6 @@
  *   limitations under the License.
  */
 
-#define _POSIX_C_SOURCE 200112L
-
 #if defined(_WIN32) || defined(WIN32)
 #define WB_WINDOWS
 #endif
@@ -29,11 +27,80 @@
 #include <iostream>
 #include <cstring> // strlen strstr strchr
 
+#define IS_INBOUND(x)   ( (x) & 1 )
+#define IS_OUTBOUND(x)  ( ((x) & 1) == 0 )
+#define IS_REQUEST(x)   ( (x) & 2 )
+#define IS_RESPONSE(x)  ( ((x) & 2) == 0)
+
+#define WBMF_INBOUND   1
+#define WBMF_OUTBOUND  0
+#define WBMF_REQUEST   2
+#define WBMF_RESPONSE  0
+
 namespace webster {
+
+enum State
+{
+	WBS_IDLE     = 0,
+	WBS_BODY     = 1,
+	WBS_COMPLETE = 2,
+};
+
+class MessageImpl : public Message
+{
+    public:
+        MessageImpl( HttpStream &stream, int buffer_size = WBL_DEF_BUFFER_SIZE );
+        ~MessageImpl();
+        int read( uint8_t *buffer, int *size );
+        int read( char *buffer, int size );
+        //int read( std::string &buffer );
+        int write( const uint8_t *buffer, int size );
+        int write( const char *buffer );
+        int write( const std::string &buffer );
+        int ready();
+        int flush();
+        int finish();
+
+    public:
+        State state_;
+        int flags_;
+        struct
+        {
+            /**
+             * @brief Message expected size.
+             *
+             * This value is any negative if using chunked transfer encoding.
+             */
+            int expected;
+
+            /**
+             * @brief Number of chunks received.
+             */
+            int chunks;
+
+            int flags;
+        } body_;
+        HttpStream &stream_;
+        Client *client_;
+        Channel *channel_;
+
+        int receive_header( int timeout );
+        int chunk_size( int timeout );
+        int write_header();
+        int write_resource_line();
+        int compute_resource_line( std::stringstream &ss ) const;
+        int compute_status_line( std::stringstream &ss ) const;
+        int parse_first_line( const char *data );
+        int parse_header_field( char *data );
+        int discard();
+
+        friend Client;
+        friend RemoteClient;
+};
 
 std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>();
 
-HttpStream::HttpStream( NetworkPtr net, Channel *chann, int type, int size ) : pending_(0), size_(size),
+HttpStream::HttpStream( NetworkPtr net, Channel *chann, int flags, int size ) : pending_(0), size_(size),
 	channel_(chann), net_(net), data_(nullptr)
 {
 	if (size_ < WBL_MIN_BUFFER_SIZE)
@@ -42,7 +109,7 @@ HttpStream::HttpStream( NetworkPtr net, Channel *chann, int type, int size ) : p
 	if (size_ > WBL_MAX_BUFFER_SIZE)
 		size_ = WBL_MAX_BUFFER_SIZE;
 
-	if (type == WBMT_OUTBOUND)
+	if (IS_OUTBOUND(flags))
 		data_ = current_ = new(std::nothrow) uint8_t[size];
 }
 
@@ -576,18 +643,18 @@ int Client::connect( const Target &target )
 
 int Client::communicate( const std::string &path, Handler &handler )
 {
-	HttpStream os(params_.network, channel_, WBMT_OUTBOUND);
+	HttpStream os(params_.network, channel_, WBMF_OUTBOUND);
 	MessageImpl request(os);
-	HttpStream is(params_.network, channel_, WBMT_INBOUND);
+	HttpStream is(params_.network, channel_, WBMF_INBOUND);
 	MessageImpl response(is);
 
-	request.flags_ = WBMT_OUTBOUND | WBMT_REQUEST;
+	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
 	request.channel_ = channel_;
 	request.client_ = this;
 	int result = Target::parse(path.c_str(), request.header.target);
 	if (result != WBERR_OK) return result;
 
-	response.flags_ = WBMT_INBOUND | WBMT_RESPONSE;
+	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
 	response.channel_ = channel_;
 	response.client_ = this;
 	response.header.target = request.header.target;
@@ -613,19 +680,19 @@ int RemoteClient::communicate( const std::string &path, Handler &handler )
 {
 	(void) path;
 
-	HttpStream is(params_.network, channel_, WBMT_INBOUND);
+	HttpStream is(params_.network, channel_, WBMF_INBOUND);
 	MessageImpl request(is);
-	HttpStream os(params_.network, channel_, WBMT_OUTBOUND);
+	HttpStream os(params_.network, channel_, WBMF_OUTBOUND);
 	MessageImpl response(os);
 
-	request.flags_ = WBMT_INBOUND | WBMT_REQUEST;
+	request.flags_ = WBMF_INBOUND | WBMF_REQUEST;
 	request.channel_ = channel_;
 	request.client_ = this;
 
 	int result = request.receive_header(params_.read_timeout);
 
 	if (result != WBERR_OK) return result;
-	response.flags_ = WBMT_OUTBOUND | WBMT_RESPONSE;
+	response.flags_ = WBMF_OUTBOUND | WBMF_RESPONSE;
 	response.channel_ = channel_;
 	response.client_ = this;
 	response.header.target = request.header.target;
@@ -704,27 +771,6 @@ int strcmpi( const char *s1, const char *s2 )
 	return c1 - c2;
 }
 #endif
-
-// is a header field name character?
-#define IS_HFNC(x) \
-	( ((x) >= 'A' && (x) <= 'Z')   \
-    || ((x) >= 'a' && (x) <= 'z')  \
-    || ((x) >= '0' && (x) <= '9')  \
-    || (x) == '-'  \
-	|| (x) == '_'  \
-	|| (x) == '!'  \
-    || (x) == '#'  \
-	|| (x) <= '$'  \
-	|| (x) <= '%'  \
-	|| (x) <= '&'  \
-	|| (x) <= '\''  \
-    || (x) == '*'  \
-    || (x) == '+'  \
-	|| (x) <= '.'  \
-    || (x) == '^'  \
-    || (x) == '|'  \
-	|| (x) == '`'  \
-    || (x) == '~' )
 
 const char *http_statusMessage( int status )
 {
@@ -913,7 +959,7 @@ int MessageImpl::parse_first_line( const char *data )
 
 	if (strncmp(data, "HTTP/1.1", 8) == 0)
 	{
-		if (!(flags_ & WBMT_RESPONSE)) return WBERR_INVALID_HTTP_MESSAGE;
+		if (!IS_RESPONSE(flags_)) return WBERR_INVALID_HTTP_MESSAGE;
 
 		// HTTP status code
 		ptr += 8;
@@ -921,7 +967,7 @@ int MessageImpl::parse_first_line( const char *data )
 	}
 	else
 	{
-		if (!(flags_ & WBMT_REQUEST)) return WBERR_INVALID_HTTP_MESSAGE;
+		if (!IS_REQUEST(flags_)) return WBERR_INVALID_HTTP_MESSAGE;
 
 		// find out the HTTP method (case-sensitive according to RFC-7230:3.1.1)
 		if (strncmp(ptr, "GET", 3) == 0)
@@ -973,6 +1019,27 @@ int MessageImpl::parse_first_line( const char *data )
 	return WBERR_OK;
 }
 
+// is a header field name character?
+#define IS_HFNC(x) \
+	( ((x) >= 'A' && (x) <= 'Z')   \
+    || ((x) >= 'a' && (x) <= 'z')  \
+    || ((x) >= '0' && (x) <= '9')  \
+    || (x) == '-'  \
+	|| (x) == '_'  \
+	|| (x) == '!'  \
+    || (x) == '#'  \
+	|| (x) <= '$'  \
+	|| (x) <= '%'  \
+	|| (x) <= '&'  \
+	|| (x) <= '\''  \
+    || (x) == '*'  \
+    || (x) == '+'  \
+	|| (x) <= '.'  \
+    || (x) == '^'  \
+    || (x) == '|'  \
+	|| (x) == '`'  \
+    || (x) == '~' )
+
 int MessageImpl::parse_header_field( char *data )
 {
 	char *ptr = data;
@@ -1001,6 +1068,8 @@ int MessageImpl::parse_header_field( char *data )
 	}
 	return WBERR_OK;
 }
+
+#undef IS_HFNC
 
 MessageImpl::MessageImpl( HttpStream &stream, int buffer_size ) : stream_(stream)
 {
@@ -1038,11 +1107,10 @@ uint64_t tick()
 
 int MessageImpl::receive_header( int timeout )
 {
-	if (state_ != WBS_IDLE || !(flags_ & WBMT_INBOUND))
+	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
-	state_ = WBS_HEADER;
 
-	char line[1024] = {0};
+	char line[1024];
 	bool first = true;
 	auto start = tick();
 	do
@@ -1064,6 +1132,7 @@ int MessageImpl::receive_header( int timeout )
 
 	} while ( (int) (tick() - start) < timeout);
 
+	state_ = WBS_BODY;
 	return WBERR_OK;
 }
 
@@ -1093,11 +1162,15 @@ int MessageImpl::chunk_size( int timeout )
 
 int MessageImpl::read( uint8_t *buffer, int *size )
 {
-	if (state_ == WBS_IDLE) receive_header(10000);
+	int result = WBERR_OK;
+	if (state_ == WBS_IDLE)
+	{
+		result = receive_header(10000);
+		if (result != WBERR_OK) return result;
+	}
 	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
 	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
 
-	int result;
 	if (body_.expected == 0)
 	{
 		if (body_.flags & WBMF_CHUNKED)
@@ -1129,10 +1202,32 @@ int MessageImpl::read( char *buffer, int size )
 	return result;
 }
 
-int MessageImpl::wait()
+int MessageImpl::ready()
 {
-	int result = read(nullptr, nullptr);
-	if (result == WBERR_INVALID_ARGUMENT) result = WBERR_OK;
+	if (state_ != WBS_IDLE) return WBERR_OK;
+	if (IS_INBOUND(flags_))
+	{
+		int result = receive_header(10000);
+		if (result != WBERR_OK) return result;
+		return state_ == WBS_BODY;
+	}
+	else
+		return write_header();
+}
+
+int MessageImpl::discard()
+{
+	// ignore outbound messages
+	if (IS_OUTBOUND(flags_)) return WBERR_OK;
+	// wait for the HTTP header, if needed
+	int result = ready();
+	if (result != WBERR_OK) return result;
+	return WBERR_OK;
+	// discard body data
+	uint8_t buffer[1024];
+	int size = sizeof(buffer);
+	while ((result = read(buffer, &size)) == WBERR_OK) size = sizeof(buffer);
+	if (result == WBERR_COMPLETE) return WBERR_OK;
 	return result;
 }
 
@@ -1189,7 +1284,7 @@ int MessageImpl::write_header()
 	std::stringstream ss;
 
 	// first line
-	if (flags_ & WBMT_RESPONSE)
+	if (IS_RESPONSE(flags_))
 		compute_status_line(ss);
 	else
 		compute_resource_line(ss);
@@ -1201,7 +1296,7 @@ int MessageImpl::write_header()
 		// TODO: merge with previously set value, if any
 		header.fields.set(WBFI_TRANSFER_ENCODING, "chunked");
 	}
-	if (flags_ & WBMT_REQUEST && header.fields.count(WBFI_HOST) == 0)
+	if (IS_REQUEST(flags_) && header.fields.count(WBFI_HOST) == 0)
 	{
 		std::string host = client_->get_target().host;
 		host += ':';
@@ -1220,7 +1315,11 @@ int MessageImpl::write_header()
 
 int MessageImpl::write( const uint8_t *buffer, int size )
 {
-	if (state_ == WBS_IDLE) write_header();
+	if (state_ == WBS_IDLE)
+	{
+		int result = write_header();
+		if (result != WBERR_OK) return result;
+	}
 	if (buffer == nullptr || size == 0) return WBERR_OK;
 
 	int result = WBERR_OK;
@@ -1251,24 +1350,36 @@ int MessageImpl::write( const std::string &text )
 
 int MessageImpl::flush()
 {
-	int result = write(nullptr, 0);
-	if (result != WBERR_OK) return result;
+	if (IS_INBOUND(flags_ )) return WBERR_OK;
+	// force headers to be written
+	if (state_ == WBS_IDLE)
+	{
+		int result = ready();
+		if (result != WBERR_OK) return result;
+	}
+	// send buffered data
 	return stream_.flush();
 }
 
 int MessageImpl::finish()
 {
 	if (state_ == WBS_COMPLETE) return WBERR_OK;
-	if (flags_ & WBMT_INBOUND)
-    {
-        // TODO: discard remaining body data?
-        return WBERR_OK;
-    }
+	if (IS_INBOUND(flags_)) return discard();
+	int result;
 
+	// force headers to be written
+	if (state_ == WBS_IDLE)
+	{
+		result = ready();
+		if (result != WBERR_OK) return result;
+	}
 	// send the last marker if using chunked transfer encoding
 	if (body_.flags & WBMF_CHUNKED)
-		stream_.write((const uint8_t*) "0\r\n\r\n", 5);
-	int result = flush();
+	{
+		result = stream_.write((const uint8_t*) "0\r\n\r\n", 5);
+		if (result != WBERR_OK) return result;
+	}
+	result = stream_.flush();
 	if (result != WBERR_OK) return result;
 
 	// we are done sending data now
@@ -1278,8 +1389,6 @@ int MessageImpl::finish()
 }
 
 } // namespace webster
-
-#undef IS_HFNC
 
 #if !defined(WEBSTER_NO_DEFAULT_NETWORK) && !defined(WEBSTER_NETWORK)
 #define WEBSTER_NETWORK

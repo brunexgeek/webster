@@ -73,16 +73,6 @@
 #define WBT_BODY                         2
 #define WBT_EMPTY                        3
 
-#define WBMT_INBOUND                     1
-#define WBMT_OUTBOUND                    2
-#define WBMT_REQUEST                     4
-#define WBMT_RESPONSE                    8
-
-#define WBS_IDLE                         0
-#define WBS_HEADER                       1
-#define WBS_BODY                         2
-#define WBS_COMPLETE                     3
-
 #define WBO_BUFFER_SIZE                  1
 
 enum FieldID
@@ -337,17 +327,19 @@ struct Parameters
     Parameters( const Parameters &that );
 
     /**
-     * Pointer to custom network functions. If NULL uses the default implementation.
+     * Pointer to custom network implementation. Uses the default implementation if not defined.
      */
     std::shared_ptr<Network> network;
 
     /**
-     * Maximum number of concurrent remote clients (server only).
+     * Maximum number of concurrent remote clients (server only). The default value is
+     * WBL_DEF_CONNECTIONS.
      */
     int max_clients;
 
     /**
-     * Size in bytes of the message internal buffer (read and write).
+     * Size (in bytes) of the message internal output buffer. The default value
+     * is WBL_DEF_BUFFER_SIZE.
      */
     uint32_t buffer_size;
 
@@ -368,8 +360,36 @@ class Message
         virtual int write( const uint8_t *buffer, int size ) = 0;
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
-        virtual int wait() = 0;
+        /**
+         * Wait until the message body is ready to be read or written.
+         *
+         * This function will block the execution until the message body is ready.
+         * The amount of time the function waits is the read or write timeout,
+         * depending on the message type (incomming or outgoing).
+         *
+         * For incomming messages, the HTTP header will be completely received.
+         * For outgoing messages, this function will force the HTTP header to be sent.
+         */
+        virtual int ready() = 0;
+        /**
+         * Send all buffered data of the outgoing message.
+         *
+         * By default, every write call is buffered and no data is sent until
+         * the buffer is full. This function force the current buffer content
+         * be sent.
+         *
+         * This function will force the HTTP header to be sent.
+         */
         virtual int flush() = 0;
+        /**
+         * Finish the message by discarding or writing necessary data.
+         *
+         * For incomming messages, this function discard all incomming body data
+         * until the end of the message.
+         *
+         * For outgoing messages, this function write any necessary data and
+         * complete the message. No more data can be written after this call.
+         */
         virtual int finish() = 0;
 };
 
@@ -452,70 +472,6 @@ class HttpStream
 		Channel *channel_;
 		NetworkPtr net_;
 		uint8_t *data_;
-};
-
-typedef std::shared_ptr<HttpStream> HttpStreamPtr;
-
-class MessageImpl : public Message
-{
-    public:
-		MessageImpl( HttpStream &stream, int buffer_size = WBL_DEF_BUFFER_SIZE );
-        ~MessageImpl();
-        int read( uint8_t *buffer, int *size );
-        int read( char *buffer, int size );
-        //int read( std::string &buffer );
-        int write( const uint8_t *buffer, int size );
-        int write( const char *buffer );
-        int write( const std::string &buffer );
-        int wait();
-        int flush();
-        int finish();
-
-    public:
-        /**
-         * @brief Current state of the message.
-         *
-         * The machine state if defined by @c WBS_* macros.
-         */
-        int state_;
-
-        /**
-         * @brief Message type (WBMT_INBOUND or WBMT_OUTBOUND).
-         */
-        int flags_;
-
-        struct
-        {
-            /**
-             * @brief Message expected size.
-             *
-             * This value is any negative if using chunked transfer encoding.
-             */
-            int expected;
-
-            /**
-             * @brief Number of chunks received.
-             */
-            int chunks;
-
-            int flags;
-        } body_;
-
-        HttpStream &stream_;
-        Client *client_;
-        Channel *channel_;
-
-        int receive_header( int timeout );
-        int chunk_size( int timeout );
-        int write_header();
-        int write_resource_line();
-        int compute_resource_line( std::stringstream &ss ) const;
-        int compute_status_line( std::stringstream &ss ) const;
-        int parse_first_line( const char *data );
-        int parse_header_field( char *data );
-
-        friend Client;
-        friend RemoteClient;
 };
 
 extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
