@@ -122,6 +122,7 @@ int HttpStream::read_line( char *data, int size )
 		*p = (char) c;
 		++p;
 	} while (p < data + size - 1);
+	if (c != '\n') return WBERR_TOO_LONG;
 	*p = 0;
 
 	return WBERR_OK;
@@ -1305,6 +1306,27 @@ typedef SSIZE_T ssize_t;
 
 namespace webster {
 
+inline int get_error()
+{
+#ifdef WB_WINDOWS
+	return WSAGetLastError();
+#else
+	return errno;
+#endif
+}
+
+inline bool match_error()
+{
+	return false;
+}
+
+template<typename ...Args>
+inline bool match_error( int code, Args... args )
+{
+	if (code == get_error()) return true;
+	return match_error(args...);
+}
+
 struct SocketChannel : public Channel
 {
 	#ifdef WB_WINDOWS
@@ -1449,7 +1471,7 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
 	if (result < 0)
 	{
-		if (errno == ETIMEDOUT) return WBERR_TIMEOUT;
+		if (get_error() == ETIMEDOUT) return WBERR_TIMEOUT;
 		return WBERR_SOCKET;
 	}
 	result = set_non_blocking(chann);
@@ -1483,9 +1505,9 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int ti
 	if (bytes == 0 || bytes < 0)
 	{
 		*size = 0;
-		if (bytes == 0 || errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
+		if (bytes == 0 || match_error(ECONNRESET, EPIPE, ENOTCONN))
 			return WBERR_NOT_CONNECTED;
-		if (errno == EWOULDBLOCK || errno == EAGAIN)
+		if (match_error(EWOULDBLOCK, EAGAIN))
 			return WBERR_NO_DATA;
 		return WBERR_SOCKET;
 	}
@@ -1512,9 +1534,9 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int
 		result = ::send(chann->socket, (const char *) buffer, (size_t) *size, flags);
 		if (result < 0)
 		{
-			if (errno == ECONNRESET || errno == EPIPE || errno == ENOTCONN)
+			if (match_error(ECONNRESET, EPIPE, ENOTCONN))
 				return WBERR_NOT_CONNECTED;
-			if (errno == EWOULDBLOCK || errno == EAGAIN)
+			if (match_error(EWOULDBLOCK, EAGAIN))
 				continue;
 			return WBERR_SOCKET;
 		}
@@ -1568,11 +1590,11 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	{
 		delete (SocketChannel*)*client;
 		*client = NULL;
-		if (errno == EMFILE || errno == ENFILE)
+		if (match_error(EMFILE, ENFILE))
 			return WBERR_NO_RESOURCES;
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		if (match_error(EAGAIN, EWOULDBLOCK))
 			return WBERR_TIMEOUT;
-		if (errno == ENOBUFS || errno == ENOMEM)
+		if (match_error(ENOBUFS, ENOMEM))
 			return WBERR_MEMORY_EXHAUSTED;
 		return WBERR_SOCKET;
 	}
