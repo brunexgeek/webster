@@ -296,7 +296,7 @@ class Network
         virtual int close( Channel *channel ) = 0;
         virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
         virtual int receive( Channel *channel, uint8_t *buffer, int *size, int timeout ) = 0;
-        virtual int send( Channel *channel, const uint8_t *buffer, int *size, int timeout ) = 0;
+        virtual int send( Channel *channel, const uint8_t *buffer, int size, int timeout ) = 0;
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
 };

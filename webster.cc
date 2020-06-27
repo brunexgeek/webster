@@ -137,7 +137,7 @@ class SocketNetwork : public Network
         int close( Channel *channel );
         int connect( Channel *channel, int scheme, const char *host, int port );
         int receive( Channel *channel, uint8_t *buffer, int *size, int timeout );
-        int send( Channel *channel, const uint8_t *buffer, int *size, int timeout );
+        int send( Channel *channel, const uint8_t *buffer, int size, int timeout );
         int accept( Channel *channel, Channel **client, int timeout );
         int listen( Channel *channel, const char *host, int port, int maxClients );
     protected:
@@ -194,8 +194,7 @@ int HttpStream::write( const uint8_t *buffer, int size )
 	// send pending data if the buffer is full
 	if (current_ >= data_ + params_.buffer_size)
 	{
-		int tmp = params_.buffer_size;
-		result = params_.network->send(channel_, data_, &tmp, params_.write_timeout);
+		result = params_.network->send(channel_, data_, params_.buffer_size, params_.write_timeout);
 		current_ = data_;
 		pending_ = 0;
 	}
@@ -257,7 +256,7 @@ int HttpStream::flush()
 	if (current_ > data_)
 	{
 		int size = (int) (current_ - data_);
-		params_.network->send(channel_, data_, &size, params_.write_timeout);
+		params_.network->send(channel_, data_, size, params_.write_timeout);
 		current_ = data_;
 	}
 	return WBERR_OK;
@@ -1500,6 +1499,31 @@ inline bool match_error( int code, Args... args )
 	return match_error(args...);
 }
 
+inline int poll( struct pollfd &pfd, int &timeout )
+{
+	if (timeout < 0) timeout = 0;
+	pfd.revents = 0;
+#ifdef WB_WINDOWS
+	auto start = tick();
+	int result = WSAPoll(&pfd, 1, timeout);
+	timeout -= (int) (tick() - start);
+#else
+	int result;
+	do
+	{
+		auto start = tick();
+		result = ::poll(&pfd, 1, timeout);
+		int elapsed = (int) (tick() - start);
+		timeout -= elapsed;
+		if (result >= 0 || get_error() != EINTR) break;
+	} while (timeout > 0);
+#endif
+	if (timeout < 0) timeout = 0;
+	if (result == 0) return WBERR_TIMEOUT;
+	if (result < 0) return WBERR_SOCKET;
+	return WBERR_OK;
+}
+
 struct SocketChannel : public Channel
 {
 	#ifdef WB_WINDOWS
@@ -1662,17 +1686,11 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int ti
 	SocketChannel *chann = (SocketChannel*) channel;
 	int bufferSize = *size;
 	*size = 0;
-	chann->poll.revents = 0;
 
 	// wait for data
-	#ifdef WB_WINDOWS
-	int result = WSAPoll(&chann->poll, 1, timeout);
-	#else
-	int result = ::poll(&chann->poll, 1, timeout);
-	#endif
-	if (result == 0) return WBERR_TIMEOUT;
-	if (result == EINTR) return WBERR_SIGNAL;
-	if (result < 0) return WBERR_SOCKET;
+	chann->poll.events = POLLIN;
+	int result = webster::poll(chann->poll, timeout);
+	if (result != WBERR_OK) return result;
 
 	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
 	if (bytes == 0 || bytes < 0)
@@ -1689,10 +1707,10 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int ti
 	return WBERR_OK;
 }
 
-int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int timeout )
+int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int timeout )
 {
 	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (buffer == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
 	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
@@ -1702,22 +1720,31 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int
 	#else
 	int flags = MSG_NOSIGNAL;
 	#endif
-	ssize_t result = 0;
-	uint64_t start = tick();
-	do {
-		result = ::send(chann->socket, (const char *) buffer, (size_t) *size, flags);
-		if (result < 0)
+	ssize_t sent = 0;
+	ssize_t pending = size;
+
+	do
+	{
+		ssize_t bytes = ::send(chann->socket, (const char *) buffer, pending, flags);
+		if (bytes < 0)
 		{
 			if (match_error(ECONNRESET, EPIPE, ENOTCONN))
 				return WBERR_NOT_CONNECTED;
-			if (match_error(EWOULDBLOCK, EAGAIN))
-				continue;
+			if (match_error(EWOULDBLOCK, EAGAIN, EINTR))
+			{
+				if (timeout == 0) return WBERR_TIMEOUT;
+				chann->poll.events = POLLOUT;
+				int result = webster::poll(chann->poll, timeout);
+				if (result != WBERR_OK) return result;
+			}
 			return WBERR_SOCKET;
 		}
-		return WBERR_OK;
-	} while ((int) (tick() - start) < timeout);
-	*size = (int) result;
+		sent += bytes;
+		buffer += bytes;
+		pending -= bytes;
+	} while (sent < size && timeout > 0);
 
+	if (sent < size) return WBERR_TIMEOUT;
 	return WBERR_OK;
 }
 
