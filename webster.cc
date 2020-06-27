@@ -1489,16 +1489,38 @@ inline int get_error()
 #endif
 }
 
-inline bool match_error()
+inline int translate_error( int code = 0 )
 {
-	return false;
-}
-
-template<typename ...Args>
-inline bool match_error( int code, Args... args )
-{
-	if (code == get_error()) return true;
-	return match_error(args...);
+	if (code == 0) code = get_error();
+	switch (code)
+	{
+		case EACCES:
+			return WBERR_PERMISSION;
+		case EADDRINUSE:
+			return WBERR_ADDRESS_IN_USE;
+		case ENOTSOCK:
+			return WBERR_INVALID_CHANNEL;
+		case ECONNRESET:
+		case EPIPE:
+		case ENOTCONN:
+			return WBERR_NOT_CONNECTED;
+		case ETIMEDOUT:
+		case EWOULDBLOCK:
+#if EWOULDBLOCK != EAGAIN
+		case EAGAIN:
+#endif
+			return WBERR_TIMEOUT;
+		case EINTR:
+			return WBERR_SIGNAL;
+		case EMFILE:
+		case ENFILE:
+			return WBERR_NO_RESOURCES;
+		case ENOBUFS:
+		case ENOMEM:
+			return WBERR_MEMORY_EXHAUSTED;
+		default:
+			return WBERR_SOCKET;
+	}
 }
 
 inline int poll( struct pollfd &pfd, int &timeout, bool ignore_signal = true )
@@ -1617,7 +1639,7 @@ int SocketNetwork::open( Channel **channel, Type type )
 	SocketChannel *chann = (SocketChannel*) *channel;
 
 	chann->socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (chann->socket == -1) return WBERR_SOCKET;
+	if (chann->socket < 0) return translate_error();
 	chann->poll.fd = chann->socket;
 	chann->poll.events = POLLIN;
 
@@ -1643,8 +1665,6 @@ int SocketNetwork::close( Channel *channel )
 	::shutdown(chann->socket, SHUT_RDWR);
 	::close(chann->socket);
 	#endif
-
-	chann->socket = chann->poll.fd = 0;
 	delete channel;
 
 	return WBERR_OK;
@@ -1656,8 +1676,6 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 		return WBERR_INVALID_CHANNEL;
 	if (port < 0 && port > 0xFFFF)
 		return WBERR_INVALID_PORT;
-	if (host == nullptr || host[0] == 0)
-		return WBERR_INVALID_HOST;
 	if (scheme == WBP_AUTO)
 		scheme = (port == 443) ? WBP_HTTPS : WBP_HTTP;
 	if (scheme != WBP_HTTP)
@@ -1671,11 +1689,7 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 	address.sin_port = htons( (uint16_t) port );
 	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
-	if (result < 0)
-	{
-		if (get_error() == ETIMEDOUT) return WBERR_TIMEOUT;
-		return WBERR_SOCKET;
-	}
+	if (result < 0) return translate_error();
 	result = set_non_blocking(chann);
 	if (result == WBERR_OK) return result;
 
@@ -1691,7 +1705,6 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *re
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	// wait for data
 	chann->poll.events = POLLIN;
 	int result = webster::poll(chann->poll, timeout);
 	if (result != WBERR_OK) return result;
@@ -1699,11 +1712,8 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *re
 	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) size, 0);
 	if (bytes <= 0)
 	{
-		if (bytes == 0 || match_error(ECONNRESET, EPIPE, ENOTCONN))
-			return WBERR_NOT_CONNECTED;
-		if (match_error(EWOULDBLOCK, EAGAIN))
-			return WBERR_TIMEOUT;
-		return WBERR_SOCKET;
+		if (bytes == 0) return WBERR_NOT_CONNECTED;
+		return translate_error();
 	}
 	*received = (int) bytes;
 
@@ -1731,16 +1741,16 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int 
 		ssize_t bytes = ::send(chann->socket, (const char *) buffer, pending, flags);
 		if (bytes < 0)
 		{
-			if (match_error(ECONNRESET, EPIPE, ENOTCONN))
-				return WBERR_NOT_CONNECTED;
-			if (match_error(EWOULDBLOCK, EAGAIN, EINTR))
+			int code = get_error();
+			if (code == EWOULDBLOCK || code ==  EAGAIN || code == EINTR)
 			{
 				if (timeout == 0) return WBERR_TIMEOUT;
 				chann->poll.events = POLLOUT;
 				int result = webster::poll(chann->poll, timeout);
 				if (result != WBERR_OK) return result;
+				continue;
 			}
-			return WBERR_SOCKET;
+			return translate_error(code);
 		}
 		sent += bytes;
 		buffer += bytes;
@@ -1789,15 +1799,9 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	socket = ::accept(chann->socket, (struct sockaddr *) &address, &addressLength);
 	if (socket < 0)
 	{
-		delete (SocketChannel*)*client;
+		delete (SocketChannel*) *client;
 		*client = nullptr;
-		if (match_error(EMFILE, ENFILE))
-			return WBERR_NO_RESOURCES;
-		if (match_error(EAGAIN, EWOULDBLOCK))
-			return WBERR_TIMEOUT;
-		if (match_error(ENOBUFS, ENOMEM))
-			return WBERR_MEMORY_EXHAUSTED;
-		return WBERR_SOCKET;
+		return translate_error();
 	}
 	((SocketChannel*)*client)->socket = socket;
 	((SocketChannel*)*client)->poll.fd = socket;
@@ -1816,8 +1820,6 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 {
 	if (channel == nullptr)
 		return WBERR_INVALID_CHANNEL;
-	if ( host == nullptr || host[0] == 0)
-		return WBERR_INVALID_HOST;
 	if (port < 0 && port > 0xFFFF)
 		return WBERR_INVALID_PORT;
 
@@ -1828,12 +1830,12 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 	if (result != WBERR_OK) return result;
 
 	address.sin_port = htons( (uint16_t) port );
-	if (::bind(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in)) != 0)
-		return WBERR_SOCKET;
+	if (::bind(chann->socket, (const struct sockaddr*) &address, sizeof(struct sockaddr_in)) != 0)
+		return translate_error();
 
 	// listen for incoming connections
 	if ( ::listen(chann->socket, maxClients) != 0 )
-		return WBERR_SOCKET;
+		return translate_error();
 
 	return WBERR_OK;
 }

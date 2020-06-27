@@ -58,10 +58,12 @@
 #define WBERR_INVALID_HOST               -20
 #define WBERR_INVALID_PORT               -21
 #define WBERR_INVALID_CHANNEL            -22
+#define WBERR_ADDRESS_IN_USE             -27
 #define WBERR_INVALID_CHUNK              -28
 #define WBERR_NOT_CONNECTED              -29
 #define WBERR_SIGNAL                     -30
 #define WBERR_INVALID_HTTP_FIELD         -32
+#define WBERR_PERMISSION                 -31
 #define WBERR_INVALID_HANDLER            -33
 #define WBERR_NOT_IMPLEMENTED            -34
 #define WBERR_NO_RESOURCES               -35

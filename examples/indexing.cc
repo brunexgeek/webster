@@ -508,6 +508,7 @@ int main(int argc, char* argv[])
 	pool.stop();
 
 	printf("Server terminated!\n");
+	free(rootDirectory);
 
     return 0;
 }
