@@ -494,6 +494,11 @@ int Target::parse( const char *url, Target &target )
     return WBERR_OK;
 }
 
+int Target::parse( const std::string &url, Target &target )
+{
+	return parse(url.c_str(), target);
+}
+
 void Target::swap( Target &that )
 {
 	std::swap(type, that.type);

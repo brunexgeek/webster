@@ -188,6 +188,7 @@ struct Target
     Target( Target &&that ) = default;
     Target &operator=( const Target &that ) = default;
     static int parse( const char *url, Target &target ); // TODO: make this dynamic
+    static int parse( const std::string &url, Target &target ); // TODO: make this dynamic
     static std::string encode( const std::string & value );
     static std::string decode( const std::string & value );
     void swap( Target &that );
