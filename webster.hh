@@ -49,7 +49,6 @@
 #define WBERR_NO_CLIENT                  -5
 #define WBERR_COMPLETE                   -6
 #define WBERR_TOO_LONG                   -7
-#define WBERR_NO_DATA                    -9
 #define WBERR_BAD_RESPONSE               -10
 #define WBERR_TIMEOUT                    -11
 #define WBERR_INVALID_STATE              -12
@@ -292,10 +291,48 @@ class Network
 {
     public:
         enum Type { CLIENT, SERVER };
+        /**
+         * Create a channel.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
         virtual int open( Channel **channel, Type type ) = 0;
+        /**
+         * Close and destroy a channel.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
         virtual int close( Channel *channel ) = 0;
+        /**
+         * Connect to a HTTP server.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
         virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
-        virtual int receive( Channel *channel, uint8_t *buffer, int *size, int timeout ) = 0;
+        /**
+         * Receive data.
+         *
+         * @param channel Pointer to the channel.
+         * @param buffer Pointer to the destination buffer.
+         * @param size Buffer size.
+         * @param received Pointer to store the amount of data retrieved.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    waiting for data.
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout ) = 0;
+        /**
+         * Write data.
+         *
+         * This function will succeed only if all data is written.
+         *
+         * @param channel Pointer to the channel.
+         * @param buffer Pointer to the destination buffer.
+         * @param size Buffer size.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    writing data.
+         * @returns WBERR_OK on success; error code otherwise.
+         */
         virtual int send( Channel *channel, const uint8_t *buffer, int size, int timeout ) = 0;
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;

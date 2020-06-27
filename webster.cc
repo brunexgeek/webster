@@ -136,7 +136,7 @@ class SocketNetwork : public Network
         int open( Channel **channel, Type type );
         int close( Channel *channel );
         int connect( Channel *channel, int scheme, const char *host, int port );
-        int receive( Channel *channel, uint8_t *buffer, int *size, int timeout );
+        int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout );
         int send( Channel *channel, const uint8_t *buffer, int size, int timeout );
         int accept( Channel *channel, Channel **client, int timeout );
         int listen( Channel *channel, const char *host, int port, int maxClients );
@@ -219,7 +219,7 @@ int HttpStream::write( char c )
 
 int HttpStream::read( uint8_t *data, int *size )
 {
-	return params_.network->receive(channel_, data, size, params_.read_timeout);
+	return params_.network->receive(channel_, data, *size, size, params_.read_timeout);
 }
 
 int HttpStream::read_line( char *data, int size )
@@ -1655,6 +1655,8 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 		return WBERR_INVALID_PORT;
 	if (host == nullptr || host[0] == 0)
 		return WBERR_INVALID_HOST;
+	if (scheme == WBP_AUTO)
+		scheme = (port == 443) ? WBP_HTTPS : WBP_HTTP;
 	if (scheme != WBP_HTTP)
 		return WBERR_INVALID_SCHEME;
 
@@ -1677,32 +1679,30 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	return WBERR_OK;
 }
 
-int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int timeout )
+int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout )
 {
 	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (buffer == nullptr || received == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
 	if (timeout < 0) timeout = 0;
+	*received = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
-	int bufferSize = *size;
-	*size = 0;
 
 	// wait for data
 	chann->poll.events = POLLIN;
 	int result = webster::poll(chann->poll, timeout);
 	if (result != WBERR_OK) return result;
 
-	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) bufferSize, 0);
-	if (bytes == 0 || bytes < 0)
+	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) size, 0);
+	if (bytes <= 0)
 	{
-		*size = 0;
 		if (bytes == 0 || match_error(ECONNRESET, EPIPE, ENOTCONN))
 			return WBERR_NOT_CONNECTED;
 		if (match_error(EWOULDBLOCK, EAGAIN))
-			return WBERR_NO_DATA;
+			return WBERR_TIMEOUT;
 		return WBERR_SOCKET;
 	}
-	*size = (int) bytes;
+	*received = (int) bytes;
 
 	return WBERR_OK;
 }
