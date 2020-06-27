@@ -37,6 +37,8 @@
 #define WBMF_REQUEST   2
 #define WBMF_RESPONSE  0
 
+#define WBMF_CHUNKED   1
+
 namespace webster {
 
 enum State
@@ -1499,7 +1501,7 @@ inline bool match_error( int code, Args... args )
 	return match_error(args...);
 }
 
-inline int poll( struct pollfd &pfd, int &timeout )
+inline int poll( struct pollfd &pfd, int &timeout, bool ignore_signal = true )
 {
 	if (timeout < 0) timeout = 0;
 	pfd.revents = 0;
@@ -1515,11 +1517,12 @@ inline int poll( struct pollfd &pfd, int &timeout )
 		result = ::poll(&pfd, 1, timeout);
 		int elapsed = (int) (tick() - start);
 		timeout -= elapsed;
-		if (result >= 0 || get_error() != EINTR) break;
+		if (result >= 0 || !ignore_signal || get_error() != EINTR) break;
 	} while (timeout > 0);
 #endif
 	if (timeout < 0) timeout = 0;
 	if (result == 0) return WBERR_TIMEOUT;
+	if (get_error() == EINTR) return WBERR_SIGNAL;
 	if (result < 0) return WBERR_SOCKET;
 	return WBERR_OK;
 }
@@ -1766,14 +1769,10 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	#ifdef WB_WINDOWS
-	int result = WSAPoll(&chann->poll, 1, timeout);
-	#else
-	int result = poll(&chann->poll, 1, timeout);
-	#endif
-	if (result == 0) return WBERR_TIMEOUT;
-	if (result == EINTR) return WBERR_SIGNAL;
-	if (result < 0) return WBERR_SOCKET;
+	// wait for connections
+	chann->poll.events = POLLIN;
+	int result = webster::poll(chann->poll, timeout, false);
+	if (result != WBERR_OK) return result;
 
 	*client = new(std::nothrow) SocketChannel();
 	if (*client == nullptr) return WBERR_MEMORY_EXHAUSTED;

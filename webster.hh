@@ -46,10 +46,8 @@
 #define WBERR_MEMORY_EXHAUSTED           -2
 #define WBERR_INVALID_ADDRESS            -3
 #define WBERR_SOCKET                     -4
-#define WBERR_NO_CLIENT                  -5
 #define WBERR_COMPLETE                   -6
 #define WBERR_TOO_LONG                   -7
-#define WBERR_BAD_RESPONSE               -10
 #define WBERR_TIMEOUT                    -11
 #define WBERR_INVALID_STATE              -12
 #define WBERR_INVALID_HTTP_METHOD        -14
@@ -71,8 +69,6 @@
 #define WBT_HEADER                       1
 #define WBT_BODY                         2
 #define WBT_EMPTY                        3
-
-#define WBO_BUFFER_SIZE                  1
 
 enum FieldID
 {
@@ -159,21 +155,13 @@ enum FieldID
 #define WB_IS_VALID_SCHEME(x)  ( (x) >= WBP_AUTO && (x) <= WBP_HTTPS )
 #define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
 
-#define WBL_MAX_FIELD_NAME     128
-#define WBL_MAX_FIELD_VALUE    4096
-#define WBL_MAX_FIELDS         128
-#define WBL_MAX_HOST_NAME      255
-#define WBL_MIN_BUFFER_SIZE    128
-#define WBL_MAX_BUFFER_SIZE    (10 * 1024 * 1024)
-#define WBL_DEF_BUFFER_SIZE    (1024 * 4) // 4KB
-#define WBL_MAX_CONNECTIONS    1000
+#define WBL_MIN_BUFFER_SIZE    64
+#define WBL_MAX_BUFFER_SIZE    10485760 // 10 MB
+#define WBL_DEF_BUFFER_SIZE    4096 // 4KB
+#define WBL_MAX_CONNECTIONS    10000
 #define WBL_DEF_CONNECTIONS    200
-#define WBL_DEF_FIELD_INITIAL  16
-#define WBL_DEF_FIELD_GROW     8
 #define WBL_DEF_TIMEOUT        10000 // 10 sec
-#define WBL_MAX_TIMEOUT        120000 // 120 sec
-
-#define WBMF_CHUNKED    0x01
+#define WBL_MAX_TIMEOUT        620000 // 10 minutes
 
 #include <memory>
 #include <map>
@@ -334,6 +322,16 @@ class Network
          * @returns WBERR_OK on success; error code otherwise.
          */
         virtual int send( Channel *channel, const uint8_t *buffer, int size, int timeout ) = 0;
+        /**
+         * Accept client connections.
+         *
+         * This function will return if interrupted by signals.
+         *
+         * @param channel Pointer to the channel.
+         * @param channel Pointer to the new channel.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    waiting for connections.
+         */
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
 };
