@@ -46,10 +46,40 @@ enum State
 	WBS_COMPLETE = 2,
 };
 
+typedef std::shared_ptr<Network> NetworkPtr;
+
+class HttpStream
+{
+	public:
+		HttpStream( const Parameters &params, Channel *chann, int type );
+		~HttpStream();
+		int write( const uint8_t *data, int size );
+		int write( const char *data );
+		int write( const std::string &text );
+		int write( char c );
+		template<typename T, typename std::enable_if<std::is_arithmetic<T>::value, int>::type = 0>
+		int write( T value )
+		{
+			std::string str = std::to_string(value);
+			return write(str);
+		}
+		int read( uint8_t *data, int *size );
+        int read_line( char *data, int size );
+        int pending() const;
+        int flush();
+		const Parameters &get_parameters() const { return params_; }
+	protected:
+		int pending_;
+		Channel *channel_;
+		Parameters params_;
+		uint8_t *data_;
+		uint8_t *current_;
+};
+
 class MessageImpl : public Message
 {
     public:
-        MessageImpl( HttpStream &stream, int buffer_size = WBL_DEF_BUFFER_SIZE );
+        MessageImpl( HttpStream &stream );
         ~MessageImpl();
         int read( uint8_t *buffer, int *size );
         int read( char *buffer, int size );
@@ -84,12 +114,11 @@ class MessageImpl : public Message
         Client *client_;
         Channel *channel_;
 
-        int receive_header( int timeout );
-        int chunk_size( int timeout );
+        int receive_header();
+        int chunk_size();
         int write_header();
         int write_resource_line();
-        int compute_resource_line( std::stringstream &ss ) const;
-        int compute_status_line( std::stringstream &ss ) const;
+        int write_status_line();
         int parse_first_line( const char *data );
         int parse_header_field( char *data );
         int discard();
@@ -98,19 +127,34 @@ class MessageImpl : public Message
         friend RemoteClient;
 };
 
+#ifndef WEBSTER_NO_DEFAULT_NETWORK
+class SocketNetwork : public Network
+{
+    public:
+        SocketNetwork();
+        ~SocketNetwork() = default;
+        int open( Channel **channel, Type type );
+        int close( Channel *channel );
+        int connect( Channel *channel, int scheme, const char *host, int port );
+        int receive( Channel *channel, uint8_t *buffer, int *size, int timeout );
+        int send( Channel *channel, const uint8_t *buffer, int *size, int timeout );
+        int accept( Channel *channel, Channel **client, int timeout );
+        int listen( Channel *channel, const char *host, int port, int maxClients );
+    protected:
+        int set_non_blocking( Channel *channel );
+        int set_reusable( Channel *channel );
+        int resolve( const char *host, void *address );
+};
+
 std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>();
 
-HttpStream::HttpStream( NetworkPtr net, Channel *chann, int flags, int size ) : pending_(0), size_(size),
-	channel_(chann), net_(net), data_(nullptr)
-{
-	if (size_ < WBL_MIN_BUFFER_SIZE)
-		size_ = WBL_MIN_BUFFER_SIZE;
-	else
-	if (size_ > WBL_MAX_BUFFER_SIZE)
-		size_ = WBL_MAX_BUFFER_SIZE;
+#endif
 
+HttpStream::HttpStream( const Parameters &params, Channel *chann, int flags ) : pending_(0),
+	channel_(chann), params_(params), data_(nullptr), current_(nullptr)
+{
 	if (IS_OUTBOUND(flags))
-		data_ = current_ = new(std::nothrow) uint8_t[size];
+		data_ = current_ = new(std::nothrow) uint8_t[params_.buffer_size];
 }
 
 HttpStream::~HttpStream()
@@ -120,11 +164,12 @@ HttpStream::~HttpStream()
 
 int HttpStream::write( const uint8_t *buffer, int size )
 {
-	if (size == 0 || buffer == NULL) return WBERR_OK;
+	if (size == 0 || buffer == nullptr) return WBERR_OK;
 	if (size < 0 || size > 0x3FFFFFFF) return WBERR_TOO_LONG;
+	if (data_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
 
 	// ensures the current pointer is valid
-	if (current_ == NULL)
+	if (current_ == nullptr)
 	{
 		current_ = data_;
 		pending_ = 0;
@@ -133,13 +178,13 @@ int HttpStream::write( const uint8_t *buffer, int size )
 	// fragment input data through recursive call until the data size fits the internal buffer
 	int offset = 0;
 	int result = WBERR_OK;
-	int fit = size_ - (int)(current_ - data_);
+	int fit = params_.buffer_size - (int)(current_ - data_);
 	while (size > fit)
 	{
 		result = write(buffer + offset, fit);
 		size -= fit;
 		offset += fit;
-		fit = size_ - (int)(current_ - data_);
+		fit = params_.buffer_size - (int)(current_ - data_);
 		if (result != WBERR_OK) return result;
 	}
 
@@ -147,11 +192,12 @@ int HttpStream::write( const uint8_t *buffer, int size )
 	current_ += size;
 
 	// send pending data if the buffer is full
-	if (current_ >= data_ + size_)
+	if (current_ >= data_ + params_.buffer_size)
 	{
-		int tmp = size_;
-		result = net_->send(channel_, data_, &tmp, 10000);
+		int tmp = params_.buffer_size;
+		result = params_.network->send(channel_, data_, &tmp, params_.write_timeout);
 		current_ = data_;
+		pending_ = 0;
 	}
 
 	return result;
@@ -167,9 +213,14 @@ int HttpStream::write( const std::string &text )
 	return write((uint8_t*) text.c_str(), (int) text.length());
 }
 
+int HttpStream::write( char c )
+{
+	return write((uint8_t*) &c, 1);
+}
+
 int HttpStream::read( uint8_t *data, int *size )
 {
-	return net_->receive(channel_, data, size, 10000);
+	return params_.network->receive(channel_, data, size, params_.read_timeout);
 }
 
 int HttpStream::read_line( char *data, int size )
@@ -206,7 +257,7 @@ int HttpStream::flush()
 	if (current_ > data_)
 	{
 		int size = (int) (current_ - data_);
-		net_->send(channel_, data_, &size, 10000);
+		params_.network->send(channel_, data_, &size, params_.write_timeout);
 		current_ = data_;
 	}
 	return WBERR_OK;
@@ -222,10 +273,10 @@ static std::string string_cut(
     size_t offset,
     size_t length )
 {
-    if (text == NULL) return NULL;
+    if (text == nullptr) return nullptr;
 
     size_t len = strlen(text);
-    if (offset + length > len) return NULL;
+    if (offset + length > len) return nullptr;
 
     std::string output;
     for (size_t i = offset; i < offset + length; ++i) output += text[i];
@@ -331,18 +382,18 @@ int Target::parse( const char *url, Target &target )
 
 		// extract the host name
 		const char *hb = strstr(url, "://");
-		if (hb == NULL) return WBERR_INVALID_TARGET;
+		if (hb == nullptr) return WBERR_INVALID_TARGET;
 		hb += 3;
 		const char *he = hb;
 		while (*he != ':' && *he != '/' && *he != 0) ++he;
 		if (hb == he) return WBERR_INVALID_TARGET;
 
 		const char *rb = he;
-		const char *re = NULL;
+		const char *re = nullptr;
 
 		// extract the port number, if any
 		const char *pb = he;
-		const char *pe = NULL;
+		const char *pe = nullptr;
 		if (*pb == ':')
 		{
 			pe = ++pb;
@@ -357,7 +408,7 @@ int Target::parse( const char *url, Target &target )
 			re = rb;
 			while (*re != 0) ++re;
 		}
-		if (re != NULL && *re != 0) return WBERR_INVALID_TARGET;
+		if (re != nullptr && *re != 0) return WBERR_INVALID_TARGET;
 
 		// return the scheme
 		if (url[4] == ':')
@@ -366,7 +417,7 @@ int Target::parse( const char *url, Target &target )
 			target.scheme = WBP_HTTPS;
 
 		// return the port number, if any
-		if (pe != NULL)
+		if (pe != nullptr)
 		{
 			target.port = 0;
 			int mult = 1;
@@ -390,7 +441,7 @@ int Target::parse( const char *url, Target &target )
         target.host = string_cut(hb, 0, (size_t) (he - hb));
 
 		// return the resource, if any
-		if (re != NULL)
+		if (re != nullptr)
 			target.path = string_cut(rb, 0, (size_t) (re - rb));
 		else
 			target.path = "/";
@@ -404,7 +455,7 @@ int Target::parse( const char *url, Target &target )
         target.type = WBRT_AUTHORITY;
 
         const char *hb = strchr(url, '@');
-        if (hb != NULL)
+        if (hb != nullptr)
         {
             target.user = string_cut(url, 0, (size_t) (hb - url));
             hb++;
@@ -413,7 +464,7 @@ int Target::parse( const char *url, Target &target )
             hb = url;
 
         const char *he = strchr(hb, ':');
-        if (he != NULL)
+        if (he != nullptr)
         {
             target.host = string_cut(hb, 0, (size_t) (he - hb));
             target.port = 0;
@@ -484,46 +535,55 @@ void Header::clear()
 	target.clear();
 }
 
-Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
-	read_timeout(WBL_DEF_TIMEOUT)
+static void fix_parameters( Parameters &params )
 {
-    #ifdef WEBSTER_NO_DEFAULT_NETWORK
-	network = nullptr;
-	#else
+	if (params.max_clients <= 0)
+		params.max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if (params.max_clients > WBL_MAX_CONNECTIONS)
+		params.max_clients = WBL_MAX_CONNECTIONS;
+
+	if (params.buffer_size == 0)
+		params.buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if (params.buffer_size > WBL_MAX_BUFFER_SIZE)
+		params.buffer_size = WBL_MAX_BUFFER_SIZE;
+	params.buffer_size = (uint32_t) (params.buffer_size + 3) & (uint32_t) (~3);
+
+	if (params.read_timeout < 0)
+		params.read_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (params.read_timeout > WBL_MAX_TIMEOUT)
+		params.read_timeout = WBL_MAX_TIMEOUT;
+
+	if (params.write_timeout < 0)
+		params.write_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (params.write_timeout > WBL_MAX_TIMEOUT)
+		params.write_timeout = WBL_MAX_TIMEOUT;
+}
+
+Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
+	read_timeout(WBL_DEF_TIMEOUT), write_timeout(WBL_DEF_TIMEOUT)
+{
+    #ifndef WEBSTER_NO_DEFAULT_NETWORK
 	network = DEFAULT_NETWORK;
 	#endif
 }
 
 Parameters::Parameters( const Parameters &that )
 {
-    #ifdef WEBSTER_NO_DEFAULT_NETWORK
-	network = nullptr;
-	#else
+    #ifndef WEBSTER_NO_DEFAULT_NETWORK
 	network = DEFAULT_NETWORK;
 	#endif
 
     if (that.network) network = that.network;
     max_clients = that.max_clients;
-    buffer_size = (uint32_t) (that.buffer_size + 3) & (uint32_t) (~3);
+    buffer_size = that.buffer_size;
     read_timeout = that.read_timeout;
+    write_timeout = that.write_timeout;
 
-	if (max_clients <= 0)
-		max_clients = WBL_DEF_CONNECTIONS;
-	else
-	if (max_clients > WBL_MAX_CONNECTIONS)
-		max_clients = WBL_MAX_CONNECTIONS;
-
-	if (buffer_size == 0)
-		buffer_size = WBL_DEF_BUFFER_SIZE;
-	else
-	if (buffer_size > WBL_MAX_BUFFER_SIZE)
-		buffer_size = WBL_MAX_BUFFER_SIZE;
-
-	if (read_timeout <= 0)
-		read_timeout = WBL_DEF_TIMEOUT;
-	else
-	if (read_timeout > WBL_MAX_TIMEOUT)
-		read_timeout = WBL_MAX_TIMEOUT;
+	fix_parameters(*this);
 }
 
 Handler::Handler( std::function<int(Message&,Message&)> func ) : func_(func)
@@ -581,12 +641,12 @@ int Server::stop()
 
 int Server::accept( std::shared_ptr<Client> &remote )
 {
-	Channel *channel = NULL;
+	Channel *channel = nullptr;
 	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
 	if (result != WBERR_OK) return result;
 
 	remote = std::shared_ptr<Client>(new (std::nothrow) RemoteClient(params_));
-	if (remote == NULL)
+	if (remote == nullptr)
 	{
 		params_.network->close(channel);
 		return WBERR_MEMORY_EXHAUSTED;
@@ -643,9 +703,9 @@ int Client::connect( const Target &target )
 
 int Client::communicate( const std::string &path, Handler &handler )
 {
-	HttpStream os(params_.network, channel_, WBMF_OUTBOUND);
+	HttpStream os(params_, channel_, WBMF_OUTBOUND);
 	MessageImpl request(os);
-	HttpStream is(params_.network, channel_, WBMF_INBOUND);
+	HttpStream is(params_, channel_, WBMF_INBOUND);
 	MessageImpl response(is);
 
 	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
@@ -660,10 +720,8 @@ int Client::communicate( const std::string &path, Handler &handler )
 	response.header.target = request.header.target;
 
 	result = handler(request, response);
-	if (result > 0) result = 0;
-	result = response.finish();
-
-	return result;
+	if (result < WBERR_OK) return result;
+	return response.finish();
 }
 
 const Parameters &Client::get_parameters() const
@@ -680,29 +738,26 @@ int RemoteClient::communicate( const std::string &path, Handler &handler )
 {
 	(void) path;
 
-	HttpStream is(params_.network, channel_, WBMF_INBOUND);
+	HttpStream is(params_, channel_, WBMF_INBOUND);
 	MessageImpl request(is);
-	HttpStream os(params_.network, channel_, WBMF_OUTBOUND);
+	HttpStream os(params_, channel_, WBMF_OUTBOUND);
 	MessageImpl response(os);
 
 	request.flags_ = WBMF_INBOUND | WBMF_REQUEST;
 	request.channel_ = channel_;
 	request.client_ = this;
 
-	int result = request.receive_header(params_.read_timeout);
-
+	int result = request.ready();
 	if (result != WBERR_OK) return result;
+
 	response.flags_ = WBMF_OUTBOUND | WBMF_RESPONSE;
 	response.channel_ = channel_;
 	response.client_ = this;
 	response.header.target = request.header.target;
 
 	result = handler(request, response);
-	if (result > 0) result = 0;
-
-	result = response.finish();
-
-	return result;
+	if (result < WBERR_OK) return result;
+	return response.finish();
 }
 
 int Client::disconnect()
@@ -772,7 +827,7 @@ int strcmpi( const char *s1, const char *s2 )
 }
 #endif
 
-const char *http_statusMessage( int status )
+static const char *http_status_message( int status )
 {
     switch (status)
     {
@@ -942,7 +997,7 @@ const char *HeaderFields::get_name( FieldID id )
 	return HTTP_HEADER_FIELDS[(int)id];
 }
 
-char *http_removeTrailing( char *text )
+static char *http_trim( char *text )
 {
     // remove whitespaces from the start
     while (*text == ' ') ++text;
@@ -1047,13 +1102,13 @@ int MessageImpl::parse_header_field( char *data )
 	// header field name
 	char *name = ptr;
 	for (; IS_HFNC(*ptr); ++ptr);
-	if (*ptr != ':') return WBERR_INVALID_HTTP_MESSAGE;
+	if (*ptr != ':') return WBERR_INVALID_HTTP_FIELD;
 	*ptr++ = 0;
 	// header field value
 	char *value = ptr;
 
 	// ignore trailing whitespaces in the value
-	value = http_removeTrailing(value);
+	value = http_trim(value);
 	header.fields.set(name, value);
 	if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
 		body_.expected = (int) strtol(value, nullptr, 10);
@@ -1071,15 +1126,8 @@ int MessageImpl::parse_header_field( char *data )
 
 #undef IS_HFNC
 
-MessageImpl::MessageImpl( HttpStream &stream, int buffer_size ) : stream_(stream)
+MessageImpl::MessageImpl( HttpStream &stream ) : stream_(stream)
 {
-    if (buffer_size < WBL_MIN_BUFFER_SIZE)
-        buffer_size = WBL_MIN_BUFFER_SIZE;
-    else
-    if (buffer_size > WBL_MAX_BUFFER_SIZE)
-        buffer_size = WBL_MAX_BUFFER_SIZE;
-    buffer_size = (buffer_size + 3) & (uint32_t) (~3);
-
     state_ = WBS_IDLE;
 	flags_ = 0;
     body_.expected = body_.chunks = body_.flags = 0;
@@ -1095,7 +1143,7 @@ uint64_t tick()
 	return GetTickCount64();
 	#else
 	struct timeval info;
-    gettimeofday(&info, NULL);
+    gettimeofday(&info, nullptr);
     return (uint64_t) (info.tv_usec / 1000) + (uint64_t) (info.tv_sec * 1000);
 	#endif
 }
@@ -1105,11 +1153,12 @@ uint64_t tick()
 	  ( (x) >= 'A' && (x) <= 'F') || \
 	  ( (x) >= '0' && (x) <= '9') )
 
-int MessageImpl::receive_header( int timeout )
+int MessageImpl::receive_header()
 {
 	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
 
+	int timeout = stream_.get_parameters().read_timeout;
 	char line[1024];
 	bool first = true;
 	auto start = tick();
@@ -1136,10 +1185,8 @@ int MessageImpl::receive_header( int timeout )
 	return WBERR_OK;
 }
 
-int MessageImpl::chunk_size( int timeout )
+int MessageImpl::chunk_size()
 {
-    (void) timeout;
-
 	char line[64];
 	char *ptr = nullptr;
 	// discard the previous chunk terminator
@@ -1165,7 +1212,7 @@ int MessageImpl::read( uint8_t *buffer, int *size )
 	int result = WBERR_OK;
 	if (state_ == WBS_IDLE)
 	{
-		result = receive_header(10000);
+		result = receive_header();
 		if (result != WBERR_OK) return result;
 	}
 	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
@@ -1175,7 +1222,7 @@ int MessageImpl::read( uint8_t *buffer, int *size )
 	{
 		if (body_.flags & WBMF_CHUNKED)
 		{
-			result = chunk_size(10000);
+			result = chunk_size();
 			if (result != WBERR_OK) return result;
 		}
 		else
@@ -1207,9 +1254,9 @@ int MessageImpl::ready()
 	if (state_ != WBS_IDLE) return WBERR_OK;
 	if (IS_INBOUND(flags_))
 	{
-		int result = receive_header(10000);
+		int result = receive_header();
 		if (result != WBERR_OK) return result;
-		return state_ == WBS_BODY;
+		return WBERR_OK;
 	}
 	else
 		return write_header();
@@ -1231,7 +1278,7 @@ int MessageImpl::discard()
 	return result;
 }
 
-int MessageImpl::compute_resource_line( std::stringstream &ss ) const
+int MessageImpl::write_resource_line()
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 
@@ -1239,41 +1286,56 @@ int MessageImpl::compute_resource_line( std::stringstream &ss ) const
 	if (!WB_IS_VALID_METHOD(method)) method = WBM_GET;
 	const Target &target = header.target;
 
-	ss << HTTP_METHODS[method] << ' ';
+	stream_.write(HTTP_METHODS[method]);
+	stream_.write(' ');
 	switch (target.type)
 	{
 		case WBRT_ABSOLUTE:
-			ss << ((target.scheme == WBP_HTTPS) ? "https://" : "http://");
-			ss << target.host << ':' << target.port;
-			if (target.path[0] != '/') ss << '/';
-				ss << target.path;
+			stream_.write((target.scheme == WBP_HTTPS) ? "https://" : "http://");
+			stream_.write(target.host);
+			stream_.write(':');
+			stream_.write(target.port);
+			if (target.path[0] != '/') stream_.write('/');
+			stream_.write(target.path);
 			if (!target.query.empty())
-				ss << '&' << target.query;
+			{
+				stream_.write('&');
+				stream_.write(target.query);
+			}
 			break;
 		case WBRT_ORIGIN:
-			ss << target.path;
+			stream_.write(target.path);
 			if (!target.query.empty())
-				ss << '&' << target.query;
+			{
+				stream_.write('&');
+				stream_.write(target.query);
+			}
 			break;
 		case WBRT_ASTERISK:
-			ss << '*';
+			stream_.write('*');
 			break;
 		case WBRT_AUTHORITY:
-			ss << target.host << ':' << target.port;
+			stream_.write(target.host);
+			stream_.write(':');
+			stream_.write(target.port);
 			break;
 		default:
 			return WBERR_INVALID_TARGET;
 	}
-	ss << " HTTP/1.1\r\n";
+	stream_.write(" HTTP/1.1\r\n");
 	return WBERR_OK;
 }
 
-int MessageImpl::compute_status_line( std::stringstream &ss ) const
+int MessageImpl::write_status_line()
 {
 	int status = header.status;
 	if (status == 0) status = 200;
-	const char *desc = http_statusMessage(status);
-	ss << "HTTP/1.1 " << status << ' ' << desc << "\r\n";
+	const char *desc = http_status_message(status);
+	stream_.write("HTTP/1.1 ");
+	stream_.write(status);
+	stream_.write(' ');
+	stream_.write(desc);
+	stream_.write("\r\n");
 	return WBERR_OK;
 }
 
@@ -1281,13 +1343,11 @@ int MessageImpl::write_header()
 {
 	if (state_ != WBS_IDLE) return WBERR_INVALID_STATE;
 
-	std::stringstream ss;
-
 	// first line
 	if (IS_RESPONSE(flags_))
-		compute_status_line(ss);
+		write_status_line();
 	else
-		compute_resource_line(ss);
+		write_resource_line();
 
 	// set 'tranfer-encoding' to chunked if required
 	if (header.fields.count(WBFI_CONTENT_LENGTH) == 0)
@@ -1305,10 +1365,14 @@ int MessageImpl::write_header()
 	}
 
 	for (auto item : header.fields)
-		ss << item.first << ": " << item.second << "\r\n";
-	ss << "\r\n";
+	{
+		stream_.write(item.first);
+		stream_.write(": ");
+		stream_.write(item.second);
+		stream_.write("\r\n");
+	}
+	stream_.write("\r\n");
 
-	stream_.write(ss.str());
 	state_ = WBS_BODY;
 	return WBERR_OK;
 }
@@ -1450,8 +1514,8 @@ int SocketNetwork::resolve( const char *host, void *address )
 {
 	int result = 0;
 
-	if (address == NULL) return WBERR_INVALID_ARGUMENT;
-	if (host == NULL || *host == 0) host = "127.0.0.1";
+	if (address == nullptr) return WBERR_INVALID_ARGUMENT;
+	if (host == nullptr || *host == 0) host = "127.0.0.1";
 
     // get an IPv4 address from hostname
 	struct addrinfo aiHints, *aiInfo;
@@ -1459,7 +1523,7 @@ int SocketNetwork::resolve( const char *host, void *address )
 	aiHints.ai_family = AF_INET;
 	aiHints.ai_socktype = SOCK_STREAM;
 	aiHints.ai_protocol = IPPROTO_TCP;
-	result = getaddrinfo( host, NULL, &aiHints, &aiInfo );
+	result = getaddrinfo( host, nullptr, &aiHints, &aiInfo );
 	if (result != 0 || aiInfo->ai_addr->sa_family != AF_INET)
 	{
 		if (result == 0) freeaddrinfo(aiInfo);
@@ -1518,10 +1582,10 @@ int SocketNetwork::open( Channel **channel, Type type )
 {
 	(void) type;
 
-	if (channel == NULL) return WBERR_INVALID_CHANNEL;
+	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
 
 	*channel = new(std::nothrow) SocketChannel();
-	if (*channel == NULL) return WBERR_MEMORY_EXHAUSTED;
+	if (*channel == nullptr) return WBERR_MEMORY_EXHAUSTED;
 
 	SocketChannel *chann = (SocketChannel*) *channel;
 
@@ -1541,7 +1605,7 @@ int SocketNetwork::open( Channel **channel, Type type )
 
 int SocketNetwork::close( Channel *channel )
 {
-	if (channel == NULL) return WBERR_INVALID_CHANNEL;
+	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
@@ -1561,7 +1625,7 @@ int SocketNetwork::close( Channel *channel )
 
 int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int port )
 {
-	if (channel == NULL)
+	if (channel == nullptr)
 		return WBERR_INVALID_CHANNEL;
 	if (port < 0 && port > 0xFFFF)
 		return WBERR_INVALID_PORT;
@@ -1591,9 +1655,9 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int timeout )
 {
-	if (channel == NULL) return WBERR_INVALID_CHANNEL;
-	if (buffer == NULL || size == NULL || *size <= 0) return WBERR_INVALID_ARGUMENT;
-	if (timeout < 0) timeout = -1;
+	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
+	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 	int bufferSize = *size;
@@ -1627,8 +1691,9 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int *size, int ti
 
 int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int timeout )
 {
-	if (channel == NULL) return WBERR_INVALID_CHANNEL;
-	if (buffer == NULL || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
+	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
@@ -1649,7 +1714,8 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int *size, int
 				continue;
 			return WBERR_SOCKET;
 		}
-	} while (result < 0 && (int) (tick() - start) < timeout);
+		return WBERR_OK;
+	} while ((int) (tick() - start) < timeout);
 	*size = (int) result;
 
 	return WBERR_OK;
@@ -1667,8 +1733,8 @@ static std::string get_address( struct sockaddr_in &addr )
 
 int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 {
-	if (channel == NULL) return WBERR_INVALID_CHANNEL;
-	if (client == NULL) return WBERR_INVALID_ARGUMENT;
+	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
+	if (client == nullptr) return WBERR_INVALID_ARGUMENT;
 	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
@@ -1683,7 +1749,7 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	if (result < 0) return WBERR_SOCKET;
 
 	*client = new(std::nothrow) SocketChannel();
-	if (*client == NULL) return WBERR_MEMORY_EXHAUSTED;
+	if (*client == nullptr) return WBERR_MEMORY_EXHAUSTED;
 
 	struct sockaddr_in address;
 	#ifdef WB_WINDOWS
@@ -1698,7 +1764,7 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	if (socket < 0)
 	{
 		delete (SocketChannel*)*client;
-		*client = NULL;
+		*client = nullptr;
 		if (match_error(EMFILE, ENFILE))
 			return WBERR_NO_RESOURCES;
 		if (match_error(EAGAIN, EWOULDBLOCK))
@@ -1722,9 +1788,9 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 
 int SocketNetwork::listen( Channel *channel, const char *host, int port, int maxClients )
 {
-	if (channel == NULL)
+	if (channel == nullptr)
 		return WBERR_INVALID_CHANNEL;
-	if ( host == NULL || host[0] == 0)
+	if ( host == nullptr || host[0] == 0)
 		return WBERR_INVALID_HOST;
 	if (port < 0 && port > 0xFFFF)
 		return WBERR_INVALID_PORT;

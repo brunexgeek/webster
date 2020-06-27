@@ -301,31 +301,8 @@ class Network
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
 };
 
-#ifndef WEBSTER_NO_DEFAULT_NETWORK
-class SocketNetwork : public Network
-{
-    public:
-        SocketNetwork();
-        ~SocketNetwork() = default;
-        int open( Channel **channel, Type type );
-        int close( Channel *channel );
-        int connect( Channel *channel, int scheme, const char *host, int port );
-        int receive( Channel *channel, uint8_t *buffer, int *size, int timeout );
-        int send( Channel *channel, const uint8_t *buffer, int *size, int timeout );
-        int accept( Channel *channel, Channel **client, int timeout );
-        int listen( Channel *channel, const char *host, int port, int maxClients );
-    protected:
-        int set_non_blocking( Channel *channel );
-        int set_reusable( Channel *channel );
-        int resolve( const char *host, void *address );
-};
-#endif
-
 struct Parameters
 {
-    Parameters();
-    Parameters( const Parameters &that );
-
     /**
      * Pointer to custom network implementation. Uses the default implementation if not defined.
      */
@@ -347,6 +324,14 @@ struct Parameters
      * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
     int read_timeout;
+
+    /**
+     * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
+    int write_timeout;
+
+    Parameters();
+    Parameters( const Parameters &that );
 };
 
 class Message
@@ -450,31 +435,6 @@ class RemoteClient : public Client
         ~RemoteClient() = default;
         int communicate( const std::string &path, Handler &handler ) override;
 };
-
-typedef std::shared_ptr<Network> NetworkPtr;
-
-class HttpStream
-{
-	public:
-		HttpStream( NetworkPtr net, Channel *chann, int type, int size = WBL_DEF_BUFFER_SIZE );
-		~HttpStream();
-		int write( const uint8_t *data, int size );
-		int write( const char *data );
-		int write( const std::string &text );
-		int read( uint8_t *data, int *size );
-        int read_line( char *data, int size );
-        int pending() const;
-        int flush();
-	protected:
-		uint8_t *current_;
-		int pending_;
-		int size_;
-		Channel *channel_;
-		NetworkPtr net_;
-		uint8_t *data_;
-};
-
-extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
 
 } // namespace webster
 
