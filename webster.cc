@@ -65,7 +65,7 @@ class HttpStream
 			std::string str = std::to_string(value);
 			return write(str);
 		}
-		int read( uint8_t *data, int *size );
+		int read( uint8_t *data, int size );
         int read_line( char *data, int size );
         int pending() const;
         int flush();
@@ -83,12 +83,14 @@ class MessageImpl : public Message
     public:
         MessageImpl( HttpStream &stream );
         ~MessageImpl();
-        int read( uint8_t *buffer, int *size );
+        int read( uint8_t *buffer, int size );
         int read( char *buffer, int size );
-        //int read( std::string &buffer );
+        int read_all( std::vector<uint8_t> &buffer );
+		int read_all( std::string &buffer );
         int write( const uint8_t *buffer, int size );
         int write( const char *buffer );
-        int write( const std::string &buffer );
+		int write( const std::string &buffer );
+        int write( const std::vector<uint8_t> &buffer );
         int ready();
         int flush();
         int finish();
@@ -219,23 +221,26 @@ int HttpStream::write( char c )
 	return write((uint8_t*) &c, 1);
 }
 
-int HttpStream::read( uint8_t *data, int *size )
+int HttpStream::read( uint8_t *data, int size )
 {
-	return params_.network->receive(channel_, data, *size, size, params_.read_timeout);
+	int read = 0;
+	int result = params_.network->receive(channel_, data, size, &read, params_.read_timeout);
+	if (result == WBERR_OK) return read;
+	return result;
 }
 
 int HttpStream::read_line( char *data, int size )
 {
 	if (data == nullptr || size < 2) return WBERR_INVALID_ARGUMENT;
 	char *p = data;
-	int s;
 	uint8_t c;
+
+	// TODO: optimize this algorithm by using recv and MSG_PEEK do find the '\n'
 
 	do
 	{
-		s = 1;
-		int result = read(&c, &s);
-		if (result != WBERR_OK) return result;
+		int result = read(&c, 1);
+		if (result < 0) return result;
 		if (c == '\r') continue;
 		if (c == '\n') break;
 		*p = (char) c;
@@ -1212,8 +1217,7 @@ int MessageImpl::chunk_size()
 	return WBERR_OK;
 }
 
-
-int MessageImpl::read( uint8_t *buffer, int *size )
+int MessageImpl::read( uint8_t *buffer, int size )
 {
 	int result = WBERR_OK;
 	if (state_ == WBS_IDLE)
@@ -1222,7 +1226,7 @@ int MessageImpl::read( uint8_t *buffer, int *size )
 		if (result != WBERR_OK) return result;
 	}
 	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
-	if (buffer == nullptr || size == nullptr || *size <= 0) return WBERR_INVALID_ARGUMENT;
+	if (buffer == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
 
 	if (body_.expected == 0)
 	{
@@ -1238,10 +1242,10 @@ int MessageImpl::read( uint8_t *buffer, int *size )
 		}
 	}
 
-	if (*size > body_.expected) *size = body_.expected;
+	if (size > body_.expected) size = body_.expected;
 	result = stream_.read(buffer, size);
-	if (result != WBERR_OK) return result;
-	body_.expected -= *size;
+	if (result < 0) return result;
+	body_.expected -= result;
 	return result;
 }
 
@@ -1249,10 +1253,61 @@ int MessageImpl::read( char *buffer, int size )
 {
 	if (size <= 1) return WBERR_INVALID_ARGUMENT;
 	--size;
-	int result = read( (uint8_t*) buffer, &size);
-	if (result != WBERR_OK) return result;
-	buffer[size] = 0;
+	int result = read( (uint8_t*) buffer, size);
+	if (result < 0) return result;
+	buffer[result] = 0;
 	return result;
+}
+
+int MessageImpl::read_all( std::vector<uint8_t> &buffer )
+{
+	int result = ready();
+	if (result != WBERR_OK) return result;
+	buffer.clear();
+
+	uint8_t temp[1024];
+	int count = 0;
+	while (true)
+	{
+		result = read(temp, sizeof(temp));
+		if (result < 0)
+		{
+			if (result == WBERR_COMPLETE) break;
+			buffer.clear();
+			return result;
+		}
+		else
+		if (result > 0)
+		{
+			buffer.resize(buffer.size() + result);
+			std::copy(temp, temp + result, buffer.data() + count);
+			count += result;
+		}
+	}
+	return WBERR_OK;
+}
+
+int MessageImpl::read_all( std::string &buffer )
+{
+	int result = ready();
+	if (result != WBERR_OK) return result;
+	buffer.clear();
+
+	char temp[1024];
+	while (true)
+	{
+		result = read(temp, sizeof(temp));
+		if (result < 0)
+		{
+			if (result == WBERR_COMPLETE) break;
+			buffer.clear();
+			return result;
+		}
+		else
+		if (result > 0)
+			buffer += temp;
+	}
+	return WBERR_OK;
 }
 
 int MessageImpl::ready()
@@ -1278,8 +1333,7 @@ int MessageImpl::discard()
 	return WBERR_OK;
 	// discard body data
 	uint8_t buffer[1024];
-	int size = sizeof(buffer);
-	while ((result = read(buffer, &size)) == WBERR_OK) size = sizeof(buffer);
+	while ((result = read(buffer, sizeof(buffer))) >= 0);
 	if (result == WBERR_COMPLETE) return WBERR_OK;
 	return result;
 }
@@ -1413,9 +1467,14 @@ int MessageImpl::write( const char *buffer )
 	return write((const uint8_t*) buffer, (int) strlen(buffer));
 }
 
-int MessageImpl::write( const std::string &text )
+int MessageImpl::write( const std::vector<uint8_t> &buffer )
 {
-	return write((const uint8_t*) text.c_str(), (int) text.length());
+	return write(buffer.data(), (int) buffer.size());
+}
+
+int MessageImpl::write( const std::string &buffer )
+{
+	return write((const uint8_t*) buffer.c_str(), (int) buffer.length());
 }
 
 int MessageImpl::flush()

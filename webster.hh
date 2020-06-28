@@ -168,6 +168,8 @@ enum FieldID
 #include <memory>
 #include <map>
 #include <string>
+#include <vector>
+#include <stdint.h>
 
 namespace webster {
 
@@ -347,7 +349,7 @@ struct Parameters
     std::shared_ptr<Network> network;
 
     /**
-     * Maximum number of concurrent remote clients (server only). The default value is
+     * Maximum number of remote clients in the server queue. The default value is
      * WBL_DEF_CONNECTIONS.
      */
     int max_clients;
@@ -377,12 +379,51 @@ class Message
     public:
         Header header;
         virtual ~Message() = default;
-        virtual int read( uint8_t *buffer, int *size ) = 0;
+        /**
+         * Try to read bytes from the message.
+         *
+         * @param buffer Pointer to destination buffer .
+         * @param size Buffer size.
+         * @returns Positive number of bytes read or a negative error code.
+         */
+        virtual int read( uint8_t *buffer, int size ) = 0;
+        /**
+         * Try to read bytes from the message.
+         *
+         * This function may read less bytes than requested.
+         *
+         * Although the buffer is a 'char' array, this function reads data
+         * as binary. Thus, the output buffer may contain null characters.
+         *
+         * The output buffer is guaranteed to have a null terminator after
+         * a successfully call.
+         *
+         * @param buffer Pointer to destination buffer .
+         * @param size Buffer size.
+         * @returns Positive number of bytes read or a negative error code.
+         */
         virtual int read( char *buffer, int size ) = 0;
-        //virtual int read( std::string &buffer ) = 0;
+        /**
+         * Read the remaining data to a 'std::vector<uint8>' object.
+         *
+         * @param buffer Vector object to store the data.
+         * @returns WBERR_OK if succeed or a negative error code.
+         */
+        virtual int read_all( std::vector<uint8_t> &buffer ) = 0;
+        /**
+         * Read the remaining data to a 'std::string' object.
+         *
+         * Although the buffer is a string object, this function reads data
+         * as binary. Thus, the output buffer may contain null characters.
+         *
+         * @param buffer String object to store the data.
+         * @returns WBERR_OK if succeed or a negative error code.
+         */
+        virtual int read_all( std::string &buffer ) = 0;
         virtual int write( const uint8_t *buffer, int size ) = 0;
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
+        virtual int write( const std::vector<uint8_t> &buffer ) = 0;
         /**
          * Wait until the message body is ready to be read or written.
          *

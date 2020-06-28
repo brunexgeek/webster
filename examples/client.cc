@@ -30,13 +30,21 @@ static int main_clientHandler(
     Message &request,
     Message &response )
 {
-    std::cout << "Request to " << request.header.target.path << std::endl;
+    std::cout << "--- Request to " << request.header.target.path << std::endl;
     request.header.fields["Content-Length"] = "0";
     request.finish();
 
+    response.ready();
+    std::cout << "--- Expected " << response.header.fields.get(WBFI_CONTENT_LENGTH) << std::endl;
+    #if 0
     char ptr[1024];
-    while (response.read(ptr, sizeof(ptr)) == WBERR_OK)
+    while (response.read(ptr, sizeof(ptr)) >= 0)
         std::cout << ptr << std::endl;
+    #else
+    std::string buffer;
+    if (response.read_all(buffer) == WBERR_OK)
+        std::cout << buffer << std::endl;
+    #endif
 
     return WBERR_OK;
 }
