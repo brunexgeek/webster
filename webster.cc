@@ -1669,7 +1669,7 @@ int SocketNetwork::set_non_blocking( Channel *channel )
 {
 	SocketChannel *chann = (SocketChannel*) channel;
 #ifdef _WIN32
-	long flags = 1;
+	u_long flags = 1;
 	int result = ioctlsocket(chann->socket, FIONBIO, &flags);
 #else
 	int flags = fcntl(chann->socket, F_GETFL, 0);
