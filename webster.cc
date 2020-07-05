@@ -139,7 +139,7 @@ class SocketNetwork : public Network
         ~SocketNetwork() = default;
         int open( Channel **channel, Type type );
         int close( Channel *channel );
-        int connect( Channel *channel, int scheme, const char *host, int port );
+        int connect( Channel *channel, int scheme, const char *host, int port, int timeout );
         int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout );
         int send( Channel *channel, const uint8_t *buffer, int size, int timeout );
         int accept( Channel *channel, Channel **client, int timeout );
@@ -575,7 +575,7 @@ static void fix_parameters( Parameters &params )
 }
 
 Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
-	read_timeout(WBL_DEF_TIMEOUT), write_timeout(WBL_DEF_TIMEOUT)
+	read_timeout(WBL_DEF_TIMEOUT), write_timeout(WBL_DEF_TIMEOUT), connect_timeout(WBL_DEF_TIMEOUT * 2)
 {
     #ifndef WEBSTER_NO_DEFAULT_NETWORK
 	network = DEFAULT_NETWORK;
@@ -593,6 +593,7 @@ Parameters::Parameters( const Parameters &that )
     buffer_size = that.buffer_size;
     read_timeout = that.read_timeout;
     write_timeout = that.write_timeout;
+    connect_timeout = that.connect_timeout;
 
 	fix_parameters(*this);
 }
@@ -700,7 +701,8 @@ int Client::connect( const Target &target )
 	// try to connect with the remote host
 	int result = params_.network->open(&this->channel_, Network::CLIENT);
 	if (result != WBERR_OK) return result;
-	result = params_.network->connect(this->channel_, target.scheme, target.host.c_str(), target.port);
+	result = params_.network->connect(this->channel_, target.scheme, target.host.c_str(), target.port,
+		params_.connect_timeout );
 	if (result != WBERR_OK)
     {
         params_.network->close(this->channel_);
@@ -1568,6 +1570,8 @@ inline int translate_error( int code = 0 )
 		case EPIPE:
 		case ENOTCONN:
 			return WBERR_NOT_CONNECTED;
+		case ECONNREFUSED:
+			return WBERR_REFUSED;
 		case ETIMEDOUT:
 		case EWOULDBLOCK:
 #if EWOULDBLOCK != EAGAIN
@@ -1582,6 +1586,10 @@ inline int translate_error( int code = 0 )
 		case ENOBUFS:
 		case ENOMEM:
 			return WBERR_MEMORY_EXHAUSTED;
+		case ENETUNREACH:
+			return WBERR_UNREACHABLE;
+		case EINPROGRESS:
+			return WBERR_IN_PROGRESS;
 		default:
 			return WBERR_SOCKET;
 	}
@@ -1734,7 +1742,7 @@ int SocketNetwork::close( Channel *channel )
 	return WBERR_OK;
 }
 
-int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int port )
+int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int port, int timeout )
 {
 	if (channel == nullptr)
 		return WBERR_INVALID_CHANNEL;
@@ -1744,18 +1752,29 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 		scheme = (port == 443) ? WBP_HTTPS : WBP_HTTP;
 	if (scheme != WBP_HTTP)
 		return WBERR_INVALID_SCHEME;
+	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
 	struct sockaddr_in address;
 	int result = resolve(host, &address);
 	if (result != WBERR_OK) return result;
-
 	address.sin_port = htons( (uint16_t) port );
-	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
-	if (result < 0) return translate_error();
+
 	result = set_non_blocking(chann);
-	if (result == WBERR_OK) return result;
+	if (result != WBERR_OK) return result;
+
+	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
+	if (result < 0)
+	{
+		result = translate_error();
+		std::cout << result << std::endl;
+		if (result != WBERR_IN_PROGRESS) return result;
+	}
+
+	chann->poll.events = POLLOUT;
+	result = webster::poll(chann->poll, timeout);
+	if (result != WBERR_OK) return result;
 
 	return WBERR_OK;
 }

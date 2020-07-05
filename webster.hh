@@ -58,6 +58,9 @@
 #define WBERR_INVALID_HOST               -20
 #define WBERR_INVALID_PORT               -21
 #define WBERR_INVALID_CHANNEL            -22
+#define WBERR_REFUSED                    -23
+#define WBERR_UNREACHABLE                -24
+#define WBERR_IN_PROGRESS                -25
 #define WBERR_ADDRESS_IN_USE             -27
 #define WBERR_INVALID_CHUNK              -28
 #define WBERR_NOT_CONNECTED              -29
@@ -301,7 +304,7 @@ class Network
          *
          * @returns WBERR_OK on success; error code otherwise.
          */
-        virtual int connect( Channel *channel, int scheme, const char *host, int port ) = 0;
+        virtual int connect( Channel *channel, int scheme, const char *host, int port, int timeout ) = 0;
         /**
          * Receive data.
          *
@@ -369,6 +372,11 @@ struct Parameters
      * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
     int write_timeout;
+
+    /**
+     * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
+    int connect_timeout;
 
     Parameters();
     Parameters( const Parameters &that );
