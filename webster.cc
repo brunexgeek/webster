@@ -1768,7 +1768,6 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	if (result < 0)
 	{
 		result = translate_error();
-		std::cout << result << std::endl;
 		if (result != WBERR_IN_PROGRESS) return result;
 	}
 

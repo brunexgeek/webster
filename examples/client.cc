@@ -37,10 +37,12 @@ static int main_clientHandler(
     response.ready();
     std::cout << "--- Expected " << response.header.fields.get(WBFI_CONTENT_LENGTH) << std::endl;
     #if 0
+    // read in blocks with application buffer
     char ptr[1024];
     while (response.read(ptr, sizeof(ptr)) >= 0)
         std::cout << ptr << std::endl;
     #else
+    // read everything with Webster internal buffer
     std::string buffer;
     if (response.read_all(buffer) == WBERR_OK)
         std::cout << buffer << std::endl;
