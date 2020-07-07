@@ -189,9 +189,9 @@ struct Target
     std::string query;
 
     Target();
-    Target( const Target &that ) = default;
-    Target( Target &&that ) = default;
-    Target &operator=( const Target &that ) = default;
+    Target( const Target & ) = default;
+    Target( Target && ) = default;
+    Target &operator=( const Target & ) = default;
     static int parse( const char *url, Target &target ); // TODO: make this dynamic
     static int parse( const std::string &url, Target &target ); // TODO: make this dynamic
     static std::string encode( const std::string & value );

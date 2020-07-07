@@ -1791,7 +1791,7 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *re
 	int result = webster::poll(chann->poll, timeout);
 	if (result != WBERR_OK) return result;
 
-	auto bytes = ::recv(chann->socket, (char *) buffer, (size_t) size, 0);
+	auto bytes = ::recv(chann->socket, (char *) buffer, size, 0);
 	if (bytes <= 0)
 	{
 		if (bytes == 0) return WBERR_NOT_CONNECTED;
@@ -1812,15 +1812,19 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int 
 
 	#ifdef WB_WINDOWS
 	int flags = 0;
+	int sent = 0
+	int pending = size;
+	int bytes = 0;
 	#else
 	int flags = MSG_NOSIGNAL;
-	#endif
 	ssize_t sent = 0;
 	ssize_t pending = size;
+	ssize_t bytes = 0;
+	#endif
 
 	do
 	{
-		ssize_t bytes = ::send(chann->socket, (const char *) buffer, pending, flags);
+		bytes = ::send(chann->socket, (const char *) buffer, pending, flags);
 		if (bytes < 0)
 		{
 			int code = get_error();

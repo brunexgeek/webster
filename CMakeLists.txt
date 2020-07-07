@@ -25,10 +25,6 @@ if(MSVC)
 endif()
 
 if (UNIX)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=int-conversion -Werror=return-type -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=discarded-qualifiers")
-    set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} -s -O3")
-    set(CMAKE_C_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
-
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wfatal-errors -fvisibility=hidden -Wfatal-errors -pedantic -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=return-type")
     set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} -s -O3")
     set(CMAKE_CXX_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
@@ -47,7 +43,7 @@ set_target_properties(libwebster PROPERTIES
     PREFIX "lib" )
 
 
-find_package(Threads REQUIRED)
+#find_package(Threads REQUIRED)
 
 add_executable(example_echo "examples/echo.cc")
 target_link_libraries(example_echo libwebster)
