@@ -147,7 +147,6 @@ class SocketNetwork : public Network
     protected:
         int set_non_blocking( Channel *channel );
         int set_reusable( Channel *channel );
-        int resolve( const char *host, void *address );
 };
 
 std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>();
@@ -1631,11 +1630,13 @@ struct SocketChannel : public Channel
 	struct pollfd poll;
 };
 
-int SocketNetwork::resolve( const char *host, void *address )
+struct addrdel
 {
-	int result = 0;
+	void operator()( addrinfo *ptr ) { freeaddrinfo(ptr); };
+};
 
-	if (address == nullptr) return WBERR_INVALID_ARGUMENT;
+static std::shared_ptr<addrinfo[]> resolve( const char *host )
+{
 	if (host == nullptr || *host == 0) host = "127.0.0.1";
 
     // get an IPv4 address from hostname
@@ -1644,17 +1645,10 @@ int SocketNetwork::resolve( const char *host, void *address )
 	aiHints.ai_family = AF_INET;
 	aiHints.ai_socktype = SOCK_STREAM;
 	aiHints.ai_protocol = IPPROTO_TCP;
-	result = getaddrinfo( host, nullptr, &aiHints, &aiInfo );
-	if (result != 0 || aiInfo->ai_addr->sa_family != AF_INET)
-	{
-		if (result == 0) freeaddrinfo(aiInfo);
-		return WBERR_INVALID_ADDRESS;
-	}
+	int result = getaddrinfo(host, nullptr, &aiHints, &aiInfo);
+	if (result != 0) return nullptr;
     // copy address information
-    memcpy(address, (struct sockaddr_in*) aiInfo->ai_addr, sizeof(struct sockaddr_in));
-	freeaddrinfo(aiInfo);
-
-    return WBERR_OK;
+    return std::shared_ptr<addrinfo[]>(aiInfo, addrdel());
 }
 
 SocketNetwork::SocketNetwork()
@@ -1756,12 +1750,16 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	struct sockaddr_in address;
-	int result = resolve(host, &address);
-	if (result != WBERR_OK) return result;
+	auto addrs = resolve(host);
+	addrinfo *addr = nullptr;
+	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
+	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
+
+	sockaddr_in address;
+	address = *((sockaddr_in*) addr->ai_addr);
 	address.sin_port = htons( (uint16_t) port );
 
-	result = set_non_blocking(chann);
+	int result = set_non_blocking(chann);
 	if (result != WBERR_OK) return result;
 
 	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
@@ -1774,7 +1772,6 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	chann->poll.events = POLLOUT;
 	result = webster::poll(chann->poll, timeout);
 	if (result != WBERR_OK) return result;
-
 	return WBERR_OK;
 }
 
@@ -1911,11 +1908,15 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	struct sockaddr_in address;
-	int result = resolve(host, &address);
-	if (result != WBERR_OK) return result;
+	auto addrs = resolve(host);
+	addrinfo *addr = nullptr;
+	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
+	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
 
+	sockaddr_in address;
+	address = *((sockaddr_in*) addr->ai_addr);
 	address.sin_port = htons( (uint16_t) port );
+
 	if (::bind(chann->socket, (const struct sockaddr*) &address, sizeof(struct sockaddr_in)) != 0)
 		return translate_error();
 
