@@ -26,21 +26,23 @@
 #include <sstream>
 #include <iostream>
 #include <cstring> // strlen strstr strchr
+#include <chrono>
 
 #include "network.hh"
 #include "stream.hh"
 #include "http1.hh"
-
-#define WBMF_INBOUND   1
-#define WBMF_OUTBOUND  0
-#define WBMF_REQUEST   2
-#define WBMF_RESPONSE  0
 
 namespace webster {
 
 typedef std::shared_ptr<Network> NetworkPtr;
 
 extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
+
+uint64_t tick()
+{
+    auto now = std::chrono::steady_clock::now().time_since_epoch();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+}
 
 Target::Target()
 {
@@ -298,27 +300,6 @@ void Target::clear()
 	query.clear();
 }
 
-Header::Header()
-{
-	clear();
-}
-
-void Header::swap( Header &that )
-{
-	std::swap(status, that.status);
-	std::swap(method, that.method);
-	fields.swap(that.fields);
-	target.swap(that.target);
-}
-
-void Header::clear()
-{
-	status = 200;
-	method = WBM_GET;
-	fields.clear();
-	target.clear();
-}
-
 static void fix_parameters( Parameters &params )
 {
 	if (params.max_clients <= 0)
@@ -371,21 +352,6 @@ Parameters::Parameters( const Parameters &that )
 	fix_parameters(*this);
 }
 
-Handler::Handler( std::function<int(Message&,Message&)> func ) : func_(func)
-{
-}
-
-Handler::Handler( int (&func)(Message&,Message&) )
-{
-	func_ = std::function<int(Message&,Message&)>(func);
-}
-
-int Handler::operator()( Message &request, Message &response )
-{
-	if (func_ ==  nullptr) return WBERR_INVALID_HANDLER;
-	return func_(request, response);
-}
-
 Server::Server() : channel_(nullptr)
 {
 }
@@ -425,7 +391,7 @@ int Server::accept( std::shared_ptr<Client> &remote )
 	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
 	if (result != WBERR_OK) return result;
 
-	remote = std::shared_ptr<Client>(new (std::nothrow) RemoteClient(params_));
+	remote = std::shared_ptr<Client>(new (std::nothrow) Client(params_, WBCT_REMOTE));
 	if (remote == nullptr)
 	{
 		params_.network->close(channel);
@@ -446,11 +412,11 @@ const Target &Server::get_target() const
 	return target_;
 }
 
-Client::Client() : channel_(nullptr)
+Client::Client( ClientType type ) : channel_(nullptr), proto_(WBCP_HTTP_1), type_(type)
 {
 }
 
-Client::Client( Parameters params ) : Client()
+Client::Client( Parameters params, ClientType type ) : Client(type)
 {
 	params_ = params;
 }
@@ -482,40 +448,24 @@ int Client::connect( const Target &target )
 	return WBERR_OK;
 }
 
+int Client::get_protocol() const
+{
+	return proto_;
+}
+
+Channel *Client::get_channel()
+{
+	return channel_;
+}
+
+ClientType Client::get_type() const
+{
+	return type_;
+}
+
 bool Client::is_connected() const
 {
 	return channel_ != nullptr;
-}
-
-int Client::communicate( Handler &handler )
-{
-	if (!target_.path.empty() && target_.path[0] == '/')
-		return communicate(target_.path, handler);
-	else
-		return communicate("/", handler);
-}
-
-int Client::communicate( const std::string &path, Handler &handler )
-{
-	HttpStream os(params_, channel_, WBMF_OUTBOUND);
-	MessageImpl request(os);
-	HttpStream is(params_, channel_, WBMF_INBOUND);
-	MessageImpl response(is);
-
-	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
-	request.channel_ = channel_;
-	request.client_ = this;
-	int result = Target::parse(path.c_str(), request.header.target);
-	if (result != WBERR_OK) return result;
-
-	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
-	response.channel_ = channel_;
-	response.client_ = this;
-	response.header.target = request.header.target;
-
-	result = handler(request, response);
-	if (result < WBERR_OK) return result;
-	return response.finish();
 }
 
 const Parameters &Client::get_parameters() const
@@ -526,32 +476,6 @@ const Parameters &Client::get_parameters() const
 const Target &Client::get_target() const
 {
 	return target_;
-}
-
-int RemoteClient::communicate( const std::string &path, Handler &handler )
-{
-	(void) path;
-
-	HttpStream is(params_, channel_, WBMF_INBOUND);
-	MessageImpl request(is);
-	HttpStream os(params_, channel_, WBMF_OUTBOUND);
-	MessageImpl response(os);
-
-	request.flags_ = WBMF_INBOUND | WBMF_REQUEST;
-	request.channel_ = channel_;
-	request.client_ = this;
-
-	int result = request.ready();
-	if (result != WBERR_OK) return result;
-
-	response.flags_ = WBMF_OUTBOUND | WBMF_RESPONSE;
-	response.channel_ = channel_;
-	response.client_ = this;
-	response.header.target = request.header.target;
-
-	result = handler(request, response);
-	if (result < WBERR_OK) return result;
-	return response.finish();
 }
 
 int Client::disconnect()

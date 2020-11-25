@@ -75,9 +75,9 @@ static void main_signalHandler(
 #endif
 
 
-struct EchoHandler : public Handler
+struct EchoHandler : public webster::http::Handler
 {
-	int operator()( Message &request, Message &response )
+	int operator()( webster::http::Message &request, webster::http::Message &response )
 	{
 		request.finish();
 
@@ -155,8 +155,11 @@ int main(int argc, char* argv[])
 			int result = server.accept(remote);
 			if (result == WBERR_OK)
 			{
-				remote->communicate("", handler);
+				std::cerr << "Client connected\n";
+				webster::http::v1::Manager http(remote.get(), &handler);
+				http.event_loop();
 				remote->disconnect();
+				std::cerr << "Client disconnected\n";
 			}
 			else
 			if (result != WBERR_TIMEOUT) break;

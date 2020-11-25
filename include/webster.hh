@@ -200,6 +200,8 @@ struct Target
     void clear();
 };
 
+namespace http {
+
 enum Method
 {
     WBM_NONE    = 0,
@@ -228,10 +230,10 @@ struct less
     }
 };
 
-class HeaderFields : public std::map<std::string, std::string, webster::less>
+class HeaderFields : public std::map<std::string, std::string, webster::http::less>
 {
     public:
-        using std::map<std::string, std::string, webster::less>::count;
+        using std::map<std::string, std::string, webster::http::less>::count;
         std::string get( const std::string &name )  const;
         std::string get( FieldID id )  const;
         std::string get( const std::string &name, const std::string &value )  const;
@@ -278,6 +280,8 @@ struct Header
     void swap( Header &that );
     void clear();
 };
+
+} // namespace http
 
 class Client;
 
@@ -382,6 +386,8 @@ struct Parameters
     Parameters( const Parameters &that );
 };
 
+namespace http {
+
 class Message
 {
     public:
@@ -479,6 +485,8 @@ class Handler
         std::function<int(Message&,Message&)> func_;
 };
 
+} // namespace http
+
 WEBSTER_EXPORTED class Server
 {
     public:
@@ -496,33 +504,62 @@ WEBSTER_EXPORTED class Server
         Target target_;
 };
 
+enum Protocol
+{
+    WBCP_HTTP_1 /// HTTP 1.1
+};
+
+enum ClientType
+{
+    WBCT_LOCAL,
+    WBCT_REMOTE,
+};
+
 WEBSTER_EXPORTED class Client
 {
     public:
         friend Server;
-        Client();
-        Client( Parameters params );
-        virtual ~Client();
-        virtual int connect( const Target &target );
-        virtual int communicate( const std::string &path, Handler &handler );
-        virtual int communicate( Handler &handler );
-        virtual int disconnect();
-        virtual const Parameters &get_parameters() const;
-        virtual const Target &get_target() const;
-        virtual bool is_connected() const;
+        Client( ClientType type = WBCT_LOCAL );
+        Client( Parameters params, ClientType type = WBCT_LOCAL );
+        ~Client();
+        int connect( const Target &target );
+        int get_protocol() const;
+        int disconnect();
+        const Parameters &get_parameters() const;
+        const Target &get_target() const;
+        bool is_connected() const;
+        Channel *get_channel();
+        ClientType get_type() const;
+
     protected:
         Parameters params_;
         Channel *channel_;
         Target target_;
+        Protocol proto_;
+        ClientType type_;
 };
 
-class RemoteClient : public Client
+namespace http {
+namespace v1 {
+
+class Manager
 {
     public:
-        RemoteClient( Parameters params ) : Client(params) {}
-        ~RemoteClient() = default;
-        int communicate( const std::string &path, Handler &handler ) override;
+        Manager( Client *client, Handler *handler );
+        virtual ~Manager();
+        //int set_listener( Handler &listener );
+        //int add_listener( const std::string &path, Handler &listener );
+        int remove_listener( const std::string &path );
+        int communicate( const std::string &path );
+        int event_loop();
+
+    protected:
+        Client *client_;
+        Handler *handler_;
 };
+
+} // namespace v1
+} // namespace http
 
 } // namespace webster
 
