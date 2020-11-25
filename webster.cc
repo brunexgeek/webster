@@ -612,11 +612,6 @@ int Handler::operator()( Message &request, Message &response )
 	return func_(request, response);
 }
 
-bool Handler::operator==( std::nullptr_t ) const
-{
-	return func_ == nullptr;
-}
-
 Server::Server() : channel_(nullptr)
 {
 }
@@ -711,6 +706,19 @@ int Client::connect( const Target &target )
 	target_ = target;
 
 	return WBERR_OK;
+}
+
+bool Client::is_connected() const
+{
+	return channel_ != nullptr;
+}
+
+int Client::communicate( Handler &handler )
+{
+	if (!target_.path.empty() && target_.path[0] == '/')
+		return communicate(target_.path, handler);
+	else
+		return communicate("/", handler);
 }
 
 int Client::communicate( const std::string &path, Handler &handler )

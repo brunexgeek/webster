@@ -185,11 +185,7 @@ static const char *main_getMime(
 	return DEFAULT_MIME;
 }
 
-
-static void main_downloadFile(
-	Message &response,
-	const char *fileName,
-	int contentLength )
+static void main_downloadFile( Message &response, const char *fileName, int contentLength )
 {
 	if (fileName == NULL || strstr(fileName, rootDirectory) != fileName) return;
 
@@ -220,7 +216,7 @@ static void main_downloadFile(
 		fclose(fp);
 	}
 
-	printf("Returned %d bytes\n", (int) sent);
+	printf("Returned %d bytes from '%s'\n", (int) sent, fileName);
 }
 
 
@@ -442,7 +438,6 @@ static int main_serverHandler(
 
 	response.finish();
 	if (fileName != NULL) free(fileName);
-	printf("\n");
 	return result;
 }
 
@@ -486,10 +481,13 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 	printf("Root directory is %s\n", rootDirectory);
 
-	ctpl::thread_pool pool(2);
+	ctpl::thread_pool pool(4);
+
+	Parameters params;
+	params.read_timeout = 3000;
 
 	Handler handler(main_serverHandler);
-	Server server;
+	Server server(params);
 	Target target;
 	if (Target::parse("0.0.0.0:7000", target) != WBERR_OK) return 1;
 	if (server.start(target) == WBERR_OK)

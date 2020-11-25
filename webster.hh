@@ -475,7 +475,6 @@ class Handler
         Handler( std::function<int(Message&,Message&)> );
         Handler( int (&func)(Message&,Message&) );
         virtual int operator()(Message&, Message&);
-        bool operator==( std::nullptr_t ) const;
     protected:
         std::function<int(Message&,Message&)> func_;
 };
@@ -505,10 +504,12 @@ WEBSTER_EXPORTED class Client
         Client( Parameters params );
         virtual ~Client();
         virtual int connect( const Target &target );
-        virtual int communicate( const std::string &path, Handler &handler ); // TODO: create version which receives 'Target' instead of string
+        virtual int communicate( const std::string &path, Handler &handler );
+        virtual int communicate( Handler &handler );
         virtual int disconnect();
         virtual const Parameters &get_parameters() const;
         virtual const Target &get_target() const;
+        virtual bool is_connected() const;
     protected:
         Parameters params_;
         Channel *channel_;
