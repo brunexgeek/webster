@@ -30,9 +30,9 @@ if (UNIX)
     set(CMAKE_CXX_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 endif()
 
-add_library(libwebster STATIC "webster.cc")
+add_library(libwebster STATIC "source/webster.cc" "source/stream.cc" "source/http1.cc" "source/network.cc")
 target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
-target_include_directories(libwebster PUBLIC ".")
+target_include_directories(libwebster PUBLIC "include")
 set_target_properties(libwebster PROPERTIES
     OUTPUT_NAME "webster"
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
