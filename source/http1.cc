@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <sstream>
 #include <iostream>
-#include <ctime>
 #include "stream.hh"
 #include "http1.hh"
 
@@ -44,8 +43,15 @@
 #define IS_RESPONSE(x)  ( ((x) & 2) == 0)
 
 #define WBMF_CHUNKED   1
+#define WBMF_INBOUND   1
+#define WBMF_OUTBOUND  0
+#define WBMF_REQUEST   2
+#define WBMF_RESPONSE  0
+
+#define HTTP_LINE_LENGTH 4096
 
 namespace webster {
+namespace http {
 
 static const char *HTTP_METHODS[] =
 {
@@ -208,6 +214,88 @@ static const char* HTTP_HEADER_FIELDS[] =
     "Warning",
     "WWW-Authenticate",
 };
+
+enum State
+{
+	WBS_IDLE     = 0,
+	WBS_BODY     = 1,
+	WBS_COMPLETE = 2,
+};
+
+
+class MessageImpl : public Message
+{
+    public:
+        MessageImpl( HttpStream &stream );
+        ~MessageImpl();
+        int read( uint8_t *buffer, int size );
+        int read( char *buffer, int size );
+        int read_all( std::vector<uint8_t> &buffer );
+		int read_all( std::string &buffer );
+        int write( const uint8_t *buffer, int size );
+        int write( const char *buffer );
+		int write( const std::string &buffer );
+        int write( const std::vector<uint8_t> &buffer );
+        int ready();
+        int flush();
+        int finish();
+
+    public:
+        State state_;
+        int flags_;
+        struct
+        {
+            /**
+             * @brief Message expected size.
+             *
+             * This value is any negative if using chunked transfer encoding.
+             */
+            int expected;
+
+            /**
+             * @brief Number of chunks received.
+             */
+            int chunks;
+
+            int flags;
+        } body_;
+        HttpStream &stream_;
+        Client *client_;
+        Channel *channel_;
+        char *line_;
+
+        int receive_header();
+        int chunk_size();
+        int write_header();
+        int write_resource_line();
+        int write_status_line();
+        int parse_first_line( const char *data );
+        int parse_header_field( char *data );
+        int discard();
+
+        friend Client;
+};
+
+Header::Header()
+{
+	clear();
+}
+
+void Header::swap( Header &that )
+{
+	std::swap(status, that.status);
+	std::swap(method, that.method);
+	fields.swap(that.fields);
+	target.swap(that.target);
+}
+
+void Header::clear()
+{
+	status = 200;
+	method = WBM_GET;
+	fields.clear();
+	target.clear();
+}
 
 std::string HeaderFields::get( const std::string &name )  const
 {
@@ -385,21 +473,12 @@ MessageImpl::MessageImpl( HttpStream &stream ) : stream_(stream)
     state_ = WBS_IDLE;
 	flags_ = 0;
     body_.expected = body_.chunks = body_.flags = 0;
+    line_ = new(std::nothrow) char[HTTP_LINE_LENGTH];
 }
 
 MessageImpl::~MessageImpl()
 {
-}
-
-uint64_t tick()
-{
-	#ifdef WB_WINDOWS
-	return GetTickCount64();
-	#else
-	struct timeval info;
-    gettimeofday(&info, nullptr);
-    return (uint64_t) (info.tv_usec / 1000) + (uint64_t) (info.tv_sec * 1000);
-	#endif
+    delete[] line_;
 }
 
 #define IS_HEX_DIGIT(x) \
@@ -411,19 +490,20 @@ int MessageImpl::receive_header()
 {
 	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
+	if (line_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
 
 	int timeout = stream_.get_parameters().read_timeout;
-	char line[1024];
 	bool first = true;
 	auto start = tick();
 	do
 	{
-		int result = stream_.read_line(line, sizeof(line));
+		int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
 		if (result != WBERR_OK) return result;
 
-		if (*line != 0)
+		if (*line_ != 0)
 		{
-			result = (first) ? parse_first_line(line) : parse_header_field(line);
+			result = (first) ? parse_first_line(line_) : parse_header_field(line_);
 			if (result != WBERR_OK) return result;
 		}
 		else
@@ -760,4 +840,90 @@ int MessageImpl::finish()
 	return WBERR_OK;
 }
 
+namespace v1 {
+
+Manager::Manager( Client *client, Handler *handler ) : client_(client), handler_(handler)
+{
+}
+
+Manager::~Manager()
+{
+}
+
+int Manager::event_loop()
+{
+	int result = WBERR_OK;
+    auto params = client_->get_parameters();
+    auto channel = client_->get_channel();
+    HttpStream is(params, channel, WBMF_INBOUND);
+    HttpStream os(params, channel, WBMF_OUTBOUND);
+
+    while (result == WBERR_OK)
+    {
+        MessageImpl request(is);
+        MessageImpl response(os);
+
+        request.flags_ = WBMF_INBOUND | WBMF_REQUEST;
+        request.channel_ = channel;
+        request.client_ = client_;
+
+        int result = request.ready();
+        if (result != WBERR_OK) break;
+
+        response.flags_ = WBMF_OUTBOUND | WBMF_RESPONSE;
+        response.channel_ = channel;
+        response.client_ = client_;
+        response.header.target = request.header.target;
+
+        result = (*handler_)(request, response);
+        if (result < WBERR_OK) break;
+        result = response.finish();
+        if (result < WBERR_OK) break;
+    }
+    return result;
+}
+
+int Manager::communicate( const std::string &path )
+{
+	auto params = client_->get_parameters();
+	auto channel = client_->get_channel();
+	HttpStream os(params, channel, WBMF_OUTBOUND);
+	MessageImpl request(os);
+	HttpStream is(params, channel, WBMF_INBOUND);
+	MessageImpl response(is);
+
+	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
+	request.channel_ = channel;
+	request.client_ = client_;
+	int result = Target::parse(path.c_str(), request.header.target);
+	if (result != WBERR_OK) return result;
+
+	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
+	response.channel_ = channel;
+	response.client_ = client_;
+	response.header.target = request.header.target;
+
+	result = (*handler_)(request, response);
+	if (result < WBERR_OK) return result;
+	return response.finish();
+}
+
+} // namespace v1
+
+Handler::Handler( std::function<int(Message&,Message&)> func ) : func_(func)
+{
+}
+
+Handler::Handler( int (&func)(Message&,Message&) )
+{
+	func_ = std::function<int(Message&,Message&)>(func);
+}
+
+int Handler::operator()( Message &request, Message &response )
+{
+	if (func_ ==  nullptr) return WBERR_INVALID_HANDLER;
+	return func_(request, response);
+}
+
+} // namespace http1
 } // namespace webster

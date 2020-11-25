@@ -31,13 +31,13 @@
 #ifdef _WIN32
 #include <Windows.h>
 #define PATH_LENGTH  MAX_PATH
-#define STRCMPI      webster::strcmpi
+#define STRCMPI      webster::http::strcmpi
 #else
 #include <unistd.h>
 #include <linux/limits.h>
 #include <dirent.h>
 #define PATH_LENGTH  PATH_MAX
-#define STRCMPI      webster::strcmpi
+#define STRCMPI      webster::http::strcmpi
 #endif
 
 
@@ -133,6 +133,7 @@ static const struct mime_t MIME_TABLE[] =
 #define MIME_COUNT   sizeof(MIME_TABLE) / sizeof(struct mime_t)
 
 using namespace webster;
+using namespace webster::http;
 
 static int serverState = SERVER_RUNNING;
 
@@ -446,7 +447,8 @@ static int main_serverHandler(
 static void process( int id, std::shared_ptr<Client> remote, Handler &handler )
 {
 	(void) id;
-	remote->communicate("", handler);
+	webster::http::v1::Manager http(remote.get(), &handler);
+	http.event_loop();
 	remote->disconnect();
 }
 

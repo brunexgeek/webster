@@ -19,12 +19,10 @@
 #include <iostream>
 #include <cstring>
 
-using webster::Message;
+using namespace webster::http;
 using webster::Parameters;
 using webster::Target;
 using webster::Client;
-using webster::Handler;
-using webster::Method;
 
 static int main_clientHandler(
     Message &request,
@@ -34,7 +32,12 @@ static int main_clientHandler(
     request.header.fields["Content-Length"] = "0";
     request.finish();
 
-    response.ready();
+    int result = response.ready();
+    if (result != WBERR_OK)
+    {
+        std::cerr << "Error " << result << std::endl;
+        return result;
+    }
     std::cout << "--- Expected " << response.header.fields.get(WBFI_CONTENT_LENGTH) << std::endl;
     #if 0
     // read in blocks with application buffer
@@ -44,8 +47,11 @@ static int main_clientHandler(
     #else
     // read everything with Webster internal buffer
     std::string buffer;
-    if (response.read_all(buffer) == WBERR_OK)
+    result = response.read_all(buffer);
+    if (result == WBERR_OK)
         std::cout << buffer << std::endl;
+    else
+        std::cerr << "Error reading data " << result << std::endl;
     #endif
 
     return WBERR_OK;
@@ -68,7 +74,8 @@ int main( int argc, char **argv )
     if (Target::parse(url, target) != WBERR_OK) return 1;
     if (client.connect(target) == WBERR_OK)
     {
-        client.communicate(target.path, handler);
+        webster::http::v1::Manager http(&client, &handler);
+        http.communicate(target.path);
         client.disconnect();
     }
     else
