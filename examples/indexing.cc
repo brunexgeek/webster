@@ -447,8 +447,8 @@ static int main_serverHandler(
 static void process( int id, std::shared_ptr<Client> remote, Handler &handler )
 {
 	(void) id;
-	webster::http::v1::Manager http(remote.get(), &handler);
-	http.event_loop();
+	webster::http::v1::EventLoop http(*remote.get(), handler);
+	http.run();
 	remote->disconnect();
 }
 

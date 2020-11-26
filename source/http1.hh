@@ -37,7 +37,7 @@ enum State
 class MessageImpl : public Message
 {
     public:
-        MessageImpl( DataStream &stream );
+        MessageImpl( DataStream &stream, int flags = 0 );
         ~MessageImpl();
         int read( uint8_t *buffer, int size );
         int read( char *buffer, int size );
@@ -51,9 +51,9 @@ class MessageImpl : public Message
         int flush();
         int finish();
 
-    public:
-        State state_;
+    protected:
         int flags_;
+        State state_;
         struct
         {
             /**
@@ -71,8 +71,6 @@ class MessageImpl : public Message
             int flags;
         } body_;
         DataStream &stream_;
-        Client *client_;
-        Channel *channel_;
         char *line_;
 
         int receive_header();
@@ -83,8 +81,6 @@ class MessageImpl : public Message
         int parse_first_line( const char *data );
         int parse_header_field( char *data );
         int discard();
-
-        friend Client;
 };
 
 } // namespace v1

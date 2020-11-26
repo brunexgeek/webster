@@ -547,26 +547,22 @@ class HttpClient
 
 namespace v1 {
 
-class Manager
+class EventLoop
 {
     public:
-        Manager( Client *client, Handler *handler );
-        virtual ~Manager();
-        //int set_listener( Handler &listener );
-        //int add_listener( const std::string &path, Handler &listener );
-        //int remove_listener( const std::string &path );
-        int communicate( const std::string &path );
+        EventLoop( Client &client, Handler &handler );
+        virtual ~EventLoop();
         /**
-         * Event loop for servers.
+         * Process HTTP 1.1 requests.
          *
-         * This function waits for requests and handle them.
-         * The loop ends if any error occurs.
+         * This function waits for requests and handle them using the provided handler.
+         * The function returns if any error occurs.
          */
-        int event_loop();
+        int run();
 
     protected:
-        Client *client_;
-        Handler *handler_;
+        Client &client_;
+        Handler &handler_;
 };
 
 } // namespace v1

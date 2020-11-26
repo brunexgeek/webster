@@ -299,18 +299,12 @@ int HttpClient::communicate( Handler &handler )
 {
     DataStream os(*client_, StreamType::OUTBOUND);
 	DataStream is(*client_, StreamType::INBOUND);
-	v1::MessageImpl request(os);
-	v1::MessageImpl response(is);
 
-	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
-	request.channel_ = client_->get_channel();
-	request.client_ = client_;
+	v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
 	int result = Target::parse(target_.path, request.header.target);
 	if (result != WBERR_OK) return result;
 
-	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
-	response.channel_ = client_->get_channel();
-	response.client_ = client_;
+	v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
 	response.header.target = request.header.target;
 
 	result = handler(request, response);
