@@ -156,8 +156,7 @@ int main(int argc, char* argv[])
 			if (result == WBERR_OK)
 			{
 				std::cerr << "Client connected\n";
-				webster::http::v1::Manager http(remote.get(), &handler);
-				http.event_loop();
+				webster::http::v1::EventLoop(*remote.get(), handler).run();
 				remote->disconnect();
 				std::cerr << "Client disconnected\n";
 			}

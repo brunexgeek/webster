@@ -179,10 +179,9 @@ int MessageImpl::parse_header_field( char *data )
 
 #undef IS_HFNC
 
-MessageImpl::MessageImpl( DataStream &stream ) : stream_(stream)
+MessageImpl::MessageImpl( DataStream &stream, int flags ) : flags_(flags), stream_(stream)
 {
     state_ = WBS_IDLE;
-	flags_ = 0;
     body_.expected = body_.chunks = body_.flags = 0;
     line_ = new(std::nothrow) char[HTTP_LINE_LENGTH];
 }
@@ -452,9 +451,9 @@ int MessageImpl::write_header()
 	}
 	if (IS_REQUEST(flags_) && header.fields.count(WBFI_HOST) == 0)
 	{
-		std::string host = client_->get_target().host;
+		std::string host = stream_.get_client().get_target().host;
 		host += ':';
-		host += std::to_string(client_->get_target().port);
+		host += std::to_string(stream_.get_client().get_target().port);
 		header.fields.set(WBFI_HOST, host);
 	}
 
@@ -551,68 +550,36 @@ int MessageImpl::finish()
 	return WBERR_OK;
 }
 
-Manager::Manager( Client *client, Handler *handler ) : client_(client), handler_(handler)
+EventLoop::EventLoop( Client &client, Handler &handler ) : client_(client), handler_(handler)
 {
 }
 
-Manager::~Manager()
+EventLoop::~EventLoop()
 {
 }
 
-int Manager::event_loop()
+int EventLoop::run()
 {
 	int result = WBERR_OK;
-    auto params = client_->get_parameters();
-    auto channel = client_->get_channel();
-    DataStream is(*client_, StreamType::INBOUND);
-    DataStream os(*client_, StreamType::OUTBOUND);
+    auto params = client_.get_parameters();
+    DataStream is(client_, StreamType::INBOUND);
+    DataStream os(client_, StreamType::OUTBOUND);
 
     while (result == WBERR_OK)
     {
-        MessageImpl request(is);
-        MessageImpl response(os);
-
-        request.flags_ = WBMF_INBOUND | WBMF_REQUEST;
-        request.channel_ = channel;
-        request.client_ = client_;
-
+        MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
         int result = request.ready();
         if (result != WBERR_OK) break;
 
-        response.flags_ = WBMF_OUTBOUND | WBMF_RESPONSE;
-        response.channel_ = channel;
-        response.client_ = client_;
+        MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
         response.header.target = request.header.target;
 
-        result = (*handler_)(request, response);
+        result = handler_(request, response);
         if (result < WBERR_OK) break;
         result = response.finish();
         if (result < WBERR_OK) break;
     }
     return result;
-}
-
-int Manager::communicate( const std::string &path )
-{
-	DataStream os(*client_, StreamType::OUTBOUND);
-	DataStream is(*client_, StreamType::INBOUND);
-	MessageImpl request(os);
-	MessageImpl response(is);
-
-	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
-	request.channel_ = client_->get_channel();
-	request.client_ = client_;
-	int result = Target::parse(path.c_str(), request.header.target);
-	if (result != WBERR_OK) return result;
-
-	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
-	response.channel_ = client_->get_channel();
-	response.client_ = client_;
-	response.header.target = request.header.target;
-
-	result = (*handler_)(request, response);
-	if (result < WBERR_OK) return result;
-	return response.finish();
 }
 
 } // namespace v1

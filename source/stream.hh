@@ -51,6 +51,7 @@ class DataStream
         int pending() const;
         int flush();
 		const Parameters &get_parameters() const { return client_.get_parameters(); }
+		const Client &get_client() { return client_; }
 	protected:
 		int pending_;
 		Client &client_;
