@@ -549,8 +549,14 @@ class Manager
         virtual ~Manager();
         //int set_listener( Handler &listener );
         //int add_listener( const std::string &path, Handler &listener );
-        int remove_listener( const std::string &path );
+        //int remove_listener( const std::string &path );
         int communicate( const std::string &path );
+        /**
+         * Event loop for servers.
+         *
+         * This function waits for requests and handle them.
+         * The loop ends if any error occurs.
+         */
         int event_loop();
 
     protected:

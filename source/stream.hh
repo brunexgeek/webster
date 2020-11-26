@@ -19,11 +19,20 @@
 
 namespace webster {
 
-class HttpStream
+enum class StreamType
+{
+	INBOUND,
+	OUTBOUND
+};
+
+/**
+ * Utility class used to read and write data in network channels.
+ */
+class DataStream
 {
 	public:
-		HttpStream( const Parameters &params, Channel *chann, int type );
-		~HttpStream();
+		DataStream( Client &client, StreamType type );
+		~DataStream();
 		int write( const uint8_t *data, int size );
 		int write( const char *data );
 		int write( const std::string &text );
@@ -38,13 +47,13 @@ class HttpStream
         int read_line( char *data, int size );
         int pending() const;
         int flush();
-		const Parameters &get_parameters() const { return params_; }
+		const Parameters &get_parameters() const { return client_.get_parameters(); }
 	protected:
 		int pending_;
-		Channel *channel_;
-		Parameters params_;
+		Client &client_;
 		uint8_t *data_;
 		uint8_t *current_;
+		StreamType type_;
 };
 
 } // namespace 'webster'
