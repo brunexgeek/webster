@@ -16,14 +16,77 @@
  */
 
 #include <webster.hh>
+#include "stream.hh"
+
+#define WBMF_INBOUND   1
+#define WBMF_OUTBOUND  0
+#define WBMF_REQUEST   2
+#define WBMF_RESPONSE  0
 
 namespace webster {
-
-class HttpStream;
-
 namespace http {
+namespace v1 {
 
+enum State
+{
+	WBS_IDLE     = 0,
+	WBS_BODY     = 1,
+	WBS_COMPLETE = 2,
+};
 
+class MessageImpl : public Message
+{
+    public:
+        MessageImpl( DataStream &stream );
+        ~MessageImpl();
+        int read( uint8_t *buffer, int size );
+        int read( char *buffer, int size );
+        int read_all( std::vector<uint8_t> &buffer );
+		int read_all( std::string &buffer );
+        int write( const uint8_t *buffer, int size );
+        int write( const char *buffer );
+		int write( const std::string &buffer );
+        int write( const std::vector<uint8_t> &buffer );
+        int ready();
+        int flush();
+        int finish();
 
-} // namespace http1
+    public:
+        State state_;
+        int flags_;
+        struct
+        {
+            /**
+             * @brief Message expected size.
+             *
+             * This value is any negative if using chunked transfer encoding.
+             */
+            int expected;
+
+            /**
+             * @brief Number of chunks received.
+             */
+            int chunks;
+
+            int flags;
+        } body_;
+        DataStream &stream_;
+        Client *client_;
+        Channel *channel_;
+        char *line_;
+
+        int receive_header();
+        int chunk_size();
+        int write_header();
+        int write_resource_line();
+        int write_status_line();
+        int parse_first_line( const char *data );
+        int parse_header_field( char *data );
+        int discard();
+
+        friend Client;
+};
+
+} // namespace v1
+} // namespace http
 } // namespace webster

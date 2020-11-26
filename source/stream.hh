@@ -15,6 +15,9 @@
  *   limitations under the License.
  */
 
+#ifndef WEBSTER_STREAM_HH
+#define WEBSTER_STREAM_HH
+
 #include <webster.hh>
 
 namespace webster {
@@ -57,3 +60,5 @@ class DataStream
 };
 
 } // namespace 'webster'
+
+#endif // WEBSTER_STREAM_HH

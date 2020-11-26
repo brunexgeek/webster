@@ -1,5 +1,7 @@
 #include <webster.hh>
 #include "http.hh"
+#include "http1.hh"
+#include "stream.hh"
 
 static const char *HTTP_METHODS[] =
 {
@@ -250,6 +252,70 @@ int Handler::operator()( Message &request, Message &response )
 {
 	if (func_ ==  nullptr) return WBERR_INVALID_HANDLER;
 	return func_(request, response);
+}
+
+int HttpClient::open( const char *url )
+{
+    return open(url, Parameters());
+}
+
+int HttpClient::open( const Target &url )
+{
+    return open(url, Parameters());
+}
+
+int HttpClient::open( const char *url, const Parameters &params )
+{
+    Target target;
+    int result = Target::parse(url, target);
+    if (result != WBERR_OK) return result;
+    return open(target, params);
+}
+
+int HttpClient::open( const Target &url, const Parameters &params )
+{
+    if ((url.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
+    target_ = url;
+    params_ = params;
+    client_ = new(std::nothrow) ::webster::Client(params_);
+    if (client_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    int result = client_->connect(target_);
+    if (result != WBERR_OK)
+    {
+        delete client_;
+        client_ = nullptr;
+        return result;
+    }
+    return WBERR_OK;
+}
+
+int HttpClient::close()
+{
+    delete client_;
+    return WBERR_OK;
+}
+
+int HttpClient::communicate( Handler &handler )
+{
+    DataStream os(*client_, StreamType::OUTBOUND);
+	DataStream is(*client_, StreamType::INBOUND);
+	v1::MessageImpl request(os);
+	v1::MessageImpl response(is);
+
+	request.flags_ = WBMF_OUTBOUND | WBMF_REQUEST;
+	request.channel_ = client_->get_channel();
+	request.client_ = client_;
+	int result = Target::parse(target_.path, request.header.target);
+	if (result != WBERR_OK) return result;
+
+	response.flags_ = WBMF_INBOUND | WBMF_RESPONSE;
+	response.channel_ = client_->get_channel();
+	response.client_ = client_;
+	response.header.target = request.header.target;
+
+	result = handler(request, response);
+	if (result < WBERR_OK) return result;
+	return response.finish();
 }
 
 } // namespace http

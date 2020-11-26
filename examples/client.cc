@@ -67,19 +67,15 @@ int main( int argc, char **argv )
     const char *url = "http://duckduckgo.com:80/";
     if (argc > 1) url = argv[1];
 
-    Parameters params;
-    Client client(params);
-    Target target;
-    Handler handler(main_clientHandler);
-    if (Target::parse(url, target) != WBERR_OK) return 1;
-    if (client.connect(target) == WBERR_OK)
+    HttpClient client;
+    int result = client.open(url);
+    if (result == WBERR_OK)
     {
-        webster::http::v1::Manager http(&client, &handler);
-        http.communicate(target.path);
-        client.disconnect();
+        Handler handler(main_clientHandler);
+        client.communicate(handler);
     }
     else
-        std::cout << "Failed!\n";
+        std::cout << "Failed with " << result << "!\n";
 
     return 0;
 }
