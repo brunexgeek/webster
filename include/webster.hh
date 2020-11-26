@@ -200,7 +200,51 @@ struct Target
     void clear();
 };
 
+class Network;
+
+struct Parameters
+{
+    /**
+     * Pointer to custom network implementation. Uses the default implementation if not defined.
+     */
+    std::shared_ptr<Network> network;
+
+    /**
+     * Maximum number of remote clients in the server queue. The default value is
+     * WBL_DEF_CONNECTIONS.
+     */
+    int max_clients;
+
+    /**
+     * Size (in bytes) of the message internal output buffer. The default value
+     * is WBL_DEF_BUFFER_SIZE.
+     */
+    uint32_t buffer_size;
+
+    /**
+     * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
+    int read_timeout;
+
+    /**
+     * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
+    int write_timeout;
+
+    /**
+     * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     */
+    int connect_timeout;
+
+    Parameters();
+    Parameters( const Parameters &that );
+};
+
+class Client;
+
 namespace http {
+
+class Handler;
 
 enum Method
 {
@@ -281,6 +325,23 @@ struct Header
     void clear();
 };
 
+class HttpClient
+{
+    public:
+        HttpClient() = default;
+        virtual ~HttpClient() = default;
+        int open( const char *url );
+        int open( const Target &url );
+        int open( const char *url, const Parameters &params );
+        int open( const Target &url, const Parameters &params );
+        int close();
+        int communicate( Handler &handler );
+    protected:
+        ::webster::Target target_;
+        ::webster::Parameters params_;
+        ::webster::Client *client_;
+};
+
 } // namespace http
 
 class Client;
@@ -346,44 +407,6 @@ class Network
          */
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
-};
-
-struct Parameters
-{
-    /**
-     * Pointer to custom network implementation. Uses the default implementation if not defined.
-     */
-    std::shared_ptr<Network> network;
-
-    /**
-     * Maximum number of remote clients in the server queue. The default value is
-     * WBL_DEF_CONNECTIONS.
-     */
-    int max_clients;
-
-    /**
-     * Size (in bytes) of the message internal output buffer. The default value
-     * is WBL_DEF_BUFFER_SIZE.
-     */
-    uint32_t buffer_size;
-
-    /**
-     * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
-     */
-    int read_timeout;
-
-    /**
-     * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
-     */
-    int write_timeout;
-
-    /**
-     * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
-     */
-    int connect_timeout;
-
-    Parameters();
-    Parameters( const Parameters &that );
 };
 
 namespace http {
