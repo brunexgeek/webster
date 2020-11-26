@@ -30,12 +30,9 @@
 #ifdef WB_WINDOWS
 #include <windows.h>
 #define SNPRINTF _snprintf
-#define STRCMPI  _strcmpi
 #else
-#include <sys/time.h>
 #include <unistd.h>
 #define SNPRINTF snprintf
-#define STRCMPI  strcmpi
 #endif
 
 #define IS_INBOUND(x)   ( (x) & 1 )
@@ -43,13 +40,11 @@
 #define IS_REQUEST(x)   ( (x) & 2 )
 #define IS_RESPONSE(x)  ( ((x) & 2) == 0)
 
-#define WBMF_CHUNKED   1
-#define WBMF_INBOUND   1
-#define WBMF_OUTBOUND  0
-#define WBMF_REQUEST   2
-#define WBMF_RESPONSE  0
+const int WBMF_CHUNKED  = 1;
 
 #define HTTP_LINE_LENGTH 4096
+
+#define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
 
 namespace webster {
 namespace http {
@@ -168,10 +163,10 @@ int MessageImpl::parse_header_field( char *data )
 	// ignore trailing whitespaces in the value
 	value = http_trim(value);
 	header.fields.set(name, value);
-	if (STRCMPI(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
+	if (::webster::http::strcmpi(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
 		body_.expected = (int) strtol(value, nullptr, 10);
 	else
-	if (STRCMPI(name, "Transfer-Encoding") == 0)
+	if (::webster::http::strcmpi(name, "Transfer-Encoding") == 0)
 	{
 		if (strstr(value, "chunked"))
 		{
@@ -390,7 +385,7 @@ int MessageImpl::write_resource_line()
 	switch (target.type)
 	{
 		case WBRT_ABSOLUTE:
-			stream_.write((target.scheme == WBP_HTTPS) ? "https://" : "http://");
+			stream_.write((target.scheme == WBS_HTTPS) ? "https://" : "http://");
 			stream_.write(target.host);
 			stream_.write(':');
 			stream_.write(target.port);

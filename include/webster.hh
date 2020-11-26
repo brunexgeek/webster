@@ -15,19 +15,8 @@
  *   limitations under the License.
  */
 
-#ifndef WEBSTER_API_H
-#define WEBSTER_API_H
-
-
-#if BUILDING_WEBSTER && BUILDING_DYNAMIC && (defined(_MSC_VER) || defined(WIN32) || defined(_WIN32))
-#define WEBSTER_EXPORTED __declspec(dllexport)
-#elif BUILDING_WEBSTER && BUILDING_DYNAMIC
-#define WEBSTER_EXPORTED __attribute__((__visibility__("default")))
-#elif defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
-#define WEBSTER_EXPORTED
-#else
-#define WEBSTER_EXPORTED
-#endif
+#ifndef WEBSTER_API_HH
+#define WEBSTER_API_HH
 
 #if defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
 #define WEBSTER_PRIVATE
@@ -39,42 +28,40 @@
 #include <stddef.h>
 #include <functional>
 #include <string>
-#include <atomic>
 
-#define WBERR_OK                         0
-#define WBERR_INVALID_ARGUMENT           -1
-#define WBERR_MEMORY_EXHAUSTED           -2
-#define WBERR_INVALID_ADDRESS            -3
-#define WBERR_SOCKET                     -4
-#define WBERR_COMPLETE                   -6
-#define WBERR_TOO_LONG                   -7
-#define WBERR_TIMEOUT                    -11
-#define WBERR_INVALID_STATE              -12
-#define WBERR_INVALID_HTTP_METHOD        -14
-#define WBERR_INVALID_HTTP_VERSION       -16
-#define WBERR_INVALID_HTTP_MESSAGE       -17
-#define WBERR_INVALID_TARGET             -18
-#define WBERR_INVALID_SCHEME             -19
-#define WBERR_INVALID_HOST               -20
-#define WBERR_INVALID_PORT               -21
-#define WBERR_INVALID_CHANNEL            -22
-#define WBERR_REFUSED                    -23
-#define WBERR_UNREACHABLE                -24
-#define WBERR_IN_PROGRESS                -25
-#define WBERR_ADDRESS_IN_USE             -27
-#define WBERR_INVALID_CHUNK              -28
-#define WBERR_NOT_CONNECTED              -29
-#define WBERR_SIGNAL                     -30
-#define WBERR_INVALID_HTTP_FIELD         -32
-#define WBERR_PERMISSION                 -31
-#define WBERR_INVALID_HANDLER            -33
-#define WBERR_NOT_IMPLEMENTED            -34
-#define WBERR_NO_RESOURCES               -35
+const int WBERR_OK                   = 0;
+const int WBERR_INVALID_ARGUMENT     = -1;
+const int WBERR_MEMORY_EXHAUSTED     = -2;
+const int WBERR_INVALID_ADDRESS      = -3;
+const int WBERR_SOCKET               = -4;
+const int WBERR_COMPLETE             = -6;
+const int WBERR_TOO_LONG             = -7;
+const int WBERR_TIMEOUT              = -11;
+const int WBERR_INVALID_STATE        = -12;
+const int WBERR_INVALID_HTTP_METHOD  = -14;
+const int WBERR_INVALID_HTTP_VERSION = -16;
+const int WBERR_INVALID_HTTP_MESSAGE = -17;
+const int WBERR_INVALID_TARGET       = -18;
+const int WBERR_INVALID_SCHEME       = -19;
+const int WBERR_INVALID_HOST         = -20;
+const int WBERR_INVALID_PORT         = -21;
+const int WBERR_INVALID_CHANNEL      = -22;
+const int WBERR_REFUSED              = -23;
+const int WBERR_UNREACHABLE          = -24;
+const int WBERR_IN_PROGRESS          = -25;
+const int WBERR_ADDRESS_IN_USE       = -27;
+const int WBERR_INVALID_CHUNK        = -28;
+const int WBERR_NOT_CONNECTED        = -29;
+const int WBERR_SIGNAL               = -30;
+const int WBERR_INVALID_HTTP_FIELD   = -32;
+const int WBERR_PERMISSION           = -31;
+const int WBERR_INVALID_HANDLER      = -33;
+const int WBERR_NOT_IMPLEMENTED      = -34;
+const int WBERR_NO_RESOURCES         = -35;
 
-#define WBT_HEADER                       1
-#define WBT_BODY                         2
-#define WBT_EMPTY                        3
-
+/**
+ * HTTP header field identifier.
+ */
 enum FieldID
 {
     WBFI_NON_STANDARD = 0,
@@ -147,26 +134,28 @@ enum FieldID
     WBFI_WWW_AUTHENTICATE,
 };
 
-#define WBRT_ORIGIN      0x01
-#define WBRT_AUTHORITY   0x02
-#define WBRT_ABSOLUTE    (WBRT_ORIGIN + 0x04 + WBRT_AUTHORITY)
-#define WBRT_ASTERISK    0x08
+// Request target types
 
-#define WBP_AUTO         0
-#define WBP_HTTP         1
-#define WBP_HTTPS        2
+const int WBRT_ORIGIN    = 0x01;
+const int WBRT_AUTHORITY = 0x02;
+const int WBRT_ABSOLUTE  = (WBRT_ORIGIN + 0x04 + WBRT_AUTHORITY);
+const int WBRT_ASTERISK  = 0x08;
 
-#define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
-#define WB_IS_VALID_SCHEME(x)  ( (x) >= WBP_AUTO && (x) <= WBP_HTTPS )
-#define WB_IS_VALID_URL(x)     ( (x) >= WBRT_ORIGIN && (x) <= WBRT_ASTERISK )
+// Schemas
 
-#define WBL_MIN_BUFFER_SIZE    64
-#define WBL_MAX_BUFFER_SIZE    10485760 // 10 MB
-#define WBL_DEF_BUFFER_SIZE    4096 // 4KB
-#define WBL_MAX_CONNECTIONS    10000
-#define WBL_DEF_CONNECTIONS    200
-#define WBL_DEF_TIMEOUT        10000 // 10 sec
-#define WBL_MAX_TIMEOUT        620000 // 10 minutes
+const int WBS_AUTO       = 0;
+const int WBS_HTTP       = 1;
+const int WBS_HTTPS      = 2;
+
+// Limits
+
+const int WBL_MIN_BUFFER_SIZE = 64;
+const int WBL_MAX_BUFFER_SIZE = 10485760; // 10 MB
+const int WBL_DEF_BUFFER_SIZE = 4096; // 4KB
+const int WBL_MAX_CONNECTIONS = 10000;
+const int WBL_DEF_CONNECTIONS = 200;
+const int WBL_DEF_TIMEOUT     = 10000; // 10 sec
+const int WBL_MAX_TIMEOUT     = 620000; // 10 minutes
 
 #include <memory>
 #include <map>
@@ -200,12 +189,79 @@ struct Target
     void clear();
 };
 
-class Network;
+class Channel {};
+
+/**
+ * Abstraction for network adapters.
+ */
+class Network
+{
+    public:
+        enum Type { CLIENT, SERVER };
+        /**
+         * Create a channel.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int open( Channel **channel, Type type ) = 0;
+        /**
+         * Close and destroy a channel.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int close( Channel *channel ) = 0;
+        /**
+         * Connect to a HTTP server.
+         *
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int connect( Channel *channel, int scheme, const char *host, int port, int timeout ) = 0;
+        /**
+         * Receive data.
+         *
+         * @param channel Pointer to the channel.
+         * @param buffer Pointer to the destination buffer.
+         * @param size Buffer size.
+         * @param received Pointer to store the amount of data retrieved.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    waiting for data.
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout ) = 0;
+        /**
+         * Write data.
+         *
+         * This function will succeed only if all data is written.
+         *
+         * @param channel Pointer to the channel.
+         * @param buffer Pointer to the destination buffer.
+         * @param size Buffer size.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    writing data.
+         * @returns WBERR_OK on success; error code otherwise.
+         */
+        virtual int send( Channel *channel, const uint8_t *buffer, int size, int timeout ) = 0;
+        /**
+         * Accept client connections.
+         *
+         * This function will return if interrupted by signals.
+         *
+         * @param channel Pointer to the channel.
+         * @param channel Pointer to the new channel.
+         * @param timeout Aproximated number of milliseconds the function will block
+         *    waiting for connections.
+         */
+        virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
+        virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
+};
 
 struct Parameters
 {
     /**
-     * Pointer to custom network implementation. Uses the default implementation if not defined.
+     * Pointer to custom network implementation.
+     *
+     * Set to 'nullptr' to use the default implementation. Note that the default
+     * implementation is not available if 'WEBSTER_NO_DEFAULT_NETWORK' is set.
      */
     std::shared_ptr<Network> network;
 
@@ -240,11 +296,61 @@ struct Parameters
     Parameters( const Parameters &that );
 };
 
-class Client;
+enum Protocol
+{
+    WBCP_HTTP_1 /// HTTP 1.1
+};
+
+enum ClientType
+{
+    WBCT_LOCAL,
+    WBCT_REMOTE,
+};
+
+class Server;
+
+class Client
+{
+    public:
+        friend Server;
+        Client( ClientType type = WBCT_LOCAL );
+        Client( Parameters params, ClientType type = WBCT_LOCAL );
+        ~Client();
+        int connect( const Target &target );
+        int get_protocol() const;
+        int disconnect();
+        const Parameters &get_parameters() const;
+        const Target &get_target() const;
+        bool is_connected() const;
+        Channel *get_channel();
+        ClientType get_type() const;
+
+    protected:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+        Protocol proto_;
+        ClientType type_;
+};
+
+class Server
+{
+    public:
+        Server();
+        Server( Parameters params );
+        virtual ~Server();
+        virtual int start( const Target &target );
+        virtual int stop();
+        virtual int accept( std::shared_ptr<Client> &remote );
+        virtual const Parameters &get_parameters() const;
+        virtual const Target &get_target() const;
+    protected:
+        Parameters params_;
+        Channel *channel_;
+        Target target_;
+};
 
 namespace http {
-
-class Handler;
 
 enum Method
 {
@@ -324,92 +430,6 @@ struct Header
     void swap( Header &that );
     void clear();
 };
-
-class HttpClient
-{
-    public:
-        HttpClient() = default;
-        virtual ~HttpClient() = default;
-        int open( const char *url );
-        int open( const Target &url );
-        int open( const char *url, const Parameters &params );
-        int open( const Target &url, const Parameters &params );
-        int close();
-        int communicate( Handler &handler );
-    protected:
-        ::webster::Target target_;
-        ::webster::Parameters params_;
-        ::webster::Client *client_;
-};
-
-} // namespace http
-
-class Client;
-
-class Channel {};
-
-class Network
-{
-    public:
-        enum Type { CLIENT, SERVER };
-        /**
-         * Create a channel.
-         *
-         * @returns WBERR_OK on success; error code otherwise.
-         */
-        virtual int open( Channel **channel, Type type ) = 0;
-        /**
-         * Close and destroy a channel.
-         *
-         * @returns WBERR_OK on success; error code otherwise.
-         */
-        virtual int close( Channel *channel ) = 0;
-        /**
-         * Connect to a HTTP server.
-         *
-         * @returns WBERR_OK on success; error code otherwise.
-         */
-        virtual int connect( Channel *channel, int scheme, const char *host, int port, int timeout ) = 0;
-        /**
-         * Receive data.
-         *
-         * @param channel Pointer to the channel.
-         * @param buffer Pointer to the destination buffer.
-         * @param size Buffer size.
-         * @param received Pointer to store the amount of data retrieved.
-         * @param timeout Aproximated number of milliseconds the function will block
-         *    waiting for data.
-         * @returns WBERR_OK on success; error code otherwise.
-         */
-        virtual int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout ) = 0;
-        /**
-         * Write data.
-         *
-         * This function will succeed only if all data is written.
-         *
-         * @param channel Pointer to the channel.
-         * @param buffer Pointer to the destination buffer.
-         * @param size Buffer size.
-         * @param timeout Aproximated number of milliseconds the function will block
-         *    writing data.
-         * @returns WBERR_OK on success; error code otherwise.
-         */
-        virtual int send( Channel *channel, const uint8_t *buffer, int size, int timeout ) = 0;
-        /**
-         * Accept client connections.
-         *
-         * This function will return if interrupted by signals.
-         *
-         * @param channel Pointer to the channel.
-         * @param channel Pointer to the new channel.
-         * @param timeout Aproximated number of milliseconds the function will block
-         *    waiting for connections.
-         */
-        virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
-        virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
-};
-
-namespace http {
 
 class Message
 {
@@ -508,61 +528,23 @@ class Handler
         std::function<int(Message&,Message&)> func_;
 };
 
-} // namespace http
-
-WEBSTER_EXPORTED class Server
+class HttpClient
 {
     public:
-        Server();
-        Server( Parameters params );
-        virtual ~Server();
-        virtual int start( const Target &target );
-        virtual int stop();
-        virtual int accept( std::shared_ptr<Client> &remote );
-        virtual const Parameters &get_parameters() const;
-        virtual const Target &get_target() const;
+        HttpClient() = default;
+        virtual ~HttpClient() = default;
+        int open( const char *url );
+        int open( const Target &url );
+        int open( const char *url, const Parameters &params );
+        int open( const Target &url, const Parameters &params );
+        int close();
+        int communicate( Handler &handler );
     protected:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
+        ::webster::Target target_;
+        ::webster::Parameters params_;
+        ::webster::Client *client_;
 };
 
-enum Protocol
-{
-    WBCP_HTTP_1 /// HTTP 1.1
-};
-
-enum ClientType
-{
-    WBCT_LOCAL,
-    WBCT_REMOTE,
-};
-
-WEBSTER_EXPORTED class Client
-{
-    public:
-        friend Server;
-        Client( ClientType type = WBCT_LOCAL );
-        Client( Parameters params, ClientType type = WBCT_LOCAL );
-        ~Client();
-        int connect( const Target &target );
-        int get_protocol() const;
-        int disconnect();
-        const Parameters &get_parameters() const;
-        const Target &get_target() const;
-        bool is_connected() const;
-        Channel *get_channel();
-        ClientType get_type() const;
-
-    protected:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
-        Protocol proto_;
-        ClientType type_;
-};
-
-namespace http {
 namespace v1 {
 
 class Manager
@@ -589,7 +571,6 @@ class Manager
 
 } // namespace v1
 } // namespace http
-
 } // namespace webster
 
-#endif // WEBSTER_API_H
+#endif // WEBSTER_API_HH
