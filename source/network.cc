@@ -241,9 +241,9 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 		return WBERR_INVALID_CHANNEL;
 	if (port < 0 && port > 0xFFFF)
 		return WBERR_INVALID_PORT;
-	if (scheme == WBP_AUTO)
-		scheme = (port == 443) ? WBP_HTTPS : WBP_HTTP;
-	if (scheme != WBP_HTTP)
+	if (scheme == WBS_AUTO)
+		scheme = (port == 443) ? WBS_HTTPS : WBS_HTTP;
+	if (scheme != WBS_HTTP)
 		return WBERR_INVALID_SCHEME;
 	if (timeout < 0) timeout = 0;
 

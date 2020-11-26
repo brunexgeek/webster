@@ -193,9 +193,9 @@ int Target::parse( const char *url, Target &target )
 
 		// return the scheme
 		if (url[4] == ':')
-			target.scheme = WBP_HTTP;
+			target.scheme = WBS_HTTP;
 		else
-			target.scheme = WBP_HTTPS;
+			target.scheme = WBS_HTTPS;
 
 		// return the port number, if any
 		if (pe != nullptr)
@@ -212,7 +212,7 @@ int Target::parse( const char *url, Target &target )
 		}
 		else
 		{
-			if (target.scheme == WBP_HTTP)
+			if (target.scheme == WBS_HTTP)
 				target.port = 80;
 			else
 				target.port = 443;
@@ -293,7 +293,7 @@ void Target::swap( Target &that )
 void Target::clear()
 {
 	type = port = 0;
-	scheme = WBP_HTTP;
+	scheme = WBS_HTTP;
 	user.clear();
 	host.clear();
 	path.clear();

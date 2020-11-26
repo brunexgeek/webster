@@ -18,10 +18,10 @@
 #include <webster.hh>
 #include "stream.hh"
 
-#define WBMF_INBOUND   1
-#define WBMF_OUTBOUND  0
-#define WBMF_REQUEST   2
-#define WBMF_RESPONSE  0
+const int WBMF_INBOUND  = 1;
+const int WBMF_OUTBOUND = 0;
+const int WBMF_REQUEST  = 2;
+const int WBMF_RESPONSE = 0;
 
 namespace webster {
 namespace http {
