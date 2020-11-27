@@ -332,6 +332,8 @@ int HttpClient::communicate_remote( HttpListener &listener )
     int result = request.ready();
     if (result != WBERR_OK) return result;
 
+    bool closing = request.header.fields.get(WBFI_CONNECTION) == "close";
+
     v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
     response.header.target = request.header.target;
 
