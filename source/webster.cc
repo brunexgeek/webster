@@ -385,19 +385,21 @@ int Server::stop()
 	return WBERR_OK;
 }
 
-int Server::accept( std::shared_ptr<Client> &remote )
+int Server::accept( Client **remote )
 {
+	if (remote == nullptr) return WBERR_INVALID_ARGUMENT;
+
 	Channel *channel = nullptr;
 	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
 	if (result != WBERR_OK) return result;
 
-	remote = std::shared_ptr<Client>(new (std::nothrow) Client(params_, WBCT_REMOTE));
-	if (remote == nullptr)
+	*remote = new (std::nothrow) Client(params_, WBCT_REMOTE);
+	if (*remote == nullptr)
 	{
 		params_.network->close(channel);
 		return WBERR_MEMORY_EXHAUSTED;
 	}
-	remote->channel_ = channel;
+	(*remote)->channel_ = channel;
 
 	return WBERR_OK;
 }
@@ -428,6 +430,8 @@ Client::~Client()
 
 int Client::connect( const Target &target )
 {
+	if (channel_) return WBERR_ALREADY_CONNECTED;
+	if (type_ == WBCT_REMOTE) return WBERR_NOT_IMPLEMENTED; // TODO: use better code
 	#ifdef WEBSTER_NO_DEFAULT_NETWORK
 	if (!params->network) return WBERR_INVALID_ARGUMENT;
 	#endif

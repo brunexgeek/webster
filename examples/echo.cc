@@ -151,14 +151,13 @@ int main(int argc, char* argv[])
 		EchoHandler handler;
 		while (serverState == SERVER_RUNNING)
 		{
-			std::shared_ptr<Client> remote;
-			int result = server.accept(remote);
+			Client *remote = nullptr;
+			int result = server.accept(&remote);
 			if (result == WBERR_OK)
 			{
-				std::cerr << "Client connected\n";
-				webster::http::v1::EventLoop(*remote.get(), handler).run();
+				webster::http::v1::EventLoop(*remote, handler).run();
 				remote->disconnect();
-				std::cerr << "Client disconnected\n";
+				delete remote;
 			}
 			else
 			if (result != WBERR_TIMEOUT) break;

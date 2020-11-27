@@ -51,7 +51,7 @@ int DataStream::write( const uint8_t *buffer, int size )
 	// fragment input data through recursive call until the data size fits the internal buffer
 	int offset = 0;
 	int result = WBERR_OK;
-	int fit = client_.get_parameters().buffer_size - (int)(current_ - data_);
+	int fit = params.buffer_size - (int)(current_ - data_);
 	while (size > fit)
 	{
 		result = write(buffer + offset, fit);
