@@ -16,20 +16,18 @@ The repository also includes three programs in the ``examples`` directory:
 
 ## Client implementation
 
-To send a message to a HTTP server, just create a client object and start the communication:
+To send a message to a HTTP server, just create a `HttpClient` object and start the communication:
 
 ``` c++
-// parse the URL
-Target target;
-Target::parse("http://duckduckgo.com:80/", target);
 // create the handler using a function
 Handler handler(my_client_handler);
-Client client;
-if (client.connect(target) == WBERR_OK)
+// create the HTTP client
+HttpClient client;
+if (client.open("http://duckduckgo.com:80/") == WBERR_OK)
 {
     // use the handler to send a request to "/"
     client.communicate("/", handler);
-    client.disconnect();
+    client.close();
 }
 ```
 

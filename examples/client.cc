@@ -73,6 +73,7 @@ int main( int argc, char **argv )
     {
         Handler handler(main_clientHandler);
         client.communicate(handler);
+        client.close();
     }
     else
         std::cout << "Failed with " << result << "!\n";
