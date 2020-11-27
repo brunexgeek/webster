@@ -414,7 +414,7 @@ const Target &Server::get_target() const
 	return target_;
 }
 
-Client::Client( ClientType type ) : channel_(nullptr), proto_(WBCP_HTTP_1), type_(type)
+Client::Client( ClientType type ) : channel_(nullptr), type_(type)
 {
 }
 
@@ -450,11 +450,6 @@ int Client::connect( const Target &target )
 	target_ = target;
 
 	return WBERR_OK;
-}
-
-int Client::get_protocol() const
-{
-	return proto_;
 }
 
 Channel *Client::get_channel()

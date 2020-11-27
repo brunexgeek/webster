@@ -452,11 +452,12 @@ static int main_serverHandler(
 
 #include <sys/time.h>
 
-static void process( int id, Client *remote, Handler &handler )
+static void process( int id, HttpClient *remote, Handler &handler )
 {
 	(void) id;
-	webster::http::v1::EventLoop(*remote, handler).run();
-	remote->disconnect();
+	int result;
+	while ((result = remote->communicate(handler)) != WBERR_OK);
+	remote->close();
 	delete remote;
 }
 
@@ -497,14 +498,12 @@ int main(int argc, char* argv[])
 	params.read_timeout = 3000;
 
 	Handler handler(main_serverHandler);
-	Server server(params);
-	Target target;
-	if (Target::parse("0.0.0.0:7000", target) != WBERR_OK) return 1;
-	if (server.start(target) == WBERR_OK)
+	HttpServer server(params);
+	if (server.start("0.0.0.0:7000") == WBERR_OK)
 	{
 		while (serverState == SERVER_RUNNING)
 		{
-			Client *remote = nullptr;
+			HttpClient *remote = nullptr;
 			int result = server.accept(&remote);
 			if (result == WBERR_OK)
 				pool.push(process, remote, handler);

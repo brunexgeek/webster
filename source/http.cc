@@ -254,47 +254,166 @@ int Handler::operator()( Message &request, Message &response )
 	return func_(request, response);
 }
 
-HttpClient::HttpClient() : impl_(nullptr)
+HttpClient::HttpClient( ClientType type, Client *client ) : client_(client), proto_(WBCP_HTTP_1), type_(type)
 {
-    impl_ = new(std::nothrow) v1::HttpClient();
 }
 
 HttpClient::~HttpClient()
 {
-    delete impl_;
+    close();
 }
 
 int HttpClient::open( const char *url, const Parameters &params )
 {
-    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
-    return impl_->open(url, params);
+    Target target;
+    int result = Target::parse(url, target);
+    if (result != WBERR_OK) return result;
+    return open(target, params);
 }
 
 int HttpClient::open( const Target &url, const Parameters &params )
 {
-    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
-    return impl_->open(url, params);
+    if ((url.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
+    client_ = new(std::nothrow) ::webster::Client(params);
+    if (client_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    int result = client_->connect(url);
+    if (result != WBERR_OK)
+    {
+        delete client_;
+        client_ = nullptr;
+        return result;
+    }
+    return WBERR_OK;
 }
 
 int HttpClient::close()
 {
-    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
-    return impl_->close();
+    delete client_;
+	client_ = nullptr;
+    return WBERR_OK;
 }
 
 int HttpClient::communicate( Handler &handler )
 {
-    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
-    int result = impl_->communicate(handler);
-    // TODO: handle upgrades
-    return result;
+    if (type_ == WBCT_LOCAL)
+        return communicate_local(handler);
+    else
+        return communicate_remote(handler);
+}
+
+int HttpClient::communicate_local( Handler &handler )
+{
+    if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
+
+    DataStream os(*client_, StreamType::OUTBOUND);
+	DataStream is(*client_, StreamType::INBOUND);
+
+	v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
+	int result = Target::parse(client_->get_target().path, request.header.target);
+	if (result != WBERR_OK) return result;
+
+	v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
+	response.header.target = request.header.target;
+
+	result = handler(request, response);
+	if (result < WBERR_OK) return result;
+	return response.finish();
+}
+
+int HttpClient::communicate_remote( Handler &handler )
+{
+    if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
+
+    DataStream is(*client_, StreamType::INBOUND);
+    DataStream os(*client_, StreamType::OUTBOUND);
+
+    v1::MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
+    int result = request.ready();
+    if (result != WBERR_OK) return result;
+
+    v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
+    response.header.target = request.header.target;
+
+    result = handler(request, response);
+    if (result < WBERR_OK) return result;
+    return response.finish();
+}
+
+ClientType HttpClient::get_type() const
+{
+    return type_;
 }
 
 Protocol HttpClient::get_protocol() const
 {
-    if (impl_ == nullptr) return WBCP_NONE;
-	return impl_->get_protocol();
+	return proto_;
 }
+
+Client *HttpClient::get_client()
+{
+	return client_;
+}
+
+//
+// HttpServer
+//
+
+HttpServer::HttpServer()
+{
+}
+
+HttpServer::HttpServer( Parameters params ) : server_(params)
+{
+}
+
+HttpServer::~HttpServer()
+{
+}
+
+int HttpServer::start( const Target &target )
+{
+    return server_.start(target);
+}
+
+int HttpServer::start( const std::string &target )
+{
+    Target temp;
+    int result = Target::parse(target, temp);
+    if (result != WBERR_OK) return result;
+    return server_.start(temp);
+}
+
+int HttpServer::stop()
+{
+    return server_.stop();
+}
+
+int HttpServer::accept( HttpClient **remote )
+{
+    Client *temp = nullptr;
+    int result = server_.accept(&temp);
+    if (result != WBERR_OK) return result;
+
+    *remote = new(std::nothrow) HttpClient(WBCT_REMOTE, temp);
+    if (*remote == nullptr)
+    {
+        delete temp;
+        return WBERR_MEMORY_EXHAUSTED;
+    }
+
+    return WBERR_OK;
+}
+
+const Parameters &HttpServer::get_parameters() const
+{
+    return server_.get_parameters();
+}
+
+const Target &HttpServer::get_target() const
+{
+    return server_.get_target();
+}
+
 
 } // namespace http
 } // namespace webster
