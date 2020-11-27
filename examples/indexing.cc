@@ -201,7 +201,7 @@ static void main_downloadFile( Message &response, const char *fileName, int cont
 	}
 
 	const char *mime = main_getMime(fileName);
-	printf("Requested '%s' (%s) with %d bytes\n", fileName, mime, contentLength);
+	printf("  Requested '%s' (%s) with %d bytes\n", fileName, mime, contentLength);
 
 	response.header.status = 200;
 	response.header.fields["Content-Length"] = std::to_string(contentLength);
@@ -225,7 +225,7 @@ static void main_downloadFile( Message &response, const char *fileName, int cont
 
 	delete[] buffer;
 
-	printf("Returned %d bytes from '%s'\n", (int) sent, fileName);
+	printf("  Returned %d bytes from '%s'\n", (int) sent, fileName);
 }
 
 
@@ -281,7 +281,7 @@ static void enumerateFiles(
 		closedir(dr);
 		return;
 	}
-	printf("Found %d files at '%s'\n", *count, path);
+	printf("  Found %d files at '%s'\n", *count, path);
 
 	int i = 0;
 	while ((de = readdir(dr)) != NULL)
@@ -452,11 +452,13 @@ static int main_serverHandler(
 
 #include <sys/time.h>
 
-static void process( int id, HttpClient *remote, Handler &handler )
+static void process( int id, HttpClient *remote, HttpListener &listener )
 {
 	(void) id;
 	int result;
-	while ((result = remote->communicate(handler)) != WBERR_OK);
+	std::cerr << "Connection estabilished #" << id << std::endl;
+	while ((result = remote->communicate(listener)) == WBERR_OK);
+	std::cerr << "Connection closed #" << id << std::endl;
 	remote->close();
 	delete remote;
 }
@@ -469,7 +471,7 @@ int main(int argc, char* argv[])
 
 	#else
 
-	// install the signal handler to stop the server with CTRL + C
+	// install the signal listener to stop the server with CTRL + C
 	struct sigaction act;
 	sigemptyset(&act.sa_mask);
 	sigaddset(&act.sa_mask, SIGINT);
@@ -497,7 +499,7 @@ int main(int argc, char* argv[])
 	Parameters params;
 	params.read_timeout = 3000;
 
-	Handler handler(main_serverHandler);
+	HttpListener listener(main_serverHandler);
 	HttpServer server(params);
 	if (server.start("0.0.0.0:7000") == WBERR_OK)
 	{
@@ -506,7 +508,7 @@ int main(int argc, char* argv[])
 			HttpClient *remote = nullptr;
 			int result = server.accept(&remote);
 			if (result == WBERR_OK)
-				pool.push(process, remote, handler);
+				pool.push(process, remote, listener);
 			else
 			if (result != WBERR_TIMEOUT) break;
 		}

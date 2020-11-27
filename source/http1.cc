@@ -547,7 +547,7 @@ int MessageImpl::finish()
 	return WBERR_OK;
 }
 
-EventLoop::EventLoop( Client &client, Handler &handler ) : client_(client), handler_(handler)
+EventLoop::EventLoop( Client &client, HttpListener &listener ) : client_(client), handler_(listener)
 {
 }
 
