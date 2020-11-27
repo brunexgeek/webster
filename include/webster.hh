@@ -30,6 +30,7 @@
 #include <string>
 
 const int WBERR_OK                   = 0;
+const int WBERR_UPGRADED             = -38;
 const int WBERR_INVALID_ARGUMENT     = -1;
 const int WBERR_MEMORY_EXHAUSTED     = -2;
 const int WBERR_INVALID_ADDRESS      = -3;
@@ -477,15 +478,15 @@ class Message
         virtual int finish() = 0;
 };
 
-//typedef std::function<int(Message&,Message&)> Handler;
-class Handler
+//typedef std::function<int(Message&,Message&)> HttpListener;
+class HttpListener
 {
     public:
-        Handler() = default;
-        Handler( const Handler & ) = default;
-        Handler( Handler && ) = default;
-        Handler( std::function<int(Message&,Message&)> );
-        Handler( int (&func)(Message&,Message&) );
+        HttpListener() = default;
+        HttpListener( const HttpListener & ) = default;
+        HttpListener( HttpListener && ) = default;
+        HttpListener( std::function<int(Message&,Message&)> );
+        HttpListener( int (&func)(Message&,Message&) );
         virtual int operator()(Message&, Message&);
     protected:
         std::function<int(Message&,Message&)> func_;
@@ -501,7 +502,7 @@ class HttpClient
         int open( const char *url, const Parameters &params = Parameters() );
         int open( const Target &url, const Parameters &params = Parameters() );
         int close();
-        int communicate( Handler &handler );
+        int communicate( HttpListener &listener );
         Protocol get_protocol() const;
         Client *get_client();
         ClientType get_type() const;
@@ -512,8 +513,8 @@ class HttpClient
         Protocol proto_;
         ClientType type_;
 
-        int communicate_local( Handler &handler );
-        int communicate_remote( Handler &handler );
+        int communicate_local( HttpListener &listener );
+        int communicate_remote( HttpListener &listener );
 };
 
 class HttpServer
@@ -537,19 +538,19 @@ namespace v1 {
 class EventLoop
 {
     public:
-        EventLoop( Client &client, Handler &handler );
+        EventLoop( Client &client, HttpListener &listener );
         virtual ~EventLoop();
         /**
          * Process HTTP 1.1 requests.
          *
-         * This function waits for requests and handle them using the provided handler.
+         * This function waits for requests and handle them using the provided listener.
          * The function returns if any error occurs.
          */
         int run();
 
     protected:
         Client &client_;
-        Handler &handler_;
+        HttpListener &handler_;
 };
 
 } // namespace v1

@@ -76,7 +76,7 @@ static void main_signalHandler(
 #endif
 
 
-struct EchoHandler : public webster::http::Handler
+struct EchoHandler : public webster::http::HttpListener
 {
 	int operator()( webster::http::Message &request, webster::http::Message &response )
 	{
@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
 
 	#else
 
-	// install the signal handler to stop the server with CTRL + C
+	// install the signal listener to stop the server with CTRL + C
 	struct sigaction act;
 	sigemptyset(&act.sa_mask);
 	sigaddset(&act.sa_mask, SIGINT);
@@ -146,7 +146,7 @@ int main(int argc, char* argv[])
 	HttpServer server(params);
 	if (server.start("http://localhost:7000") == WBERR_OK)
 	{
-		EchoHandler handler;
+		EchoHandler listener;
 		while (serverState == SERVER_RUNNING)
 		{
 			HttpClient *remote = nullptr;
@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
 			if (result == WBERR_OK)
 			{
 				std::cerr << "Connection stabilished" << std::endl;
-				while ((result = remote->communicate(handler)) == WBERR_OK);
+				while ((result = remote->communicate(listener)) == WBERR_OK);
 				remote->close();
 				std::cerr << "Connection closed" << std::endl;
 				delete remote;

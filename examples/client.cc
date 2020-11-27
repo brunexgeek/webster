@@ -71,8 +71,8 @@ int main( int argc, char **argv )
     int result = client.open(url);
     if (result == WBERR_OK)
     {
-        Handler handler(main_clientHandler);
-        client.communicate(handler);
+        HttpListener listener(main_clientHandler);
+        client.communicate(listener);
         client.close();
     }
     else

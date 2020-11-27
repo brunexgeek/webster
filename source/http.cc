@@ -240,16 +240,16 @@ const char *HeaderFields::get_name( FieldID id )
 	return HTTP_HEADER_FIELDS[(int)id];
 }
 
-Handler::Handler( std::function<int(Message&,Message&)> func ) : func_(func)
+HttpListener::HttpListener( std::function<int(Message&,Message&)> func ) : func_(func)
 {
 }
 
-Handler::Handler( int (&func)(Message&,Message&) )
+HttpListener::HttpListener( int (&func)(Message&,Message&) )
 {
 	func_ = std::function<int(Message&,Message&)>(func);
 }
 
-int Handler::operator()( Message &request, Message &response )
+int HttpListener::operator()( Message &request, Message &response )
 {
 	if (func_ ==  nullptr) return WBERR_INVALID_HANDLER;
 	return func_(request, response);
@@ -294,15 +294,15 @@ int HttpClient::close()
     return WBERR_OK;
 }
 
-int HttpClient::communicate( Handler &handler )
+int HttpClient::communicate( HttpListener &listener )
 {
     if (type_ == WBCT_LOCAL)
-        return communicate_local(handler);
+        return communicate_local(listener);
     else
-        return communicate_remote(handler);
+        return communicate_remote(listener);
 }
 
-int HttpClient::communicate_local( Handler &handler )
+int HttpClient::communicate_local( HttpListener &listener )
 {
     if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
 
@@ -316,12 +316,12 @@ int HttpClient::communicate_local( Handler &handler )
 	v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
 	response.header.target = request.header.target;
 
-	result = handler(request, response);
+	result = listener(request, response);
 	if (result < WBERR_OK) return result;
 	return response.finish();
 }
 
-int HttpClient::communicate_remote( Handler &handler )
+int HttpClient::communicate_remote( HttpListener &listener )
 {
     if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
 
@@ -335,9 +335,11 @@ int HttpClient::communicate_remote( Handler &handler )
     v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
     response.header.target = request.header.target;
 
-    result = handler(request, response);
+    result = listener(request, response);
     if (result < WBERR_OK) return result;
-    return response.finish();
+    result = response.finish();
+    if (result != WBERR_OK) return result;
+    return (closing) ? WBERR_COMPLETE : WBERR_OK;
 }
 
 ClientType HttpClient::get_type() const
