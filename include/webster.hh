@@ -59,6 +59,7 @@ const int WBERR_INVALID_HANDLER      = -33;
 const int WBERR_NOT_IMPLEMENTED      = -34;
 const int WBERR_NO_RESOURCES         = -35;
 const int WBERR_ALREADY_CONNECTED    = -36;
+const int WBERR_INVALID_PROTOCOL     = -37;
 
 /**
  * HTTP header field identifier.
@@ -319,7 +320,6 @@ class Client
         Client( Parameters params, ClientType type = WBCT_LOCAL );
         ~Client();
         int connect( const Target &target );
-        int get_protocol() const;
         int disconnect();
         const Parameters &get_parameters() const;
         const Target &get_target() const;
@@ -331,7 +331,6 @@ class Client
         Parameters params_;
         Channel *channel_;
         Target target_;
-        Protocol proto_;
         ClientType type_;
 };
 
@@ -530,57 +529,48 @@ class Handler
         std::function<int(Message&,Message&)> func_;
 };
 
-class HttpClientBase
-{
-    public:
-        HttpClientBase() = default;
-        virtual ~HttpClientBase() = default;
-        virtual int open( const char *url, const Parameters &params = Parameters() ) = 0;
-        virtual int open( const Target &url, const Parameters &params = Parameters() ) = 0;
-        virtual int close() = 0;
-        virtual int communicate( Handler &handler ) = 0;
-        virtual Protocol get_protocol() const = 0;
-    protected:
-        virtual const Parameters &get_parameters() const = 0;
-        virtual const Target &get_target() const = 0;
-        virtual Client *get_client() = 0;
-};
+class HttpServer;
 
-// TODO: should inherit from 'HttpClientBase'?
 class HttpClient
 {
     public:
-        HttpClient();
+        HttpClient( ClientType type = WBCT_LOCAL, Client *client = nullptr );
         ~HttpClient();
         int open( const char *url, const Parameters &params = Parameters() );
         int open( const Target &url, const Parameters &params = Parameters() );
         int close();
         int communicate( Handler &handler );
         Protocol get_protocol() const;
+        Client *get_client();
+        ClientType get_type() const;
+
     protected:
-        HttpClientBase *impl_;
+        friend HttpServer;
+        ::webster::Client *client_;
+        Protocol proto_;
+        ClientType type_;
+
+        int communicate_local( Handler &handler );
+        int communicate_remote( Handler &handler );
+};
+
+class HttpServer
+{
+    public:
+        HttpServer();
+        HttpServer( Parameters params );
+        ~HttpServer();
+        int start( const Target &target );
+        int start( const std::string &target );
+        int stop();
+        int accept( HttpClient **remote );
+        const Parameters &get_parameters() const;
+        const Target &get_target() const;
+    protected:
+        Server server_;
 };
 
 namespace v1 {
-
-class HttpClient : public ::webster::http::HttpClientBase
-{
-    public:
-        HttpClient();
-        virtual ~HttpClient();
-        virtual int open( const char *url, const Parameters &params = Parameters() );
-        virtual int open( const Target &url, const Parameters &params = Parameters() );
-        virtual int close();
-        virtual int communicate( Handler &handler );
-        virtual Protocol get_protocol() const;
-    protected:
-        ::webster::Target target_; // TODO: 'Client' has this info
-        ::webster::Parameters params_; // TODO: 'Client' has this info
-        ::webster::Client *client_;
-        const Parameters &get_parameters() const;
-        const Target &get_target() const;
-        Client *get_client();
-};
 
 class EventLoop
 {
