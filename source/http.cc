@@ -254,62 +254,46 @@ int Handler::operator()( Message &request, Message &response )
 	return func_(request, response);
 }
 
-int HttpClient::open( const char *url )
+HttpClient::HttpClient() : impl_(nullptr)
 {
-    return open(url, Parameters());
+    impl_ = new(std::nothrow) v1::HttpClient();
 }
 
-int HttpClient::open( const Target &url )
+HttpClient::~HttpClient()
 {
-    return open(url, Parameters());
+    delete impl_;
 }
 
 int HttpClient::open( const char *url, const Parameters &params )
 {
-    Target target;
-    int result = Target::parse(url, target);
-    if (result != WBERR_OK) return result;
-    return open(target, params);
+    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    return impl_->open(url, params);
 }
 
 int HttpClient::open( const Target &url, const Parameters &params )
 {
-    if ((url.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
-    target_ = url;
-    params_ = params;
-    client_ = new(std::nothrow) ::webster::Client(params_);
-    if (client_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
-    int result = client_->connect(target_);
-    if (result != WBERR_OK)
-    {
-        delete client_;
-        client_ = nullptr;
-        return result;
-    }
-    return WBERR_OK;
+    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    return impl_->open(url, params);
 }
 
 int HttpClient::close()
 {
-    delete client_;
-    return WBERR_OK;
+    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    return impl_->close();
 }
 
 int HttpClient::communicate( Handler &handler )
 {
-    DataStream os(*client_, StreamType::OUTBOUND);
-	DataStream is(*client_, StreamType::INBOUND);
+    if (impl_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    int result = impl_->communicate(handler);
+    // TODO: handle upgrades
+    return result;
+}
 
-	v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
-	int result = Target::parse(target_.path, request.header.target);
-	if (result != WBERR_OK) return result;
-
-	v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
-	response.header.target = request.header.target;
-
-	result = handler(request, response);
-	if (result < WBERR_OK) return result;
-	return response.finish();
+Protocol HttpClient::get_protocol() const
+{
+    if (impl_ == nullptr) return WBCP_NONE;
+	return impl_->get_protocol();
 }
 
 } // namespace http

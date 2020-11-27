@@ -299,7 +299,8 @@ struct Parameters
 
 enum Protocol
 {
-    WBCP_HTTP_1 /// HTTP 1.1
+    WBCP_NONE,  // No protocol
+    WBCP_HTTP_1 // HTTP 1.1
 };
 
 enum ClientType
@@ -529,24 +530,57 @@ class Handler
         std::function<int(Message&,Message&)> func_;
 };
 
+class HttpClientBase
+{
+    public:
+        HttpClientBase() = default;
+        virtual ~HttpClientBase() = default;
+        virtual int open( const char *url, const Parameters &params = Parameters() ) = 0;
+        virtual int open( const Target &url, const Parameters &params = Parameters() ) = 0;
+        virtual int close() = 0;
+        virtual int communicate( Handler &handler ) = 0;
+        virtual Protocol get_protocol() const = 0;
+    protected:
+        virtual const Parameters &get_parameters() const = 0;
+        virtual const Target &get_target() const = 0;
+        virtual Client *get_client() = 0;
+};
+
+// TODO: should inherit from 'HttpClientBase'?
 class HttpClient
 {
     public:
-        HttpClient() = default;
-        virtual ~HttpClient() = default;
-        int open( const char *url );
-        int open( const Target &url );
-        int open( const char *url, const Parameters &params );
-        int open( const Target &url, const Parameters &params );
+        HttpClient();
+        ~HttpClient();
+        int open( const char *url, const Parameters &params = Parameters() );
+        int open( const Target &url, const Parameters &params = Parameters() );
         int close();
         int communicate( Handler &handler );
+        Protocol get_protocol() const;
     protected:
-        ::webster::Target target_;
-        ::webster::Parameters params_;
-        ::webster::Client *client_;
+        HttpClientBase *impl_;
 };
 
 namespace v1 {
+
+class HttpClient : public ::webster::http::HttpClientBase
+{
+    public:
+        HttpClient();
+        virtual ~HttpClient();
+        virtual int open( const char *url, const Parameters &params = Parameters() );
+        virtual int open( const Target &url, const Parameters &params = Parameters() );
+        virtual int close();
+        virtual int communicate( Handler &handler );
+        virtual Protocol get_protocol() const;
+    protected:
+        ::webster::Target target_; // TODO: 'Client' has this info
+        ::webster::Parameters params_; // TODO: 'Client' has this info
+        ::webster::Client *client_;
+        const Parameters &get_parameters() const;
+        const Target &get_target() const;
+        Client *get_client();
+};
 
 class EventLoop
 {
