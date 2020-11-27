@@ -310,46 +310,8 @@ enum ClientType
     WBCT_REMOTE,
 };
 
+class Client;
 class Server;
-
-class Client
-{
-    public:
-        friend Server;
-        Client( ClientType type = WBCT_LOCAL );
-        Client( Parameters params, ClientType type = WBCT_LOCAL );
-        ~Client();
-        int connect( const Target &target );
-        int disconnect();
-        const Parameters &get_parameters() const;
-        const Target &get_target() const;
-        bool is_connected() const;
-        Channel *get_channel();
-        ClientType get_type() const;
-
-    protected:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
-        ClientType type_;
-};
-
-class Server
-{
-    public:
-        Server();
-        Server( Parameters params );
-        virtual ~Server();
-        virtual int start( const Target &target );
-        virtual int stop();
-        virtual int accept( Client **remote );
-        virtual const Parameters &get_parameters() const;
-        virtual const Target &get_target() const;
-    protected:
-        Parameters params_;
-        Channel *channel_;
-        Target target_;
-};
 
 namespace http {
 
@@ -567,7 +529,7 @@ class HttpServer
         const Parameters &get_parameters() const;
         const Target &get_target() const;
     protected:
-        Server server_;
+        Server *server_;
 };
 
 namespace v1 {

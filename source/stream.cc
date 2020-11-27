@@ -17,6 +17,7 @@
 
 #include <webster.hh>
 #include "stream.hh"
+#include "network.hh"
 #include <cstring>
 
 namespace webster {
@@ -138,6 +139,16 @@ int DataStream::flush()
 		current_ = data_;
 	}
 	return WBERR_OK;
+}
+
+const Parameters &DataStream::get_parameters() const
+{
+	return client_.get_parameters();
+}
+
+const Client &DataStream::get_client()
+{
+	return client_;
 }
 
 } // namespace 'webster'

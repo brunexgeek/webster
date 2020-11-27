@@ -35,6 +35,7 @@
 #define PROGRAM_TITLE     "Sample HTTP Server"
 
 using namespace webster;
+using namespace webster::http;
 
 static int serverState = SERVER_RUNNING;
 
@@ -80,6 +81,7 @@ struct EchoHandler : public webster::http::Handler
 	int operator()( webster::http::Message &request, webster::http::Message &response )
 	{
 		request.finish();
+		std::cerr << "  Request to " << request.header.target.path << std::endl;
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";
@@ -141,22 +143,20 @@ int main(int argc, char* argv[])
 	printf(PROGRAM_TITLE "\n");
 
 	Parameters params;
-	Server server(params);
-	Target target;
-	target.type = WBRT_AUTHORITY;
-	target.host = "localhost";
-	target.port = 7000;
-	if (server.start(target) == WBERR_OK)
+	HttpServer server(params);
+	if (server.start("http://localhost:7000") == WBERR_OK)
 	{
 		EchoHandler handler;
 		while (serverState == SERVER_RUNNING)
 		{
-			Client *remote = nullptr;
+			HttpClient *remote = nullptr;
 			int result = server.accept(&remote);
 			if (result == WBERR_OK)
 			{
-				webster::http::v1::EventLoop(*remote, handler).run();
-				remote->disconnect();
+				std::cerr << "Connection stabilished" << std::endl;
+				while ((result = remote->communicate(handler)) == WBERR_OK);
+				remote->close();
+				std::cerr << "Connection closed" << std::endl;
 				delete remote;
 			}
 			else

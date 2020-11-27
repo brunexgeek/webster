@@ -50,8 +50,8 @@ class DataStream
         int read_line( char *data, int size );
         int pending() const;
         int flush();
-		const Parameters &get_parameters() const { return client_.get_parameters(); }
-		const Client &get_client() { return client_; }
+		const Parameters &get_parameters() const;
+		const Client &get_client();
 	protected:
 		int pending_;
 		Client &client_;

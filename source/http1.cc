@@ -25,6 +25,7 @@
 #include <iostream>
 #include "stream.hh"
 #include "http.hh"
+#include "network.hh"
 #include "http1.hh"
 
 #ifdef WB_WINDOWS
