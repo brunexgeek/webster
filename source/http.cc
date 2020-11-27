@@ -2,6 +2,7 @@
 #include "http.hh"
 #include "http1.hh"
 #include "stream.hh"
+#include "network.hh"
 
 static const char *HTTP_METHODS[] =
 {
@@ -362,36 +363,43 @@ HttpServer::HttpServer()
 {
 }
 
-HttpServer::HttpServer( Parameters params ) : server_(params)
+HttpServer::HttpServer( Parameters params ) : server_(nullptr)
 {
+    server_ = new(std::nothrow) Server(params);
 }
 
 HttpServer::~HttpServer()
 {
+    delete server_;
 }
 
 int HttpServer::start( const Target &target )
 {
-    return server_.start(target);
+    if (server_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    return server_->start(target);
 }
 
 int HttpServer::start( const std::string &target )
 {
+    if (server_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
     Target temp;
     int result = Target::parse(target, temp);
     if (result != WBERR_OK) return result;
-    return server_.start(temp);
+    return server_->start(temp);
 }
 
 int HttpServer::stop()
 {
-    return server_.stop();
+    if (server_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    return server_->stop();
 }
 
 int HttpServer::accept( HttpClient **remote )
 {
+    if (server_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+
     Client *temp = nullptr;
-    int result = server_.accept(&temp);
+    int result = server_->accept(&temp);
     if (result != WBERR_OK) return result;
 
     *remote = new(std::nothrow) HttpClient(WBCT_REMOTE, temp);
@@ -406,12 +414,16 @@ int HttpServer::accept( HttpClient **remote )
 
 const Parameters &HttpServer::get_parameters() const
 {
-    return server_.get_parameters();
+    static const Parameters params;
+    if (server_ == nullptr) return params;
+    return server_->get_parameters();
 }
 
 const Target &HttpServer::get_target() const
 {
-    return server_.get_target();
+    static const Target target;
+    if (server_ == nullptr) return target;
+    return server_->get_target();
 }
 
 
