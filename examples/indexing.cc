@@ -19,12 +19,12 @@
 #include <limits.h>
 #include <stdio.h>
 #include <signal.h>
-#include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <ctype.h>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include "ctpl.hh"
 
@@ -190,12 +190,20 @@ static void main_downloadFile( Message &response, const char *fileName, int cont
 {
 	if (fileName == NULL || strstr(fileName, rootDirectory) != fileName) return;
 
-	char buffer[1024];
+	std::ifstream input(fileName, std::ios_base::binary);
+	static const size_t BUFFER_SIZE = 16 * 1024;
+	char *buffer = new(std::nothrow) char[BUFFER_SIZE];
+	if (buffer == nullptr || !input.good())
+	{
+		response.header.status = 500;
+		response.header.fields["Content-Length"] = "15";
+		response.write("<h1>Error!</h1>");
+	}
 
 	const char *mime = main_getMime(fileName);
 	printf("Requested '%s' (%s) with %d bytes\n", fileName, mime, contentLength);
 
-	response.header.status= 200;
+	response.header.status = 200;
 	response.header.fields["Content-Length"] = std::to_string(contentLength);
 	response.header.fields["Content-Type"] = mime;
 	response.header.fields["Cache-Control"] = "max-age=10, must-revalidate";
@@ -203,19 +211,19 @@ static void main_downloadFile( Message &response, const char *fileName, int cont
 	response.header.fields["Server"] = PROGRAM_TITLE;
 
 	size_t sent = 0;
-	FILE *fp = fopen(fileName, "rb");
-	if (fp != NULL)
-	{
-		size_t read = 0;
-		do {
-			read = fread(buffer, 1, sizeof(buffer), fp);
-			if (read > 0)
-			{
-				if (response.write( (uint8_t*) buffer, (int) read) == WBERR_OK) sent += read;
-			}
-		} while (read > 0);
-		fclose(fp);
-	}
+	do {
+		input.read(buffer, BUFFER_SIZE);
+		auto bytes = input.gcount();
+		if (bytes > 0)
+		{
+			int result = response.write( (uint8_t*) buffer, (int) bytes);
+			if (result != WBERR_OK) break;
+			sent += bytes;
+		}
+	} while (input.good());
+	input.close();
+
+	delete[] buffer;
 
 	printf("Returned %d bytes from '%s'\n", (int) sent, fileName);
 }
@@ -444,12 +452,12 @@ static int main_serverHandler(
 
 #include <sys/time.h>
 
-static void process( int id, std::shared_ptr<Client> remote, Handler &handler )
+static void process( int id, Client *remote, Handler &handler )
 {
 	(void) id;
-	webster::http::v1::EventLoop http(*remote.get(), handler);
-	http.run();
+	webster::http::v1::EventLoop(*remote, handler).run();
 	remote->disconnect();
+	delete remote;
 }
 
 int main(int argc, char* argv[])
@@ -496,8 +504,8 @@ int main(int argc, char* argv[])
 	{
 		while (serverState == SERVER_RUNNING)
 		{
-			std::shared_ptr<Client> remote;
-			int result = server.accept(remote);
+			Client *remote = nullptr;
+			int result = server.accept(&remote);
 			if (result == WBERR_OK)
 				pool.push(process, remote, handler);
 			else

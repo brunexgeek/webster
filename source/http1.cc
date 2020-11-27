@@ -231,19 +231,18 @@ int MessageImpl::receive_header()
 
 int MessageImpl::chunk_size()
 {
-	char line[64];
 	char *ptr = nullptr;
 	// discard the previous chunk terminator
 	if (body_.chunks > 0)
 	{
-		int result = stream_.read_line(line, sizeof(line));
+		int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
 		if (result != WBERR_OK) return result;
-		if (*line != 0) return WBERR_INVALID_CHUNK;
+		if (*line_ != 0) return WBERR_INVALID_CHUNK;
 	}
 	// read the next chunk size
-	int result = stream_.read_line(line, sizeof(line));
+	int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
 	if (result != WBERR_OK) return result;
-	auto count = strtol(line, &ptr, 16);
+	auto count = strtol(line_, &ptr, 16);
 	if (*ptr != 0) return WBERR_INVALID_CHUNK;
 	++body_.chunks;
 	body_.expected = (int) count;
@@ -298,11 +297,10 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 	if (result != WBERR_OK) return result;
 	buffer.clear();
 
-	uint8_t temp[1024];
 	int count = 0;
 	while (true)
 	{
-		result = read(temp, sizeof(temp));
+		result = read(line_, HTTP_LINE_LENGTH);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -313,7 +311,7 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 		if (result > 0)
 		{
 			buffer.resize(buffer.size() + result);
-			std::copy(temp, temp + result, buffer.data() + count);
+			std::copy(line_, line_ + result, buffer.data() + count);
 			count += result;
 		}
 	}
@@ -326,10 +324,9 @@ int MessageImpl::read_all( std::string &buffer )
 	if (result != WBERR_OK) return result;
 	buffer.clear();
 
-	char temp[1024];
 	while (true)
 	{
-		result = read(temp, sizeof(temp));
+		result = read(line_, HTTP_LINE_LENGTH);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -338,7 +335,7 @@ int MessageImpl::read_all( std::string &buffer )
 		}
 		else
 		if (result > 0)
-			buffer += temp;
+			buffer += line_;
 	}
 	return WBERR_OK;
 }
@@ -365,8 +362,7 @@ int MessageImpl::discard()
 	if (result != WBERR_OK) return result;
 	return WBERR_OK;
 	// discard body data
-	uint8_t buffer[1024];
-	while ((result = read(buffer, sizeof(buffer))) >= 0);
+	while ((result = read((uint8_t*)line_, HTTP_LINE_LENGTH)) >= 0);
 	if (result == WBERR_COMPLETE) return WBERR_OK;
 	return result;
 }
@@ -561,7 +557,6 @@ EventLoop::~EventLoop()
 int EventLoop::run()
 {
 	int result = WBERR_OK;
-    auto params = client_.get_parameters();
     DataStream is(client_, StreamType::INBOUND);
     DataStream os(client_, StreamType::OUTBOUND);
 

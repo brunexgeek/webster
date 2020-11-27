@@ -58,6 +58,7 @@ const int WBERR_PERMISSION           = -31;
 const int WBERR_INVALID_HANDLER      = -33;
 const int WBERR_NOT_IMPLEMENTED      = -34;
 const int WBERR_NO_RESOURCES         = -35;
+const int WBERR_ALREADY_CONNECTED    = -36;
 
 /**
  * HTTP header field identifier.
@@ -341,7 +342,7 @@ class Server
         virtual ~Server();
         virtual int start( const Target &target );
         virtual int stop();
-        virtual int accept( std::shared_ptr<Client> &remote );
+        virtual int accept( Client **remote );
         virtual const Parameters &get_parameters() const;
         virtual const Target &get_target() const;
     protected:
