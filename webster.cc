@@ -117,6 +117,8 @@ class MessageImpl : public Message
         HttpStream &stream_;
         Client *client_;
         Channel *channel_;
+        char *line_;
+        size_t line_size_;
 
         int receive_header();
         int chunk_size();
@@ -1143,10 +1145,13 @@ MessageImpl::MessageImpl( HttpStream &stream ) : stream_(stream)
     state_ = WBS_IDLE;
 	flags_ = 0;
     body_.expected = body_.chunks = body_.flags = 0;
+	line_size_ = stream_.get_parameters().buffer_size;
+	line_ = new(std::nothrow) char[line_size_];
 }
 
 MessageImpl::~MessageImpl()
 {
+	delete[] line_;
 }
 
 uint64_t tick()
@@ -1169,19 +1174,21 @@ int MessageImpl::receive_header()
 {
 	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
+	if (line_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
 
 	int timeout = stream_.get_parameters().read_timeout;
-	char line[1024];
 	bool first = true;
 	auto start = tick();
+	*line_ = 0;
 	do
 	{
-		int result = stream_.read_line(line, sizeof(line));
+		int result = stream_.read_line(line_, line_size_);
 		if (result != WBERR_OK) return result;
 
-		if (*line != 0)
+		if (*line_ != 0)
 		{
-			result = (first) ? parse_first_line(line) : parse_header_field(line);
+			result = (first) ? parse_first_line(line_) : parse_header_field(line_);
 			if (result != WBERR_OK) return result;
 		}
 		else
@@ -1191,7 +1198,9 @@ int MessageImpl::receive_header()
 		}
 		first = false;
 
-	} while ( (int) (tick() - start) < timeout);
+		if ((int) (tick() - start) >= timeout)
+			return WBERR_TIMEOUT;
+	} while (true);
 
 	state_ = WBS_BODY;
 	return WBERR_OK;
@@ -1199,19 +1208,21 @@ int MessageImpl::receive_header()
 
 int MessageImpl::chunk_size()
 {
-	char line[64];
+	if (line_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
+
 	char *ptr = nullptr;
 	// discard the previous chunk terminator
 	if (body_.chunks > 0)
 	{
-		int result = stream_.read_line(line, sizeof(line));
+		int result = stream_.read_line(line_, line_size_);
 		if (result != WBERR_OK) return result;
-		if (*line != 0) return WBERR_INVALID_CHUNK;
+		if (*line_ != 0) return WBERR_INVALID_CHUNK;
 	}
 	// read the next chunk size
-	int result = stream_.read_line(line, sizeof(line));
+	int result = stream_.read_line(line_, line_size_);
 	if (result != WBERR_OK) return result;
-	auto count = strtol(line, &ptr, 16);
+	auto count = strtol(line_, &ptr, 16);
 	if (*ptr != 0) return WBERR_INVALID_CHUNK;
 	++body_.chunks;
 	body_.expected = (int) count;
@@ -1266,11 +1277,13 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 	if (result != WBERR_OK) return result;
 	buffer.clear();
 
-	uint8_t temp[1024];
+	if (line_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
+
 	int count = 0;
 	while (true)
 	{
-		result = read(temp, sizeof(temp));
+		result = read(line_, line_size_);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -1281,7 +1294,7 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 		if (result > 0)
 		{
 			buffer.resize(buffer.size() + result);
-			std::copy(temp, temp + result, buffer.data() + count);
+			std::copy(line_, line_ + result, buffer.data() + count);
 			count += result;
 		}
 	}
@@ -1290,14 +1303,17 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 
 int MessageImpl::read_all( std::string &buffer )
 {
+	if (line_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
+
 	int result = ready();
 	if (result != WBERR_OK) return result;
 	buffer.clear();
 
-	char temp[1024];
 	while (true)
 	{
-		result = read(temp, sizeof(temp));
+		*line_ = 0;
+		result = read(line_, line_size_);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -1306,7 +1322,7 @@ int MessageImpl::read_all( std::string &buffer )
 		}
 		else
 		if (result > 0)
-			buffer += temp;
+			buffer += line_;
 	}
 	return WBERR_OK;
 }
@@ -1333,8 +1349,7 @@ int MessageImpl::discard()
 	if (result != WBERR_OK) return result;
 	return WBERR_OK;
 	// discard body data
-	uint8_t buffer[1024];
-	while ((result = read(buffer, sizeof(buffer))) >= 0);
+	while ((result = read((uint8_t*)line_, line_size_)) >= 0);
 	if (result == WBERR_COMPLETE) return WBERR_OK;
 	return result;
 }
