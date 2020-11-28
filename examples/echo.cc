@@ -18,6 +18,7 @@
 #include <webster.hh>
 #include <limits.h>
 #include <signal.h>
+#include <cstring>
 #include <iostream>
 
 #ifdef WB_WINDOWS
@@ -26,14 +27,19 @@
 #include <linux/limits.h>
 #endif
 
-#define SERVER_RUNNING    1
-#define SERVER_STOPPING   2
-
 #define PROGRAM_TITLE     "Sample HTTP Server"
 
 using namespace webster;
 
-static int serverState = SERVER_RUNNING;
+// Bootstrap's 'asterisk' icon (under MIT license)
+// https://icons.getbootstrap.com/icons/asterisk/
+static const char *ICON = "<svg width='1em' height='1em' viewBox='0 0 16 16' class='bi bi-asterisk'"
+	" fill='currentColor' xmlns='http://www.w3.org/2000/svg'><path fill-rule='evenodd' d='M8 0a1 1 "
+	"0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 "
+	"1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1"
+	" 1 0 0 1 1-1z'/></svg>";
+
+static bool is_running = true;
 
 static const char *HTTP_METHODS[] =
 {
@@ -55,7 +61,7 @@ static BOOL WINAPI main_signalHandler(
   _In_ DWORD dwCtrlType )
 {
 	(void) dwCtrlType;
-	serverState = SERVER_STOPPING;
+	is_running = true;
 	return TRUE;
 }
 
@@ -65,18 +71,27 @@ static void main_signalHandler(
 	int handle )
 {
 	(void) handle;
-	if (serverState == SERVER_STOPPING) exit(1);
-	serverState = SERVER_STOPPING;
+	if (is_running == false) exit(1);
+	is_running = true;
 }
 
 #endif
 
-struct EchoHandler : public webster::HttpListener
+struct EchoListener : public webster::HttpListener
 {
 	int operator()( webster::Message &request, webster::Message &response )
 	{
 		request.finish();
 		std::cerr << "  Request to " << request.header.target.path << std::endl;
+
+		if (request.header.target.path == "/favicon.ico")
+		{
+			response.header.status = 200;
+			response.header.fields.set("Content-Type", "image/svg+xml");
+			response.header.fields.set("Content-Length", strlen(ICON));
+			response.write(ICON);
+			return WBERR_OK;
+		}
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";
@@ -138,17 +153,18 @@ int main(int argc, char* argv[])
 	HttpServer server;
 	if (server.start("http://localhost:7000") == WBERR_OK)
 	{
-		EchoHandler listener;
-		while (serverState == SERVER_RUNNING)
+		EchoListener listener;
+		while (is_running)
 		{
 			HttpClient *remote = nullptr;
+			// wait for connections (uses `read_timeout`from `Parameters` class)
 			int result = server.accept(&remote);
 			if (result == WBERR_OK)
 			{
 				std::cerr << "Connection stabilished" << std::endl;
 
 				// keep processing requests until some error occurs
-				while ((result = remote->communicate(listener)) == WBERR_OK);
+				while (is_running && (result = remote->communicate(listener)) == WBERR_OK);
 				// close the client (optional, closed by destructor) and destroy the object
 				remote->close();
 				delete remote;
@@ -156,7 +172,9 @@ int main(int argc, char* argv[])
 				std::cerr << "Connection closed" << std::endl;
 			}
 			else
-			if (result != WBERR_TIMEOUT) break;
+			// `HttpServer::accept` will return `WBERR_TIMEOUT` if there were no connections
+			if (result != WBERR_TIMEOUT)
+				break;
 		}
 	}
 	server.stop();
