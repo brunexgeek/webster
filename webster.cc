@@ -1246,6 +1246,11 @@ int MessageImpl::read( uint8_t *buffer, int size )
 		{
 			result = chunk_size();
 			if (result != WBERR_OK) return result;
+			if (body_.expected == 0)
+			{
+				state_ = WBS_COMPLETE;
+				return WBERR_COMPLETE;
+			}
 		}
 		else
 		{
