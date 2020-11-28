@@ -14,19 +14,26 @@ The repository also includes three programs in the ``examples`` directory:
 * ``echo.cc``: simple server program that echoes information about the request;
 * ``indexing.cc``: more elaborated server program that implements directory indexing. Works only in GNU/Linux for now.
 
+## Organization
+
+* **examples**: examples of how to use the API;
+* **include**: public header files;
+* **source**: library source code;
+* **generated**: contains the files `webster.hh` (from `include` directory) and `webster.cc`, which is an amalgamation of the library's source code.
+
 ## Client implementation
 
-To send a message to a HTTP server, just create a `HttpClient` object and start the communication:
+To send a message to an HTTP server, just create an `HttpClient` object and start the communication:
 
 ``` c++
-// create the handler using a function
-Handler handler(my_client_handler);
+// create a listener using a function
+HttpListener listener(my_client_handler);
 // create the HTTP client
 HttpClient client;
 if (client.open("http://duckduckgo.com:80/") == WBERR_OK)
 {
-    // use the handler to send a request to "/"
-    client.communicate("/", handler);
+    // use the listener to send a request to "/"
+    client.communicate("/", listener);
     client.close();
 }
 ```
@@ -52,10 +59,10 @@ int my_client_handler( Message &request, Message &response )
 }
 ```
 
-It's also possible to implement a handler by specializing the class ``Handler`` with a new implementation for ``operator()``.
+You can also implement a listener by specializing the class ``HttpListener`` with a new implementation for ``operator()``. This way you can have a statefull listener.
 
 ``` c++
-struct MyHandler : public Handler
+struct MyListener : public HttpListener
 {
 	int operator()( Message &request, Message &response )
 	{
@@ -64,36 +71,38 @@ struct MyHandler : public Handler
 };
 ```
 
-The directory ``examples`` contains example programs for client and server.
-
 ## Server implementation
 
 The server keeps listening for connections and handle each one of them. To start the server, do something like:
 
 ``` c++
-Target target;
-Target::parse("localhost:7000", target);
-Server server;
-if (server.start(target) == WBERR_OK)
+HttpServer server;
+if (server.start("http://localhost:7000") == WBERR_OK)
 {
-    EchoHandler handler(my_server_handler);
+    HttpListener listener(my_server_handler);
     while (is_running)
     {
-        std::shared_ptr<Client> remote;
-        int result = server.accept(remote);
+        HttpClient *remote = nullptr;
+        // wait for connections (uses `read_timeout`from `Parameters` class)
+        int result = server.accept(&remote);
         if (result == WBERR_OK)
         {
-            remote->communicate("", handler); // first argument ignored
-            remote->disconnect();
+            // keep processing requests until some error occurs
+            while ((result = remote->communicate(listener)) == WBERR_OK);
+            // close the client (optional, closed by destructor) and destroy the object
+            remote->close();
+            delete remote;
         }
         else
-        if (result != WBERR_TIMEOUT) break;
+        // `HttpServer::accept` will return `WBERR_TIMEOUT` if there were no connections
+        if (result != WBERR_TIMEOUT)
+            break;
     }
 }
 server.stop();
 ```
 
-In the example above, the ``my_server_handler`` is the function which receive the request and send the response to the client. This handler have the same signature of the client handler, however the request must be read not written. For more details in the server implementation, see the file ``examples/echo.cc`` or ``examples/indexing.cc``.
+In the example above, the ``my_server_handler`` is the function which receive the request and send the response to the client. This listener have the same signature of the client listener, however the request must be read (not written). For more details in the server implementation, see the files ``examples/echo.cc`` and ``examples/indexing.cc``.
 
 ## Limitations
 
