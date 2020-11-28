@@ -20,6 +20,7 @@
 
 #if defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
 #define WEBSTER_PRIVATE
+#define WB_WINDOWS 1
 #else
 #define WEBSTER_PRIVATE __attribute__((__visibility__("hidden")))
 #endif
@@ -168,7 +169,8 @@ const int WBL_MAX_TIMEOUT     = 620000; // 10 minutes
 
 namespace webster {
 
-uint64_t tick();
+WEBSTER_PRIVATE uint64_t tick();
+WEBSTER_PRIVATE int strcmpi(const char *s1, const char *s2);
 
 struct Target
 {
@@ -314,8 +316,6 @@ enum ClientType
 class Client;
 class Server;
 
-namespace http {
-
 enum Method
 {
     WBM_NONE    = 0,
@@ -330,8 +330,6 @@ enum Method
     WBM_PATCH   = 9,
 };
 
-WEBSTER_PRIVATE int strcmpi(const char *s1, const char *s2);
-
 struct less
 {
     typedef std::string first_argument_type;
@@ -344,10 +342,10 @@ struct less
     }
 };
 
-class HeaderFields : public std::map<std::string, std::string, webster::http::less>
+class HeaderFields : public std::map<std::string, std::string, webster::less>
 {
     public:
-        using std::map<std::string, std::string, webster::http::less>::count;
+        using std::map<std::string, std::string, webster::less>::count;
         std::string get( const std::string &name )  const;
         std::string get( FieldID id )  const;
         std::string get( const std::string &name, const std::string &value )  const;
@@ -478,7 +476,6 @@ class Message
         virtual int finish() = 0;
 };
 
-//typedef std::function<int(Message&,Message&)> HttpListener;
 class HttpListener
 {
     public:
@@ -508,8 +505,7 @@ class HttpClient
         ClientType get_type() const;
 
     protected:
-        friend HttpServer;
-        ::webster::Client *client_;
+        Client *client_;
         Protocol proto_;
         ClientType type_;
 
@@ -533,28 +529,6 @@ class HttpServer
         Server *server_;
 };
 
-namespace v1 {
-
-class EventLoop
-{
-    public:
-        EventLoop( Client &client, HttpListener &listener );
-        virtual ~EventLoop();
-        /**
-         * Process HTTP 1.1 requests.
-         *
-         * This function waits for requests and handle them using the provided listener.
-         * The function returns if any error occurs.
-         */
-        int run();
-
-    protected:
-        Client &client_;
-        HttpListener &handler_;
-};
-
-} // namespace v1
-} // namespace http
 } // namespace webster
 
 #endif // WEBSTER_API_HH

@@ -14,6 +14,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+
 #ifndef WEBSTER_NETWORK_HH
 #define WEBSTER_NETWORK_HH
 
@@ -63,30 +64,5 @@ class Server
 };
 
 } // namespace webster
-
-#if !defined(WEBSTER_NO_DEFAULT_NETWORK)
-
-namespace webster {
-
-class SocketNetwork : public Network
-{
-    public:
-        SocketNetwork();
-        ~SocketNetwork() = default;
-        int open( Channel **channel, Type type );
-        int close( Channel *channel );
-        int connect( Channel *channel, int scheme, const char *host, int port, int timeout );
-        int receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout );
-        int send( Channel *channel, const uint8_t *buffer, int size, int timeout );
-        int accept( Channel *channel, Channel **client, int timeout );
-        int listen( Channel *channel, const char *host, int port, int maxClients );
-    protected:
-        int set_non_blocking( Channel *channel );
-        int set_reusable( Channel *channel );
-};
-
-} // namespace webster
-
-#endif // !WEBSTER_NO_DEFAULT_NETWORK
 
 #endif // WEBSTER_NETWORK_HH

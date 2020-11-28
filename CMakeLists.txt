@@ -1,13 +1,10 @@
 project(webster)
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.10)
 
-set(WEBSTER_MAJOR_VERSION 2)
+set(WEBSTER_MAJOR_VERSION 3)
 set(WEBSTER_MINOR_VERSION 0)
 set(WEBSTER_PATCH_VERSION 0)
-
-set(LIBRARY_TYPE "SHARED" CACHE STRING "Specify the type of binary to be generated")
-set_property(CACHE LIBRARY_TYPE PROPERTY STRINGS "STATIC" "SHARED")
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
     message(STATUS "No build type selected, default to 'Release'")
@@ -41,6 +38,7 @@ add_library(libwebster STATIC
     "source/stream.cc"
     "source/http.cc"
     "source/http1.cc"
+    "source/socket.cc"
     "source/network.cc")
 target_compile_definitions(libwebster PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster PUBLIC "include")
@@ -53,9 +51,6 @@ set_target_properties(libwebster PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     PREFIX "lib" )
 
-
-#find_package(Threads REQUIRED)
-
 add_executable(example_echo "examples/echo.cc")
 target_link_libraries(example_echo libwebster)
 target_compile_definitions(example_echo PRIVATE _DEFAULT_SOURCE)
@@ -64,7 +59,6 @@ set_target_properties(example_echo PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
-
 
 add_executable(example_client "examples/client.cc")
 target_link_libraries(example_client libwebster)
@@ -75,16 +69,13 @@ set_target_properties(example_client PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
-
-add_executable(example_indexing "examples/indexing.cc")
 if (UNIX)
+    add_executable(example_indexing "examples/indexing.cc")
     target_link_libraries(example_indexing libwebster pthread)
-else()
-    target_link_libraries(example_indexing libwebster)
+    target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
+    set_target_properties(example_indexing PROPERTIES
+        OUTPUT_NAME "example_indexing"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 endif()
-target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
-set_target_properties(example_indexing PROPERTIES
-    OUTPUT_NAME "example_indexing"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )

@@ -15,14 +15,10 @@
  *   limitations under the License.
  */
 
-#include <ctype.h>
 #include <string>
 #include <cstring>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <sstream>
-#include <iostream>
 #include "stream.hh"
 #include "http.hh"
 #include "network.hh"
@@ -32,7 +28,6 @@
 #include <windows.h>
 #define SNPRINTF _snprintf
 #else
-#include <unistd.h>
 #define SNPRINTF snprintf
 #endif
 
@@ -48,8 +43,7 @@ const int WBMF_CHUNKED  = 1;
 #define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
 
 namespace webster {
-namespace http {
-namespace v1 {
+namespace http_v1 {
 
 static char *http_trim( char *text )
 {
@@ -128,9 +122,9 @@ int MessageImpl::parse_first_line( const char *data )
 	return WBERR_OK;
 }
 
-// is a header field name character?
+// is a valid character for header field name?
 #define IS_HFNC(x) \
-	( ((x) >= 'A' && (x) <= 'Z')   \
+	(  ((x) >= 'A' && (x) <= 'Z')   \
     || ((x) >= 'a' && (x) <= 'z')  \
     || ((x) >= '0' && (x) <= '9')  \
     || (x) == '-'  \
@@ -164,10 +158,10 @@ int MessageImpl::parse_header_field( char *data )
 	// ignore trailing whitespaces in the value
 	value = http_trim(value);
 	header.fields.set(name, value);
-	if (::webster::http::strcmpi(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
+	if (::webster::strcmpi(name, "Content-Length") == 0 && (body_.flags & WBMF_CHUNKED) == 0)
 		body_.expected = (int) strtol(value, nullptr, 10);
 	else
-	if (::webster::http::strcmpi(name, "Transfer-Encoding") == 0)
+	if (::webster::strcmpi(name, "Transfer-Encoding") == 0)
 	{
 		if (strstr(value, "chunked"))
 		{
@@ -192,17 +186,15 @@ MessageImpl::~MessageImpl()
     delete[] line_;
 }
 
-#define IS_HEX_DIGIT(x) \
-	( ( (x) >= 'a' && (x) <= 'f') || \
-	  ( (x) >= 'A' && (x) <= 'F') || \
-	  ( (x) >= '0' && (x) <= '9') )
-
 int MessageImpl::receive_header()
 {
 	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
 	if (line_ == nullptr)
 		return WBERR_MEMORY_EXHAUSTED;
+
+	// Note: To ensure a hard timeout and prevent 'slow read' attacks, the complete header
+	//       must be received before the read timeout expires.
 
 	int timeout = stream_.get_parameters().read_timeout;
 	bool first = true;
@@ -249,6 +241,8 @@ int MessageImpl::chunk_size()
 	body_.expected = (int) count;
 	return WBERR_OK;
 }
+
+// TODO: implement a hard timeout for the entire message body
 
 int MessageImpl::read( uint8_t *buffer, int size )
 {
@@ -362,6 +356,9 @@ int MessageImpl::discard()
 	int result = ready();
 	if (result != WBERR_OK) return result;
 	return WBERR_OK;
+
+	// TODO: implement a better way to discard bytes instead of copying to some buffer
+
 	// discard body data
 	while ((result = read((uint8_t*)line_, HTTP_LINE_LENGTH)) >= 0);
 	if (result == WBERR_COMPLETE) return WBERR_OK;
@@ -547,37 +544,5 @@ int MessageImpl::finish()
 	return WBERR_OK;
 }
 
-EventLoop::EventLoop( Client &client, HttpListener &listener ) : client_(client), handler_(listener)
-{
-}
-
-EventLoop::~EventLoop()
-{
-}
-
-int EventLoop::run()
-{
-	int result = WBERR_OK;
-    DataStream is(client_, StreamType::INBOUND);
-    DataStream os(client_, StreamType::OUTBOUND);
-
-    while (result == WBERR_OK)
-    {
-        MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
-        int result = request.ready();
-        if (result != WBERR_OK) break;
-
-        MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
-        response.header.target = request.header.target;
-
-        result = handler_(request, response);
-        if (result < WBERR_OK) break;
-        result = response.finish();
-        if (result < WBERR_OK) break;
-    }
-    return result;
-}
-
-} // namespace v1
-} // namespace http
+} // namespace http_v1
 } // namespace webster

@@ -1,8 +1,27 @@
+/*
+ *   Copyright 2020 Bruno Ribeiro
+ *   <https://github.com/brunexgeek/webster>
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include <webster.hh>
 #include "http.hh"
 #include "http1.hh"
 #include "stream.hh"
 #include "network.hh"
+
+namespace webster {
 
 static const char *HTTP_METHODS[] =
 {
@@ -18,8 +37,77 @@ static const char *HTTP_METHODS[] =
 	"PATCH",
 };
 
-namespace webster {
-namespace http {
+static const char* HTTP_HEADER_FIELDS[] =
+{
+	"",
+    "Accept",
+    "Accept-Charset",
+    "Accept-Encoding",
+    "Accept-Language",
+    "Accept-Patch",
+    "Accept-Ranges",
+    "Access-Control-Allow-Credentials",
+    "Access-Control-Allow-Headers",
+    "Access-Control-Allow-Methods",
+    "Access-Control-Allow-Origin",
+    "Access-Control-Expose-Headers",
+    "Access-Control-Max-Age",
+    "Access-Control-Request-Headers",
+    "Access-Control-Request-Method",
+    "Age",
+    "Allow",
+    "Alt-Svc",
+    "Authorization",
+    "Cache-Control",
+    "Connection",
+    "Content-Disposition",
+    "Content-Encoding",
+    "Content-Language",
+    "Content-Length",
+    "Content-Location",
+    "Content-Range",
+    "Content-Type",
+    "Cookie",
+    "Date",
+    "DNT",
+    "ETag",
+    "Expect",
+    "Expires",
+    "Forwarded",
+    "From",
+    "Host",
+    "If-Match",
+    "If-Modified-Since",
+    "If-None-Match",
+    "If-Range",
+    "If-Unmodified-Since",
+    "Last-Modified",
+    "Link",
+    "Location",
+    "Max-Forwards",
+    "Origin",
+    "Pragma",
+    "Proxy-Authenticate",
+    "Proxy-Authorization",
+    "Public-Key-Pins",
+    "Range",
+    "Referer",
+    "Retry-After",
+    "Server",
+    "Set-Cookie",
+    "Strict-Transport-Security",
+    "TE",
+    "Tk",
+    "Trailer",
+    "Transfer-Encoding",
+    "Upgrade",
+    "Upgrade-Insecure-Requests",
+    "User-Agent",
+    "Vary",
+    "Via",
+    "Warning",
+    "WWW-Authenticate",
+};
 
 const char *http_method( int value )
 {
@@ -103,78 +191,6 @@ int strcmpi( const char *s1, const char *s2 )
 	return c1 - c2;
 }
 #endif
-
-static const char* HTTP_HEADER_FIELDS[] =
-{
-	"",
-    "Accept",
-    "Accept-Charset",
-    "Accept-Encoding",
-    "Accept-Language",
-    "Accept-Patch",
-    "Accept-Ranges",
-    "Access-Control-Allow-Credentials",
-    "Access-Control-Allow-Headers",
-    "Access-Control-Allow-Methods",
-    "Access-Control-Allow-Origin",
-    "Access-Control-Expose-Headers",
-    "Access-Control-Max-Age",
-    "Access-Control-Request-Headers",
-    "Access-Control-Request-Method",
-    "Age",
-    "Allow",
-    "Alt-Svc",
-    "Authorization",
-    "Cache-Control",
-    "Connection",
-    "Content-Disposition",
-    "Content-Encoding",
-    "Content-Language",
-    "Content-Length",
-    "Content-Location",
-    "Content-Range",
-    "Content-Type",
-    "Cookie",
-    "Date",
-    "DNT",
-    "ETag",
-    "Expect",
-    "Expires",
-    "Forwarded",
-    "From",
-    "Host",
-    "If-Match",
-    "If-Modified-Since",
-    "If-None-Match",
-    "If-Range",
-    "If-Unmodified-Since",
-    "Last-Modified",
-    "Link",
-    "Location",
-    "Max-Forwards",
-    "Origin",
-    "Pragma",
-    "Proxy-Authenticate",
-    "Proxy-Authorization",
-    "Public-Key-Pins",
-    "Range",
-    "Referer",
-    "Retry-After",
-    "Server",
-    "Set-Cookie",
-    "Strict-Transport-Security",
-    "TE",
-    "Tk",
-    "Trailer",
-    "Transfer-Encoding",
-    "Upgrade",
-    "Upgrade-Insecure-Requests",
-    "User-Agent",
-    "Vary",
-    "Via",
-    "Warning",
-    "WWW-Authenticate",
-};
 
 Header::Header()
 {
@@ -309,11 +325,11 @@ int HttpClient::communicate_local( HttpListener &listener )
     DataStream os(*client_, StreamType::OUTBOUND);
 	DataStream is(*client_, StreamType::INBOUND);
 
-	v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
+	http_v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
 	int result = Target::parse(client_->get_target().path, request.header.target);
 	if (result != WBERR_OK) return result;
 
-	v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
+	http_v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
 	response.header.target = request.header.target;
 
 	result = listener(request, response);
@@ -328,13 +344,13 @@ int HttpClient::communicate_remote( HttpListener &listener )
     DataStream is(*client_, StreamType::INBOUND);
     DataStream os(*client_, StreamType::OUTBOUND);
 
-    v1::MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
+    http_v1::MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
     int result = request.ready();
     if (result != WBERR_OK) return result;
 
     bool closing = request.header.fields.get(WBFI_CONNECTION) == "close";
 
-    v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
+    http_v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
     response.header.target = request.header.target;
 
     result = listener(request, response);
@@ -430,6 +446,4 @@ const Target &HttpServer::get_target() const
     return server_->get_target();
 }
 
-
-} // namespace http
 } // namespace webster

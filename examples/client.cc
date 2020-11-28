@@ -19,10 +19,7 @@
 #include <iostream>
 #include <cstring>
 
-using namespace webster::http;
-using webster::Parameters;
-using webster::Target;
-using webster::Client;
+using namespace webster;
 
 static int main_clientHandler(
     Message &request,

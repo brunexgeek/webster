@@ -15,417 +15,461 @@
  *   limitations under the License.
  */
 
-#if !defined(WEBSTER_NO_DEFAULT_NETWORK) && !defined(WEBSTER_NETWORK)
-#define WEBSTER_NETWORK
-
-#include <sys/types.h>
-
-#ifdef WB_WINDOWS
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-typedef SSIZE_T ssize_t;
-#else
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <poll.h>
-#include <fcntl.h>
-#endif
-
-#include <string.h>
-#include <errno.h>
-#include <stdlib.h>
+#include <chrono>
+#include <cstring>
 
 #include "network.hh"
+#include "socket.hh"
 
 namespace webster {
 
-std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>();
+extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
 
-inline int get_error()
+uint64_t tick()
 {
-#ifdef WB_WINDOWS
-	return WSAGetLastError();
-#else
-	return errno;
-#endif
+    auto now = std::chrono::steady_clock::now().time_since_epoch();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 }
 
-inline int translate_error( int code = 0 )
+Target::Target()
 {
-	if (code == 0) code = get_error();
-	switch (code)
+	clear();
+}
+
+static std::string string_cut(
+    const char *text,
+    size_t offset,
+    size_t length )
+{
+    if (text == nullptr) return nullptr;
+
+    size_t len = strlen(text);
+    if (offset + length > len) return nullptr;
+
+    std::string output;
+    for (size_t i = offset; i < offset + length; ++i) output += text[i];
+    return output;
+}
+
+static int hex_digit( uint8_t digit )
+{
+    if (digit >= '0' && digit <= '9')
+        return digit - '0';
+    if (digit >= 'a' && digit <= 'f')
+        digit = (uint8_t) (digit - 32);
+    if (digit >= 'A' && digit <= 'F')
+        return digit - 'A' + 10;
+    return 0;
+}
+
+std::string Target::decode( const std::string &input )
+{
+    const uint8_t *i = (const uint8_t*) input.c_str();
+    std::string out;
+
+    while (*i != 0)
+    {
+        if (*i == '%' && isxdigit(*(i + 1)) && isxdigit(*(i + 2)))
+        {
+            out += (uint8_t) (hex_digit(*(i + 1)) * 16 + hex_digit(*(i + 2)));
+            i += 3;
+        }
+        else
+        {
+            out += *i;
+            ++i;
+        }
+    }
+
+    return out;
+}
+
+std::string Target::encode( const std::string &input )
+{
+	const char *SYMBOLS = "0123456789abcdef";
+	std::string out;
+
+	for (char i : input)
 	{
-		case EACCES:
-			return WBERR_PERMISSION;
-		case EADDRINUSE:
-			return WBERR_ADDRESS_IN_USE;
-		case ENOTSOCK:
-			return WBERR_INVALID_CHANNEL;
-		case ECONNRESET:
-		case EPIPE:
-		case ENOTCONN:
-			return WBERR_NOT_CONNECTED;
-		case ECONNREFUSED:
-			return WBERR_REFUSED;
-		case ETIMEDOUT:
-		case EWOULDBLOCK:
-#if EWOULDBLOCK != EAGAIN
-		case EAGAIN:
-#endif
-			return WBERR_TIMEOUT;
-		case EINTR:
-			return WBERR_SIGNAL;
-		case EMFILE:
-		case ENFILE:
-			return WBERR_NO_RESOURCES;
-		case ENOBUFS:
-		case ENOMEM:
-			return WBERR_MEMORY_EXHAUSTED;
-		case ENETUNREACH:
-			return WBERR_UNREACHABLE;
-		case EINPROGRESS:
-			return WBERR_IN_PROGRESS;
-		default:
-			return WBERR_SOCKET;
-	}
-}
-
-inline int poll( struct pollfd &pfd, int &timeout, bool ignore_signal = true )
-{
-	if (timeout < 0) timeout = 0;
-	pfd.revents = 0;
-#ifdef WB_WINDOWS
-	auto start = tick();
-	int result = WSAPoll(&pfd, 1, timeout);
-	timeout -= (int) (tick() - start);
-#else
-	int result;
-	do
-	{
-		auto start = tick();
-		result = ::poll(&pfd, 1, timeout);
-		int elapsed = (int) (tick() - start);
-		timeout -= elapsed;
-		if (result >= 0 || !ignore_signal || get_error() != EINTR) break;
-	} while (timeout > 0);
-#endif
-	if (timeout < 0) timeout = 0;
-	if (result == 0) return WBERR_TIMEOUT;
-	if (get_error() == EINTR) return WBERR_SIGNAL;
-	if (result < 0) return WBERR_SOCKET;
-	return WBERR_OK;
-}
-
-struct SocketChannel : public Channel
-{
-	#ifdef WB_WINDOWS
-	SOCKET socket;
-	#else
-	int socket;
-	#endif
-	struct pollfd poll;
-};
-
-struct addrdel
-{
-	void operator()( addrinfo *ptr ) { freeaddrinfo(ptr); };
-};
-
-static std::shared_ptr<addrinfo[]> resolve( const char *host )
-{
-	if (host == nullptr || *host == 0) host = "127.0.0.1";
-
-    // get an IPv4 address from hostname
-	struct addrinfo aiHints, *aiInfo;
-    memset(&aiHints, 0, sizeof(aiHints));
-	aiHints.ai_family = AF_INET;
-	aiHints.ai_socktype = SOCK_STREAM;
-	aiHints.ai_protocol = IPPROTO_TCP;
-	int result = getaddrinfo(host, nullptr, &aiHints, &aiInfo);
-	if (result != 0) return nullptr;
-    // copy address information
-    return std::shared_ptr<addrinfo[]>(aiInfo, addrdel());
-}
-
-SocketNetwork::SocketNetwork()
-{
-	#ifdef WB_WINDOWS
-	int err = 0;
-	WORD wVersionRequested;
-	WSADATA wsaData;
-	wVersionRequested = MAKEWORD( 2, 2 );
-
-	err = WSAStartup( wVersionRequested, &wsaData );
-	if (err != 0 || LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
-	{
-		if (err == 0) WSACleanup();
-	}
-	#endif
-}
-
-int SocketNetwork::set_non_blocking( Channel *channel )
-{
-	SocketChannel *chann = (SocketChannel*) channel;
-#ifdef _WIN32
-	u_long flags = 1;
-	int result = ioctlsocket(chann->socket, FIONBIO, &flags);
-#else
-	int flags = fcntl(chann->socket, F_GETFL, 0);
-	int result = fcntl(chann->socket, F_SETFL, flags | O_NONBLOCK);
-#endif
-	return (result == 0) ? WBERR_OK : WBERR_SOCKET;
-}
-
-int SocketNetwork::set_reusable( Channel *channel )
-{
-	SocketChannel *chann = (SocketChannel*) channel;
-#ifdef WB_WINDOWS
-	int opt = SO_EXCLUSIVEADDRUSE;
-#else
-	int opt = SO_REUSEADDR;
-#endif
-	int value = 1;
-	value = ::setsockopt(chann->socket, SOL_SOCKET,  opt, (char *)&value, sizeof(int));
-	return (value == 0) ? WBERR_OK : WBERR_SOCKET;
-}
-
-int SocketNetwork::open( Channel **channel, Type type )
-{
-	(void) type;
-
-	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-
-	*channel = new(std::nothrow) SocketChannel();
-	if (*channel == nullptr) return WBERR_MEMORY_EXHAUSTED;
-
-	SocketChannel *chann = (SocketChannel*) *channel;
-
-	chann->socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (chann->socket < 0) return translate_error();
-	chann->poll.fd = chann->socket;
-	chann->poll.events = POLLIN;
-
-	if (type == Network::SERVER)
-	{
-		// allow socket descriptor to be reusable
-		set_reusable(chann);
-	}
-
-	return WBERR_OK;
-}
-
-int SocketNetwork::close( Channel *channel )
-{
-	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-
-	SocketChannel *chann = (SocketChannel*) channel;
-
-	#ifdef WB_WINDOWS
-	::shutdown(chann->socket, SD_BOTH);
-	::closesocket(chann->socket);
-	#else
-	::shutdown(chann->socket, SHUT_RDWR);
-	::close(chann->socket);
-	#endif
-	delete channel;
-
-	return WBERR_OK;
-}
-
-int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int port, int timeout )
-{
-	if (channel == nullptr)
-		return WBERR_INVALID_CHANNEL;
-	if (port < 0 && port > 0xFFFF)
-		return WBERR_INVALID_PORT;
-	if (scheme == WBS_AUTO)
-		scheme = (port == 443) ? WBS_HTTPS : WBS_HTTP;
-	if (scheme != WBS_HTTP)
-		return WBERR_INVALID_SCHEME;
-	if (timeout < 0) timeout = 0;
-
-	SocketChannel *chann = (SocketChannel*) channel;
-
-	auto addrs = resolve(host);
-	addrinfo *addr = nullptr;
-	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
-	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
-
-	sockaddr_in address;
-	address = *((sockaddr_in*) addr->ai_addr);
-	address.sin_port = htons( (uint16_t) port );
-
-	int result = set_non_blocking(chann);
-	if (result != WBERR_OK) return result;
-
-	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
-	if (result < 0)
-	{
-		result = translate_error();
-		if (result != WBERR_IN_PROGRESS) return result;
-	}
-
-	chann->poll.events = POLLOUT;
-	result = webster::poll(chann->poll, timeout);
-	if (result != WBERR_OK) return result;
-	return WBERR_OK;
-}
-
-int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *received, int timeout )
-{
-	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-	if (buffer == nullptr || received == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
-	if (timeout < 0) timeout = 0;
-	*received = 0;
-
-	SocketChannel *chann = (SocketChannel*) channel;
-
-	chann->poll.events = POLLIN;
-	int result = webster::poll(chann->poll, timeout);
-	if (result != WBERR_OK) return result;
-
-	auto bytes = ::recv(chann->socket, (char *) buffer, size, 0);
-	if (bytes <= 0)
-	{
-		if (bytes == 0) return WBERR_NOT_CONNECTED;
-		return translate_error();
-	}
-	*received = (int) bytes;
-
-	return WBERR_OK;
-}
-
-int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int timeout )
-{
-	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-	if (buffer == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
-	if (timeout < 0) timeout = 0;
-
-	SocketChannel *chann = (SocketChannel*) channel;
-
-	#ifdef WB_WINDOWS
-	int flags = 0;
-	int sent = 0
-	int pending = size;
-	int bytes = 0;
-	#else
-	int flags = MSG_NOSIGNAL;
-	ssize_t sent = 0;
-	ssize_t pending = size;
-	ssize_t bytes = 0;
-	#endif
-
-	do
-	{
-		bytes = ::send(chann->socket, (const char *) buffer, pending, flags);
-		if (bytes < 0)
+		uint8_t c = (uint8_t) i;
+		if ((c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') ||
+			c == '-' || c == '_' ||
+			c == '.' || c == '~')
+			out += i;
+		else
 		{
-			int code = get_error();
-			if (code == EWOULDBLOCK || code ==  EAGAIN || code == EINTR)
-			{
-				if (timeout == 0) return WBERR_TIMEOUT;
-				chann->poll.events = POLLOUT;
-				int result = webster::poll(chann->poll, timeout);
-				if (result != WBERR_OK) return result;
-				continue;
-			}
-			return translate_error(code);
+			out += '%';
+			out += SYMBOLS[c >> 4];
+			out += SYMBOLS[c & 0x0F];
 		}
-		sent += bytes;
-		buffer += bytes;
-		pending -= bytes;
-	} while (sent < size && timeout > 0);
-
-	if (sent < size) return WBERR_TIMEOUT;
-	return WBERR_OK;
+	}
+	return out;
 }
 
-#if 0
-static std::string get_address( struct sockaddr_in &addr )
+int Target::parse( const char *url, Target &target )
 {
-	char output[16] = {0};
-	uint8_t *octets = (uint8_t*) &addr.sin_addr;
-	snprintf(output, sizeof(output) - 1, "%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
-	return output;
+    if (url == nullptr || url[0] == 0) return WBERR_INVALID_TARGET;
+
+    // handle asterisk form
+    if (url[0] == '*' && url[1] == 0)
+        target.type = WBRT_ASTERISK;
+    else
+    // handle origin form
+    if (url[0] == '/')
+    {
+        target.type = WBRT_ORIGIN;
+
+        const char *ptr = url;
+        while (*ptr != '?' && *ptr != 0) ++ptr;
+
+        if (*ptr == '?')
+        {
+            size_t pos = (size_t) (ptr - url);
+            target.path = string_cut(url, 0, pos);
+            target.query = string_cut(url, pos + 1, strlen(url) - pos - 1);
+        }
+        else
+        {
+            target.path = std::string(url);
+        }
+
+        target.path = Target::decode(target.path);
+        target.query = Target::decode(target.query);
+    }
+    else
+    // handle absolute form
+    if (tolower(url[0]) == 'h' &&
+		tolower(url[1]) == 't' &&
+		tolower(url[2]) == 't' &&
+		tolower(url[3]) == 'p' &&
+		(tolower(url[4]) == 's' || url[4] == ':'))
+	{
+        target.type = WBRT_ABSOLUTE;
+
+		// extract the host name
+		const char *hb = strstr(url, "://");
+		if (hb == nullptr) return WBERR_INVALID_TARGET;
+		hb += 3;
+		const char *he = hb;
+		while (*he != ':' && *he != '/' && *he != 0) ++he;
+		if (hb == he) return WBERR_INVALID_TARGET;
+
+		const char *rb = he;
+		const char *re = nullptr;
+
+		// extract the port number, if any
+		const char *pb = he;
+		const char *pe = nullptr;
+		if (*pb == ':')
+		{
+			pe = ++pb;
+			while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
+			if (pb == pe || (pe - pb) > 5) return WBERR_INVALID_TARGET;
+			rb = pe;
+		}
+
+		// extract the resource
+		if (*rb == '/')
+		{
+			re = rb;
+			while (*re != 0) ++re;
+		}
+		if (re != nullptr && *re != 0) return WBERR_INVALID_TARGET;
+
+		// return the scheme
+		if (url[4] == ':')
+			target.scheme = WBS_HTTP;
+		else
+			target.scheme = WBS_HTTPS;
+
+		// return the port number, if any
+		if (pe != nullptr)
+		{
+			target.port = 0;
+			int mult = 1;
+			while (--pe >= pb)
+			{
+				target.port += (int) (*pe - '0') * mult;
+				mult *= 10;
+			}
+			if (target.port > 65535 || target.port < 0)
+                return WBERR_INVALID_TARGET;
+		}
+		else
+		{
+			if (target.scheme == WBS_HTTP)
+				target.port = 80;
+			else
+				target.port = 443;
+		}
+
+		// return the host
+        target.host = string_cut(hb, 0, (size_t) (he - hb));
+
+		// return the resource, if any
+		if (re != nullptr)
+			target.path = string_cut(rb, 0, (size_t) (re - rb));
+		else
+			target.path = "/";
+
+		target.path = Target::decode(target.path);
+        target.query = Target::decode(target.query);
+	}
+    else
+    // handle authority form
+    {
+        target.type = WBRT_AUTHORITY;
+
+        const char *hb = strchr(url, '@');
+        if (hb != nullptr)
+        {
+            target.user = string_cut(url, 0, (size_t) (hb - url));
+            hb++;
+        }
+        else
+            hb = url;
+
+        const char *he = strchr(hb, ':');
+        if (he != nullptr)
+        {
+            target.host = string_cut(hb, 0, (size_t) (he - hb));
+            target.port = 0;
+
+            const char *pb = he + 1;
+            const char *pe = pb;
+            while (*pe >= '0' && *pe <= '9' && *pe != 0) ++pe;
+            if (*pe != 0) return WBERR_INVALID_TARGET;
+
+			int mult = 1;
+			while (--pe >= pb)
+			{
+				target.port += (int) (*pe - '0') * mult;
+				mult *= 10;
+			}
+			if (target.port > 65535 || target.port < 0)
+                return WBERR_INVALID_TARGET;
+        }
+        else
+        {
+            target.host = std::string(hb);
+            target.port = 80;
+        }
+    }
+
+    return WBERR_OK;
 }
-#endif
 
-int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
+int Target::parse( const std::string &url, Target &target )
 {
-	if (channel == nullptr) return WBERR_INVALID_CHANNEL;
-	if (client == nullptr) return WBERR_INVALID_ARGUMENT;
-	if (timeout < 0) timeout = 0;
+	return parse(url.c_str(), target);
+}
 
-	SocketChannel *chann = (SocketChannel*) channel;
+void Target::swap( Target &that )
+{
+	std::swap(type, that.type);
+	std::swap(scheme, that.scheme);
+	user.swap(that.user);
+	host.swap(that.path);
+	std::swap(port, that.port);
+	path.swap(that.path);
+	query.swap(that.query);
+}
 
-	// wait for connections
-	chann->poll.events = POLLIN;
-	int result = webster::poll(chann->poll, timeout, false);
+void Target::clear()
+{
+	type = port = 0;
+	scheme = WBS_HTTP;
+	user.clear();
+	host.clear();
+	path.clear();
+	query.clear();
+}
+
+static void fix_parameters( Parameters &params )
+{
+	if (params.max_clients <= 0)
+		params.max_clients = WBL_DEF_CONNECTIONS;
+	else
+	if (params.max_clients > WBL_MAX_CONNECTIONS)
+		params.max_clients = WBL_MAX_CONNECTIONS;
+
+	if (params.buffer_size == 0)
+		params.buffer_size = WBL_DEF_BUFFER_SIZE;
+	else
+	if (params.buffer_size > WBL_MAX_BUFFER_SIZE)
+		params.buffer_size = WBL_MAX_BUFFER_SIZE;
+	params.buffer_size = (uint32_t) (params.buffer_size + 3) & (uint32_t) (~3);
+
+	if (params.read_timeout < 0)
+		params.read_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (params.read_timeout > WBL_MAX_TIMEOUT)
+		params.read_timeout = WBL_MAX_TIMEOUT;
+
+	if (params.write_timeout < 0)
+		params.write_timeout = WBL_DEF_TIMEOUT;
+	else
+	if (params.write_timeout > WBL_MAX_TIMEOUT)
+		params.write_timeout = WBL_MAX_TIMEOUT;
+}
+
+Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
+	read_timeout(WBL_DEF_TIMEOUT), write_timeout(WBL_DEF_TIMEOUT), connect_timeout(WBL_DEF_TIMEOUT * 2)
+{
+    #ifndef WEBSTER_NO_DEFAULT_NETWORK
+	network = DEFAULT_NETWORK;
+	#endif
+}
+
+Parameters::Parameters( const Parameters &that )
+{
+    #ifndef WEBSTER_NO_DEFAULT_NETWORK
+	network = DEFAULT_NETWORK;
+	#endif
+
+    if (that.network) network = that.network;
+    max_clients = that.max_clients;
+    buffer_size = that.buffer_size;
+    read_timeout = that.read_timeout;
+    write_timeout = that.write_timeout;
+    connect_timeout = that.connect_timeout;
+
+	fix_parameters(*this);
+}
+
+Server::Server() : channel_(nullptr)
+{
+}
+
+Server::Server( Parameters params ) : Server()
+{
+	params_ = params;
+}
+
+Server::~Server()
+{
+	stop();
+}
+
+int Server::start( const Target &target )
+{
+	if ((target.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
+	target_ = target;
+
+	int result = params_.network->open(&channel_, Network::SERVER);
 	if (result != WBERR_OK) return result;
 
-	*client = new(std::nothrow) SocketChannel();
-	if (*client == nullptr) return WBERR_MEMORY_EXHAUSTED;
+	return params_.network->listen(channel_, target_.host.c_str(), target_.port, params_.max_clients);
+}
 
-	struct sockaddr_in address;
-	#ifdef WB_WINDOWS
-	int addressLength;
-	SOCKET socket;
-	#else
-	socklen_t addressLength;
-	int socket;
-	#endif
-	addressLength = sizeof(address);
-	socket = ::accept(chann->socket, (struct sockaddr *) &address, &addressLength);
-	if (socket < 0)
+int Server::stop()
+{
+	if (channel_ == nullptr) return WBERR_OK;
+	params_.network->close(channel_);
+	channel_ = nullptr;
+	return WBERR_OK;
+}
+
+int Server::accept( Client **remote )
+{
+	if (remote == nullptr) return WBERR_INVALID_ARGUMENT;
+
+	Channel *channel = nullptr;
+	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
+	if (result != WBERR_OK) return result;
+
+	*remote = new (std::nothrow) Client(params_, WBCT_REMOTE);
+	if (*remote == nullptr)
 	{
-		delete (SocketChannel*) *client;
-		*client = nullptr;
-		return translate_error();
+		params_.network->close(channel);
+		return WBERR_MEMORY_EXHAUSTED;
 	}
-	((SocketChannel*)*client)->socket = socket;
-	((SocketChannel*)*client)->poll.fd = socket;
-	((SocketChannel*)*client)->poll.events = POLLIN;
-
-	// allow socket descriptor to be reusable
-	set_reusable(chann);
-	// use non-blocking operations
-	result = set_non_blocking(chann);
-	if (result == WBERR_OK) return result;
+	(*remote)->channel_ = channel;
 
 	return WBERR_OK;
 }
 
-int SocketNetwork::listen( Channel *channel, const char *host, int port, int maxClients )
+const Parameters &Server::get_parameters() const
 {
-	if (channel == nullptr)
-		return WBERR_INVALID_CHANNEL;
-	if (port < 0 && port > 0xFFFF)
-		return WBERR_INVALID_PORT;
+	return params_;
+}
 
-	SocketChannel *chann = (SocketChannel*) channel;
+const Target &Server::get_target() const
+{
+	return target_;
+}
 
-	auto addrs = resolve(host);
-	addrinfo *addr = nullptr;
-	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
-	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
+Client::Client( ClientType type ) : channel_(nullptr), type_(type)
+{
+}
 
-	sockaddr_in address;
-	address = *((sockaddr_in*) addr->ai_addr);
-	address.sin_port = htons( (uint16_t) port );
+Client::Client( Parameters params, ClientType type ) : Client(type)
+{
+	params_ = params;
+}
 
-	if (::bind(chann->socket, (const struct sockaddr*) &address, sizeof(struct sockaddr_in)) != 0)
-		return translate_error();
+Client::~Client()
+{
+	disconnect();
+}
 
-	// listen for incoming connections
-	if ( ::listen(chann->socket, maxClients) != 0 )
-		return translate_error();
+int Client::connect( const Target &target )
+{
+	if (channel_) return WBERR_ALREADY_CONNECTED;
+	if (type_ == WBCT_REMOTE) return WBERR_NOT_IMPLEMENTED; // TODO: use better code
+	#ifdef WEBSTER_NO_DEFAULT_NETWORK
+	if (!params->network) return WBERR_INVALID_ARGUMENT;
+	#endif
 
+	// try to connect with the remote host
+	int result = params_.network->open(&this->channel_, Network::CLIENT);
+	if (result != WBERR_OK) return result;
+	result = params_.network->connect(this->channel_, target.scheme, target.host.c_str(), target.port,
+		params_.connect_timeout );
+	if (result != WBERR_OK)
+    {
+        params_.network->close(this->channel_);
+        this->channel_ = nullptr;
+        return result;
+    }
+	target_ = target;
+
+	return WBERR_OK;
+}
+
+Channel *Client::get_channel()
+{
+	return channel_;
+}
+
+ClientType Client::get_type() const
+{
+	return type_;
+}
+
+bool Client::is_connected() const
+{
+	return channel_ != nullptr;
+}
+
+const Parameters &Client::get_parameters() const
+{
+	return params_;
+}
+
+const Target &Client::get_target() const
+{
+	return target_;
+}
+
+int Client::disconnect()
+{
+	if (channel_ == nullptr) return WBERR_OK;
+	params_.network->close(channel_);
+	channel_ = nullptr;
 	return WBERR_OK;
 }
 
 } // namespace webster
-
-#endif // !WEBSTER_NO_DEFAULT_NETWORK && !WEBSTER_NETWORK
