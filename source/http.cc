@@ -334,7 +334,11 @@ int HttpClient::communicate_local( HttpListener &listener )
 
 	result = listener(request, response);
 	if (result < WBERR_OK) return result;
-	return response.finish();
+	result = response.finish();
+    if (result != WBERR_OK) return result;
+
+    bool closing = response.header.fields.get(WBFI_CONNECTION) == "close";
+    return (closing) ? WBERR_COMPLETE : WBERR_OK;
 }
 
 int HttpClient::communicate_remote( HttpListener &listener )
