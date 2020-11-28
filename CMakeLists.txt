@@ -34,7 +34,6 @@ if (UNIX)
 endif()
 
 add_library(libwebster STATIC
-    "source/webster.cc"
     "source/stream.cc"
     "source/http.cc"
     "source/http1.cc"
