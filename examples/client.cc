@@ -35,7 +35,10 @@ static int main_clientHandler(
     request.finish();
 
     response.ready();
-    std::cout << "--- Expected " << response.header.fields.get(WBFI_CONTENT_LENGTH) << std::endl;
+    if (response.header.fields.count(WBFI_CONTENT_LENGTH))
+        std::cout << "--- Expected " << response.header.fields.get(WBFI_CONTENT_LENGTH) << " bytes" << std::endl;
+    else
+        std::cout << "--- Expected chunked data" << std::endl;
     #if 0
     // read in blocks with application buffer
     char ptr[1024];
