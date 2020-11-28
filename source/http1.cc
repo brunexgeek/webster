@@ -255,12 +255,18 @@ int MessageImpl::read( uint8_t *buffer, int size )
 	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
 	if (buffer == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
 
+	// check whether we have more data do receive
 	if (body_.expected == 0)
 	{
 		if (body_.flags & WBMF_CHUNKED)
 		{
 			result = chunk_size();
 			if (result != WBERR_OK) return result;
+			if (body_.expected == 0)
+			{
+				state_ = WBS_COMPLETE;
+				return WBERR_COMPLETE;
+			}
 		}
 		else
 		{
@@ -321,6 +327,7 @@ int MessageImpl::read_all( std::string &buffer )
 
 	while (true)
 	{
+		*line_ = 0;
 		result = read(line_, HTTP_LINE_LENGTH);
 		if (result < 0)
 		{

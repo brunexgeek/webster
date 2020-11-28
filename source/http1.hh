@@ -61,7 +61,7 @@ class MessageImpl : public Message
             /**
              * @brief Message expected size.
              *
-             * This value is any negative if using chunked transfer encoding.
+             * This value is the current chunk size if using chunked transfer encoding.
              */
             int expected;
 
@@ -76,6 +76,9 @@ class MessageImpl : public Message
         char *line_;
 
         int receive_header();
+        /**
+         * Update `body_.expected` with the size of the next chunk.
+         */
         int chunk_size();
         int write_header();
         int write_resource_line();
