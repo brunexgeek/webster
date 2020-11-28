@@ -500,6 +500,7 @@ class HttpClient
         int open( const Target &url, const Parameters &params = Parameters() );
         int close();
         int communicate( HttpListener &listener );
+        int communicate( const std::string &path, HttpListener &listener );
         Protocol get_protocol() const;
         Client *get_client();
         ClientType get_type() const;
@@ -509,7 +510,7 @@ class HttpClient
         Protocol proto_;
         ClientType type_;
 
-        int communicate_local( HttpListener &listener );
+        int communicate_local( const std::string &path, HttpListener &listener );
         int communicate_remote( HttpListener &listener );
 };
 

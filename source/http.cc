@@ -290,9 +290,14 @@ int HttpClient::open( const char *url, const Parameters &params )
 
 int HttpClient::open( const Target &url, const Parameters &params )
 {
-    if ((url.type & WBRT_AUTHORITY) == 0) return WBERR_INVALID_TARGET;
-    client_ = new(std::nothrow) ::webster::Client(params);
-    if (client_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+    if (client_ != nullptr)
+        return WBERR_ALREADY_CONNECTED;
+    if ((url.type & WBRT_AUTHORITY) == 0)
+        return WBERR_INVALID_TARGET;
+
+    client_ = new(std::nothrow) Client(params);
+    if (client_ == nullptr)
+        return WBERR_MEMORY_EXHAUSTED;
     int result = client_->connect(url);
     if (result != WBERR_OK)
     {
@@ -310,23 +315,39 @@ int HttpClient::close()
     return WBERR_OK;
 }
 
-int HttpClient::communicate( HttpListener &listener )
+int HttpClient::communicate( const std::string &path, HttpListener &listener )
 {
+    if (proto_ != WBCP_HTTP_1)
+        return WBERR_INVALID_PROTOCOL;
+    if (client_ == nullptr)
+        return WBERR_INVALID_STATE;
+
     if (type_ == WBCT_LOCAL)
-        return communicate_local(listener);
+        return communicate_local(path, listener);
     else
         return communicate_remote(listener);
 }
 
-int HttpClient::communicate_local( HttpListener &listener )
+int HttpClient::communicate( HttpListener &listener )
 {
-    if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
+    if (proto_ != WBCP_HTTP_1)
+        return WBERR_INVALID_PROTOCOL;
+    if (client_ == nullptr)
+        return WBERR_INVALID_STATE;
 
+    if (type_ == WBCT_LOCAL)
+        return communicate_local(client_->get_target().path, listener);
+    else
+        return communicate_remote(listener);
+}
+
+int HttpClient::communicate_local( const std::string &path, HttpListener &listener )
+{
     DataStream os(*client_, StreamType::OUTBOUND);
 	DataStream is(*client_, StreamType::INBOUND);
 
 	http_v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
-	int result = Target::parse(client_->get_target().path, request.header.target);
+	int result = Target::parse(path, request.header.target);
 	if (result != WBERR_OK) return result;
 
 	http_v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
@@ -343,8 +364,6 @@ int HttpClient::communicate_local( HttpListener &listener )
 
 int HttpClient::communicate_remote( HttpListener &listener )
 {
-    if (proto_ != WBCP_HTTP_1) return WBERR_INVALID_PROTOCOL;
-
     DataStream is(*client_, StreamType::INBOUND);
     DataStream os(*client_, StreamType::OUTBOUND);
 
@@ -383,8 +402,9 @@ Client *HttpClient::get_client()
 // HttpServer
 //
 
-HttpServer::HttpServer()
+HttpServer::HttpServer() : server_(nullptr)
 {
+    server_ = new(std::nothrow) Server();
 }
 
 HttpServer::HttpServer( Parameters params ) : server_(nullptr)
