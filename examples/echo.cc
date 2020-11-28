@@ -17,14 +17,11 @@
 
 #include <webster.hh>
 #include <limits.h>
-#include <stdio.h>
 #include <signal.h>
-#include <stdlib.h>
-#include <string.h>
 #include <iostream>
 
-#if defined(_WIN32) || defined(WIN32)
-#include <Windows.h>
+#ifdef WB_WINDOWS
+#include <windows.h>
 #else
 #include <linux/limits.h>
 #endif
@@ -35,7 +32,6 @@
 #define PROGRAM_TITLE     "Sample HTTP Server"
 
 using namespace webster;
-using namespace webster::http;
 
 static int serverState = SERVER_RUNNING;
 
@@ -75,10 +71,9 @@ static void main_signalHandler(
 
 #endif
 
-
-struct EchoHandler : public webster::http::HttpListener
+struct EchoHandler : public webster::HttpListener
 {
-	int operator()( webster::http::Message &request, webster::http::Message &response )
+	int operator()( webster::Message &request, webster::Message &response )
 	{
 		request.finish();
 		std::cerr << "  Request to " << request.header.target.path << std::endl;
@@ -113,8 +108,6 @@ struct EchoHandler : public webster::http::HttpListener
 			response.write("</td></tr>");
 		}
 		response.write("</body></table></html>");
-
-		response.finish();
 		return WBERR_OK;
 	}
 };
@@ -142,8 +135,7 @@ int main(int argc, char* argv[])
 
 	printf(PROGRAM_TITLE "\n");
 
-	Parameters params;
-	HttpServer server(params);
+	HttpServer server;
 	if (server.start("http://localhost:7000") == WBERR_OK)
 	{
 		EchoHandler listener;
@@ -154,10 +146,14 @@ int main(int argc, char* argv[])
 			if (result == WBERR_OK)
 			{
 				std::cerr << "Connection stabilished" << std::endl;
+
+				// keep processing requests until some error occurs
 				while ((result = remote->communicate(listener)) == WBERR_OK);
+				// close the client (optional, closed by destructor) and destroy the object
 				remote->close();
-				std::cerr << "Connection closed" << std::endl;
 				delete remote;
+
+				std::cerr << "Connection closed" << std::endl;
 			}
 			else
 			if (result != WBERR_TIMEOUT) break;

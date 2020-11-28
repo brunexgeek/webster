@@ -31,13 +31,11 @@
 #ifdef _WIN32
 #include <Windows.h>
 #define PATH_LENGTH  MAX_PATH
-#define STRCMPI      webster::http::strcmpi
 #else
 #include <unistd.h>
 #include <linux/limits.h>
 #include <dirent.h>
 #define PATH_LENGTH  PATH_MAX
-#define STRCMPI      webster::http::strcmpi
 #endif
 
 
@@ -133,7 +131,6 @@ static const struct mime_t MIME_TABLE[] =
 #define MIME_COUNT   sizeof(MIME_TABLE) / sizeof(struct mime_t)
 
 using namespace webster;
-using namespace webster::http;
 
 static int serverState = SERVER_RUNNING;
 
@@ -175,7 +172,7 @@ static const char *main_getMime(
     while (first <= last)
 	{
 		int current = (first + last) / 2;
-		int dir = STRCMPI(ptr, MIME_TABLE[current].extension);
+		int dir = webster::strcmpi(ptr, MIME_TABLE[current].extension);
 		if (dir == 0) return MIME_TABLE[current].mime;
 		if (dir < 0)
 			last = current - 1;

@@ -14,6 +14,8 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+#ifndef WEBSTER_HTTP1_HH
+#define WEBSTER_HTTP1_HH
 
 #include <webster.hh>
 #include "stream.hh"
@@ -24,8 +26,7 @@ const int WBMF_REQUEST  = 2;
 const int WBMF_RESPONSE = 0;
 
 namespace webster {
-namespace http {
-namespace v1 {
+namespace http_v1 {
 
 enum State
 {
@@ -83,6 +84,7 @@ class MessageImpl : public Message
         int discard();
 };
 
-} // namespace v1
-} // namespace http
+} // namespace http_v1
 } // namespace webster
+
+#endif // WEBSTER_HTTP1_HH
