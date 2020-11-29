@@ -31,7 +31,6 @@
 #include <string>
 
 const int WBERR_OK                   = 0;
-const int WBERR_UPGRADED             = -38;
 const int WBERR_INVALID_ARGUMENT     = -1;
 const int WBERR_MEMORY_EXHAUSTED     = -2;
 const int WBERR_INVALID_ADDRESS      = -3;
@@ -62,6 +61,9 @@ const int WBERR_NOT_IMPLEMENTED      = -34;
 const int WBERR_NO_RESOURCES         = -35;
 const int WBERR_ALREADY_CONNECTED    = -36;
 const int WBERR_INVALID_PROTOCOL     = -37;
+const int WBERR_UPGRADED             = -38;
+const int WBERR_READ_ONLY            = -39;
+const int WBERR_WRITE_ONLY           = -40;
 
 /**
  * HTTP header field identifier.
