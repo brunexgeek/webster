@@ -22,6 +22,12 @@
 
 namespace webster {
 
+enum LineEnding
+{
+	WBLE_EVENT, // line ending for SSE messages (\r, \n, \r\n)
+	WBLE_HTTP   // line ending for HTTP messages (\r\n)
+};
+
 enum class StreamType
 {
 	INBOUND,
@@ -46,6 +52,11 @@ class DataStream
 			std::string str = std::to_string(value);
 			return write(str);
 		}
+		/**
+		 * Read up to 'size' bytes from the channel.
+		 *
+		 * @returns Positive number of bytes read or negativa error code.
+		 */
 		int read( uint8_t *data, int size );
         int read_line( char *data, int size );
         int pending() const;
@@ -57,6 +68,7 @@ class DataStream
 		Client &client_;
 		uint8_t *data_;
 		uint8_t *current_;
+		uint8_t *start_;
 		StreamType type_;
 };
 

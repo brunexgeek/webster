@@ -19,14 +19,14 @@
 #include "stream.hh"
 #include "network.hh"
 #include <cstring>
+#include <iostream>
 
 namespace webster {
 
 DataStream::DataStream( Client &client, StreamType type ) : pending_(0),
-	client_(client), data_(nullptr), current_(nullptr), type_(type)
+	client_(client), type_(type)
 {
-	if (type == StreamType::OUTBOUND)
-		data_ = current_ = new(std::nothrow) uint8_t[client_.get_parameters().buffer_size];
+	data_ = current_ = start_ = new(std::nothrow) uint8_t[client_.get_parameters().buffer_size];
 }
 
 DataStream::~DataStream()
@@ -36,41 +36,36 @@ DataStream::~DataStream()
 
 int DataStream::write( const uint8_t *buffer, int size )
 {
-	if (type_ != StreamType::OUTBOUND) return WBERR_INVALID_CHANNEL;
-	if (size == 0 || buffer == nullptr) return WBERR_OK;
-	if (size < 0 || size > 0x3FFFFFFF) return WBERR_TOO_LONG;
-	if (data_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
+	if (type_ != StreamType::OUTBOUND)
+		return WBERR_WRITE_ONLY;
+	if (size == 0 || buffer == nullptr)
+		return WBERR_OK;
+	if (size < 0 || size > 0x3FFFFFFF)
+		return WBERR_TOO_LONG;
+	if (data_ == nullptr)
+		return WBERR_MEMORY_EXHAUSTED;
+
 	auto &params = client_.get_parameters();
-
-	// ensures the current pointer is valid
-	if (current_ == nullptr)
-	{
-		current_ = data_;
-		pending_ = 0;
-	}
-
-	// fragment input data through recursive call until the data size fits the internal buffer
-	int offset = 0;
 	int result = WBERR_OK;
+
+	// send all data that doesn't fits the internal buffer with some room
 	int fit = params.buffer_size - (int)(current_ - data_);
-	while (size > fit)
+	if (size >= fit)
 	{
-		result = write(buffer + offset, fit);
-		size -= fit;
-		offset += fit;
-		fit = params.buffer_size - (int)(current_ - data_);
-		if (result != WBERR_OK) return result;
+		flush();
+		while (size > (int) params.buffer_size)
+		{
+			result = params.network->send(client_.get_channel(), buffer, params.buffer_size, params.write_timeout);
+			if (result != WBERR_OK) return result;
+			buffer += params.buffer_size;
+			size -= params.buffer_size;
+		}
 	}
-
-	memcpy(current_, buffer + offset, (size_t) size);
-	current_ += size;
-
-	// send pending data if the buffer is full
-	if (current_ >= data_ + params.buffer_size)
+	// copy the remaining data to the internal buffer
+	if (size > 0)
 	{
-		result = params.network->send(client_.get_channel(), data_, params.buffer_size, params.write_timeout);
-		current_ = data_;
-		pending_ = 0;
+		memcpy(current_, buffer, (size_t) size);
+		current_ += size;
 	}
 
 	return result;
@@ -91,34 +86,69 @@ int DataStream::write( char c )
 	return write((uint8_t*) &c, 1);
 }
 
-int DataStream::read( uint8_t *data, int size )
+int DataStream::read( uint8_t *buffer, int size )
 {
-	if (type_ != StreamType::INBOUND) return WBERR_INVALID_CHANNEL;
+	if (type_ != StreamType::INBOUND)
+		return WBERR_READ_ONLY;
+
+	// check whether there's any buffered data
+	if (start_ < current_)
+	{
+		int fit = std::min((int) (current_ - start_), size);
+		std::cerr << "Getting " << fit << " bytes from internal buffer\n";
+		memcpy(buffer, start_, fit);
+		start_ += fit;
+		std::cerr << "Remaining bytes: " << (current_ - start_) << '\n';
+		if (start_ == current_)
+			start_ = current_ = data_;
+		return fit;
+	}
+
 	auto &params = client_.get_parameters();
 	int read = 0;
-	int result = params.network->receive(client_.get_channel(), data, size, &read, params.read_timeout);
+	int result = params.network->receive(client_.get_channel(), buffer, size, &read, params.read_timeout);
 	if (result == WBERR_OK) return read;
 	return result;
 }
 
-int DataStream::read_line( char *data, int size )
+int DataStream::read_line( char *buffer, int size )
 {
-	if (type_ != StreamType::INBOUND) return WBERR_INVALID_CHANNEL;
-	if (data == nullptr || size < 2) return WBERR_INVALID_ARGUMENT;
-	char *p = data;
-	uint8_t c;
+	if (type_ != StreamType::INBOUND)
+		return WBERR_READ_ONLY;
+	if (buffer == nullptr || size < 2)
+		return WBERR_INVALID_ARGUMENT;
+
+	char *p = buffer;
+	uint8_t c, v = 0;
+	auto &params = client_.get_parameters();
+
+	// TODO: limit the line length
 
 	do
 	{
-		int result = read(&c, 1);
-		if (result < 0) return result;
+		// fill the internal buffer
+		if (start_ == current_)
+		{
+			start_ = data_;
+			int read = 0;
+			int result = params.network->receive(client_.get_channel(), data_, params.buffer_size, &read, params.read_timeout);
+			if (result != WBERR_OK)
+			{
+				*buffer = 0;
+				return result;
+			}
+			current_ = data_ + read;
+		}
+
+		c = *start_++;
 		if (c == '\r') continue;
 		if (c == '\n') break;
-		*p = (char) c;
+		*p = (char) (v = c);
 		++p;
-	} while (p < data + size - 1);
-	if (c != '\n') return WBERR_TOO_LONG;
+	} while (p < buffer + size - 1);
 	*p = 0;
+
+	if (c != '\n') return WBERR_TOO_LONG;
 
 	return WBERR_OK;
 }
