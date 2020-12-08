@@ -19,7 +19,10 @@
 #define WEBSTER_HTTP1_HH
 
 #include <webster.hh>
+
+#ifndef WEBSTER_AMALGAMATION
 #include "stream.hh"
+#endif
 
 const int WBMF_INBOUND  = 1;
 const int WBMF_OUTBOUND = 0;

@@ -46,8 +46,6 @@ set_target_properties(libwebster PROPERTIES
     VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
     SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     PREFIX "lib" )
 
 add_executable(example_echo "examples/echo.cc")
@@ -55,8 +53,6 @@ target_link_libraries(example_echo libwebster)
 target_compile_definitions(example_echo PRIVATE _DEFAULT_SOURCE)
 set_target_properties(example_echo PROPERTIES
     OUTPUT_NAME "example_echo"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
 add_executable(example_client "examples/client.cc")
@@ -64,8 +60,6 @@ target_link_libraries(example_client libwebster)
 target_compile_definitions(example_client PRIVATE _DEFAULT_SOURCE)
 set_target_properties(example_client PROPERTIES
     OUTPUT_NAME "example_client"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
 if (UNIX)
@@ -74,7 +68,40 @@ if (UNIX)
     target_compile_definitions(example_indexing PRIVATE _DEFAULT_SOURCE)
     set_target_properties(example_indexing PROPERTIES
         OUTPUT_NAME "example_indexing"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 endif()
+
+add_executable(generate_tool "generate.cc")
+set_target_properties(generate_tool PROPERTIES
+    OUTPUT_NAME "generate_tool"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
+
+set(WEBSTER_CC "${CMAKE_BINARY_DIR}/webster.cc")
+set(FILE_LIST
+    "${CMAKE_CURRENT_LIST_DIR}/source/stream.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/http.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/http1.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/socket.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/network.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/stream.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/source/http.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/source/http1.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/source/socket.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/source/network.cc")
+
+add_custom_target(generate
+    COMMAND "./generate_tool" ${WEBSTER_CC} ${FILE_LIST}
+    DEPENDS libwebster generate_tool)
+
+file(APPEND ${WEBSTER_CC} "")
+
+add_library(libwebster_generated STATIC ${WEBSTER_CC})
+target_compile_definitions(libwebster_generated PRIVATE BUILDING_WEBSTER=1 WEBSTER_AMALGAMATION=1)
+target_include_directories(libwebster_generated PUBLIC "include")
+add_dependencies(libwebster_generated generate)
+set_target_properties(libwebster_generated PROPERTIES
+    OUTPUT_NAME "webster_generated"
+    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    PREFIX "lib" )

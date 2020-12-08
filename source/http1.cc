@@ -19,10 +19,13 @@
 #include <cstring>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifndef WEBSTER_AMALGAMATION
 #include "stream.hh"
 #include "http.hh"
 #include "network.hh"
 #include "http1.hh"
+#endif
 
 #ifdef WB_WINDOWS
 #include <windows.h>
