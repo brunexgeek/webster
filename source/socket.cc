@@ -1,5 +1,8 @@
-#include "socket.hh"
 #include <sys/types.h>
+
+#ifndef WEBSTER_AMALGAMATION
+#include "socket.hh"
+#endif
 
 #ifdef WB_WINDOWS
 #include <winsock2.h>

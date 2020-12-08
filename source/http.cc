@@ -16,10 +16,13 @@
  */
 
 #include <webster.hh>
+
+#ifndef WEBSTER_AMALGAMATION
 #include "http.hh"
 #include "http1.hh"
 #include "stream.hh"
 #include "network.hh"
+#endif
 
 namespace webster {
 
