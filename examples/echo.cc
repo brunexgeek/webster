@@ -95,34 +95,24 @@ struct EchoListener : public webster::HttpListener
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";
-		response.write("<html><head><title>");
-		response.write(PROGRAM_TITLE);
-		response.write("</title></head><body>");
+		response << "<html><head><title>" << PROGRAM_TITLE << "</title></head><body>";
 
-		response.write("<p>Received <strong>");
-		response.write(HTTP_METHODS[request.header.method]);
-		response.write("</strong> request to <tt style='color: blue'>");
-		response.write(request.header.target.path);
-		response.write("</tt>");
+		response << "<p>Received <strong>" << HTTP_METHODS[request.header.method] <<
+			"</strong> request to <tt style='color: blue'>" << request.header.target.path <<
+			"</tt>";
 		if (!request.header.target.query.empty())
 		{
-			response.write(" with query <tt style='color: blue'>");
-			response.write(request.header.target.query);
-			response.write("</tt>");
+			response << " with query <tt style='color: blue'>" << request.header.target.query << "</tt>";
 		}
-		response.write("</p>");
+		response << "</p>";
 
-		response.write("<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>");
-		response.write("<table><tr><th>Header field</th><th>Value</th></tr>");
+		response << "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>" <<
+			"<table><tr><th>Header field</th><th>Value</th></tr>";
 		for (auto &item : request.header.fields)
 		{
-			response.write("<tr><td>");
-			response.write(item.first);
-			response.write("</td><td>");
-			response.write(item.second);
-			response.write("</td></tr>");
+			response << "<tr><td>" << item.first << "</td><td>" << item.second << "</td></tr>";
 		}
-		response.write("</body></table></html>");
+		response << "</body></table></html>";
 		return WBERR_OK;
 	}
 };

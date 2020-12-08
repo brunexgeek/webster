@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <functional>
 #include <string>
+#include <type_traits>
 
 const int WBERR_OK                   = 0;
 const int WBERR_INVALID_ARGUMENT     = -1;
@@ -445,6 +446,11 @@ class Message
         virtual int write( const char *buffer ) = 0;
         virtual int write( const std::string &buffer ) = 0;
         virtual int write( const std::vector<uint8_t> &buffer ) = 0;
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, bool>::type = true>
+        int write( const T &value )
+        {
+            return write(std::to_string(value));
+        }
         /**
          * Wait until the message body is ready to be read or written.
          *
@@ -476,6 +482,23 @@ class Message
          * complete the message. No more data can be written after this call.
          */
         virtual int finish() = 0;
+
+        Message &operator<<( const std::string &value )
+        {
+            write(value);
+            return *this;
+        }
+        Message &operator<<( const char &value )
+        {
+            write(value);
+            return *this;
+        }
+        template<typename T, typename std::enable_if<std::is_integral<T>::value, bool>::type = true>
+        Message &operator<<( const T &value )
+        {
+            write(value);
+            return *this;
+        }
 };
 
 class HttpListener

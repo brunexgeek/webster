@@ -194,7 +194,7 @@ static void main_downloadFile( Message &response, const char *fileName, int cont
 	{
 		response.header.status = 500;
 		response.header.fields["Content-Length"] = "15";
-		response.write("<h1>Error!</h1>");
+		response << "<h1>Error!</h1>";
 	}
 
 	const char *mime = main_getMime(fileName);
@@ -307,20 +307,19 @@ static void main_listDirectory(
 	size_t length = strlen(rootDirectory);
 
 	response.header.fields["Server"] = PROGRAM_TITLE;
-	response.write( HTML_BEGIN);
-	response.write( "<h1>Index of ");
+	response << (HTML_BEGIN) <<  "<h1>Index of ";
 	if (*(path + length) == 0)
-		response.write("/");
+		response << "/";
 	else
-		response.write(path + length);
-	response.write("</h1><table>");
+		response << (path + length);
+	response << "</h1><table>";
 
 	// parent directory
 	if (*(path + length) != 0)
 	{
 		temp[0] = 0;
 		snprintf(temp, sizeof(temp) - 1, PAR_FORMAT, path + length);
-		response.write(temp);
+		response << temp;
 	}
 
 	struct dir_entry *entries = NULL;
@@ -378,16 +377,14 @@ static void main_listDirectory(
 				continue;
 			}
 			temp[sizeof(temp) - 1] = 0;
-			response.write(temp);
+			response << temp;
 			free(entries[i].fileName);
 		}
 		free(entries);
 	}
 
-	response.write("</table><hr/>");
-	response.write(HTML_END);
+	response << "</table><hr/>" << HTML_END;
 }
-
 
 static int main_serverHandler(
     Message &request,
@@ -421,7 +418,7 @@ static int main_serverHandler(
 			response.header.status = 406;
 			response.header.fields["Content-Type"] = mime;
 			response.header.fields["Content-Length"] = std::to_string(strlen(mime));
-			response.write(mime);
+			response << mime;
 		}
 		else
 		{
@@ -439,7 +436,7 @@ static int main_serverHandler(
 	{
 		response.header.status = 404;
 		response.header.fields["Content-Length"] = "18";
-		response.write("<h1>Not found</h1>");
+		response << "<h1>Not found</h1>";
 	}
 
 	response.finish();
@@ -488,8 +485,8 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	printf(PROGRAM_TITLE "\n");
-	printf("Root directory is %s\n", rootDirectory);
+	std::cerr << PROGRAM_TITLE << std::endl;
+	std::cerr << "Root directory is " << rootDirectory << std::endl;
 
 	ctpl::thread_pool pool(4);
 
@@ -513,7 +510,7 @@ int main(int argc, char* argv[])
 	server.stop();
 	pool.stop();
 
-	printf("Server terminated!\n");
+	std::cerr << "Server terminated!" << std::endl;
 	free(rootDirectory);
 
     return 0;
