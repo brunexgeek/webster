@@ -1,25 +1,16 @@
-# Webster  ![GitHub](https://img.shields.io/github/license/brunexgeek/webster)
+# Webster  ![GitHub](https://img.shields.io/github/license/brunexgeek/webster) [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fbrunexgeek%2Fwebster%2Fbadge%3Fref%3Dmaster&label=build&logo=none)](https://actions-badge.atrox.dev/brunexgeek/webster/goto?ref=master)
 
-Lightweight framework to create HTTP servers and clients in C++11. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying a custom network stack. There is only two files to include in your projects: ``webster.cc`` and ``webster.hh``.
+Lightweight library to create HTTP servers and clients in C++11. It implements the [RFC-7230 - Message Syntax and Routing](https://tools.ietf.org/html/rfc7230) on top of POSIX socket API, however you can change the communication channel by specifying a custom network stack.
 
 Webster enables you to communicate with HTTP servers or implement your own HTTP server. It automatically parses requests and also simplify creating responses. The input/output body data is handled as a stream: to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amounts of data using small buffers.
 
-However, Webster do not:
-* Handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231).
-* Communicate through SSL/TLS natively. You need to specialize the ``Network`` class using a 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
+To use Webster you can link with `libwebster` static library or include the files ``webster.cc`` and ``webster.hh`` in your project. The file ``webster.cc`` is an almagamation of the files contained in the ``source`` directory.
 
 The repository also includes three programs in the ``examples`` directory:
 
 * ``client.cc``: simple client program that send a request and print the response;
 * ``echo.cc``: simple server program that echoes information about the request;
 * ``indexing.cc``: more elaborated server program that implements directory indexing. Works only in GNU/Linux for now.
-
-## Organization
-
-* **examples**: examples of how to use the API;
-* **include**: public header files;
-* **source**: library source code;
-* **generated**: contains the files `webster.hh` (from `include` directory) and `webster.cc`, which is an amalgamation of the library's source code.
 
 ## Client implementation
 
@@ -98,8 +89,8 @@ if (server.start("http://localhost:7000") == WBERR_OK)
         if (result != WBERR_TIMEOUT)
             break;
     }
+    server.stop();
 }
-server.stop();
 ```
 
 In the example above, the ``my_server_handler`` is the function which receive the request and send the response to the client. This listener have the same signature of the client listener, however the request must be read (not written). For more details in the server implementation, see the files ``examples/echo.cc`` and ``examples/indexing.cc``.
@@ -107,7 +98,8 @@ In the example above, the ``my_server_handler`` is the function which receive th
 ## Limitations
 
 * You cannot have multiple header fields with the same name ([RFC-7230 3.2.2 Field order](https://tools.ietf.org/html/rfc7230#section-3.2.2))
-
+* The library do not handle header fields according to [RFC-7231 - Semantics and Content](https://tools.ietf.org/html/rfc7231).
+* Support for SSL/TLS communication is not provided natively. You need to specialize the ``Network`` class using a 3rd-party library (e.g. [mbedTLS](https://tls.mbed.org)).
 ## Roadmap
 
 * Documentation
