@@ -491,7 +491,7 @@ int main(int argc, char* argv[])
 	ctpl::thread_pool pool(4);
 
 	Parameters params;
-	params.read_timeout = 3000;
+	params.read_timeout = 20000;
 
 	HttpListener listener(main_serverHandler);
 	HttpServer server(params);

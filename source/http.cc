@@ -349,11 +349,11 @@ int HttpClient::communicate_local( const std::string &path, HttpListener &listen
     DataStream os(*client_, StreamType::OUTBOUND);
 	DataStream is(*client_, StreamType::INBOUND);
 
-	http_v1::MessageImpl request(os, WBMF_OUTBOUND | WBMF_REQUEST);
+	http_v1::MessageImpl request(os, nullptr, WBMF_OUTBOUND | WBMF_REQUEST);
 	int result = Target::parse(path, request.header.target);
 	if (result != WBERR_OK) return result;
 
-	http_v1::MessageImpl response(is, WBMF_INBOUND | WBMF_RESPONSE);
+	http_v1::MessageImpl response(is, &request, WBMF_INBOUND | WBMF_RESPONSE);
 	response.header.target = request.header.target;
 
 	result = listener(request, response);
@@ -370,13 +370,13 @@ int HttpClient::communicate_remote( HttpListener &listener )
     DataStream is(*client_, StreamType::INBOUND);
     DataStream os(*client_, StreamType::OUTBOUND);
 
-    http_v1::MessageImpl request(is, WBMF_INBOUND | WBMF_REQUEST);
+    http_v1::MessageImpl request(is, nullptr, WBMF_INBOUND | WBMF_REQUEST);
     int result = request.ready();
     if (result != WBERR_OK) return result;
 
     bool closing = request.header.fields.get(WBFI_CONNECTION) == "close";
 
-    http_v1::MessageImpl response(os, WBMF_OUTBOUND | WBMF_RESPONSE);
+    http_v1::MessageImpl response(os, &request, WBMF_OUTBOUND | WBMF_RESPONSE);
     response.header.target = request.header.target;
 
     result = listener(request, response);

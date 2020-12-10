@@ -42,7 +42,7 @@ enum State
 class MessageImpl : public Message
 {
     public:
-        MessageImpl( DataStream &stream, int flags = 0 );
+        MessageImpl( DataStream &stream, MessageImpl *link, int flags = 0 );
         ~MessageImpl();
         int read( uint8_t *buffer, int size );
         int read( char *buffer, int size );
@@ -77,6 +77,7 @@ class MessageImpl : public Message
         } body_;
         DataStream &stream_;
         char *line_;
+        MessageImpl *link_;
 
         int receive_header();
         /**
