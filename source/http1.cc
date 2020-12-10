@@ -177,7 +177,8 @@ int MessageImpl::parse_header_field( char *data )
 
 #undef IS_HFNC
 
-MessageImpl::MessageImpl( DataStream &stream, int flags ) : flags_(flags), stream_(stream)
+MessageImpl::MessageImpl( DataStream &stream, MessageImpl *link, int flags ) : flags_(flags),
+	stream_(stream), link_(link)
 {
     state_ = WBS_IDLE;
     body_.expected = body_.chunks = body_.flags = 0;
@@ -249,14 +250,15 @@ int MessageImpl::chunk_size()
 
 int MessageImpl::read( uint8_t *buffer, int size )
 {
-	int result = WBERR_OK;
-	if (state_ == WBS_IDLE)
-	{
-		result = receive_header();
-		if (result != WBERR_OK) return result;
-	}
-	if (state_ == WBS_COMPLETE) return WBERR_COMPLETE;
-	if (buffer == nullptr || size <= 0) return WBERR_INVALID_ARGUMENT;
+	// commit the HTTP header
+	int result = ready();
+	if (result != WBERR_OK)
+		return result;
+
+	if (state_ == WBS_COMPLETE)
+		return WBERR_COMPLETE;
+	if (buffer == nullptr || size <= 0)
+		return WBERR_INVALID_ARGUMENT;
 
 	// check whether we have more data do receive
 	if (body_.expected == 0)
@@ -347,13 +349,12 @@ int MessageImpl::read_all( std::string &buffer )
 
 int MessageImpl::ready()
 {
-	if (state_ != WBS_IDLE) return WBERR_OK;
-	if (IS_INBOUND(flags_))
-	{
-		int result = receive_header();
-		if (result != WBERR_OK) return result;
+	if (state_ != WBS_IDLE)
 		return WBERR_OK;
-	}
+	if (link_ != nullptr)
+		link_->finish();
+	if (IS_INBOUND(flags_))
+		return receive_header();
 	else
 		return write_header();
 }
@@ -476,16 +477,17 @@ int MessageImpl::write_header()
 
 int MessageImpl::write( const uint8_t *buffer, int size )
 {
-	if (state_ == WBS_IDLE)
-	{
-		int result = write_header();
-		if (result != WBERR_OK) return result;
-	}
-	if (buffer == nullptr || size == 0) return WBERR_OK;
+	// commit the HTTP header
+	int result = ready();
+	if (result != WBERR_OK)
+		return result;
 
-	int result = WBERR_OK;
+	if (buffer == nullptr || size == 0)
+		return WBERR_OK;
+
 	if (body_.flags && WBMF_CHUNKED)
 	{
+		// start a new chunk
 		char temp[16];
 		SNPRINTF(temp, sizeof(temp)-1, "%X\r\n", size);
 		temp[15] = 0;
@@ -529,11 +531,13 @@ int MessageImpl::flush()
 
 int MessageImpl::finish()
 {
-	if (state_ == WBS_COMPLETE) return WBERR_OK;
-	if (IS_INBOUND(flags_)) return discard();
+	if (state_ == WBS_COMPLETE)
+		return WBERR_OK;
+	if (IS_INBOUND(flags_))
+		return discard();
 	int result;
 
-	// force headers to be written
+	// receive/commit headers
 	if (state_ == WBS_IDLE)
 	{
 		result = ready();
