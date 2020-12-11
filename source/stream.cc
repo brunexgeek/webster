@@ -15,14 +15,11 @@
  *   limitations under the License.
  */
 
-#include <webster.hh>
 #include <cstring>
 #include <iostream>
 
-#ifndef WEBSTER_AMALGAMATION
-#include "stream.hh"
-#include "network.hh"
-#endif
+#include "stream.hh"  // AUTO-REMOVE
+#include "network.hh" // AUTO-REMOVE
 
 namespace webster {
 
@@ -98,10 +95,8 @@ int DataStream::read( uint8_t *buffer, int size )
 	if (start_ < current_)
 	{
 		int fit = std::min((int) (current_ - start_), size);
-		std::cerr << "Getting " << fit << " bytes from internal buffer\n";
 		memcpy(buffer, start_, fit);
 		start_ += fit;
-		std::cerr << "Remaining bytes: " << (current_ - start_) << '\n';
 		if (start_ == current_)
 			start_ = current_ = data_;
 		return fit;

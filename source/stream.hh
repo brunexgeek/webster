@@ -52,17 +52,13 @@ class DataStream
 			std::string str = std::to_string(value);
 			return write(str);
 		}
-		/**
-		 * Read up to 'size' bytes from the channel.
-		 *
-		 * @returns Positive number of bytes read or negativa error code.
-		 */
 		int read( uint8_t *data, int size );
         int read_line( char *data, int size );
         int pending() const;
         int flush();
 		const Parameters &get_parameters() const;
 		const Client &get_client();
+
 	protected:
 		int pending_;
 		Client &client_;

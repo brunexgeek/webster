@@ -18,7 +18,7 @@
 #ifndef WEBSTER_NETWORK_HH
 #define WEBSTER_NETWORK_HH
 
-#include <webster.hh>
+#include <webster.hh> // AUTO-REMOVE
 
 namespace webster {
 

@@ -18,11 +18,8 @@
 #ifndef WEBSTER_HTTP1_HH
 #define WEBSTER_HTTP1_HH
 
-#include <webster.hh>
-
-#ifndef WEBSTER_AMALGAMATION
-#include "stream.hh"
-#endif
+#include <webster.hh> // AUTO-REMOVE
+#include "stream.hh"  // AUTO-REMOVE
 
 const int WBMF_INBOUND  = 1;
 const int WBMF_OUTBOUND = 0;
@@ -80,9 +77,6 @@ class MessageImpl : public Message
         MessageImpl *link_;
 
         int receive_header();
-        /**
-         * Update `body_.expected` with the size of the next chunk.
-         */
         int chunk_size();
         int write_header();
         int write_resource_line();

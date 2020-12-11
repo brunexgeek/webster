@@ -17,12 +17,12 @@
 
 #include <webster.hh>
 
-#ifndef WEBSTER_AMALGAMATION
-#include "http.hh"
-#include "http1.hh"
-#include "stream.hh"
-#include "network.hh"
-#endif
+
+#include "http.hh"    // AUTO-REMOVE
+#include "http1.hh"   // AUTO-REMOVE
+#include "stream.hh"  // AUTO-REMOVE
+#include "network.hh" // AUTO-REMOVE
+
 
 namespace webster {
 

@@ -4,7 +4,7 @@ Lightweight library to create HTTP servers and clients in C++11. It implements t
 
 Webster enables you to communicate with HTTP servers or implement your own HTTP server. It automatically parses requests and also simplify creating responses. The input/output body data is handled as a stream: to transmit data, you call write functions; to receive data, you call read functions. This enables you to handle large amounts of data using small buffers.
 
-To use Webster you can link with `libwebster` static library or include the files ``webster.cc`` and ``webster.hh`` in your project. The file ``webster.cc`` is an almagamation of the files contained in the ``source`` directory.
+To use Webster you can link with `libwebster` static library or include the files ``webster.cc`` and ``webster.hh`` in your project. The file ``webster.cc`` is an amalgamation of the files in the ``source`` directory.
 
 The repository also includes three programs in the ``examples`` directory:
 

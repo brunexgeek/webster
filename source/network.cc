@@ -18,10 +18,8 @@
 #include <chrono>
 #include <cstring>
 
-#ifndef WEBSTER_AMALGAMATION
-#include "network.hh"
-#include "socket.hh"
-#endif
+#include "network.hh"  // AUTO-REMOVE
+#include "socket.hh"   // AUTO-REMOVE
 
 namespace webster {
 

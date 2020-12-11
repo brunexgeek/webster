@@ -20,12 +20,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef WEBSTER_AMALGAMATION
-#include "stream.hh"
-#include "http.hh"
-#include "network.hh"
-#include "http1.hh"
-#endif
+#include "stream.hh"  // AUTO-REMOVE
+#include "http.hh"    // AUTO-REMOVE
+#include "network.hh" // AUTO-REMOVE
+#include "http1.hh"   // AUTO-REMOVE
 
 #ifdef WB_WINDOWS
 #include <windows.h>

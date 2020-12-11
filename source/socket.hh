@@ -17,7 +17,7 @@
 #if !defined(WEBSTER_NO_DEFAULT_NETWORK) && !defined(WEBSTER_SOCKET_HH)
 #define WEBSTER_SOCKET_HH
 
-#include <webster.hh>
+#include <webster.hh> // AUTO-REMOVE
 
 namespace webster {
 

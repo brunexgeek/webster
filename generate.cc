@@ -1,13 +1,49 @@
+/*
+ *   Copyright 2020 Bruno Ribeiro
+ *   <https://github.com/brunexgeek/webster>
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 #include <cstring>
 #include <string>
 #include <iostream>
 #include <fstream>
+
+static const char *LICENSE =
+"/*\n"
+" *   Copyright 2020 Bruno Ribeiro\n"
+" *   <https://github.com/brunexgeek/webster>\n"
+" *\n"
+" *   Licensed under the Apache License, Version 2.0 (the \"License\");\n"
+" *   you may not use this file except in compliance with the License.\n"
+" *   You may obtain a copy of the License at\n"
+" *\n"
+" *       http://www.apache.org/licenses/LICENSE-2.0\n"
+" *\n"
+" *   Unless required by applicable law or agreed to in writing, software\n"
+" *   distributed under the License is distributed on an \"AS IS\" BASIS,\n"
+" *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n"
+" *   See the License for the specific language governing permissions and\n"
+" *   limitations under the License.\n"
+" */\n";
 
 static void process( const std::string &content, std::ostream &out )
 {
     bool is_comment = false;
     bool is_string = false;
     const char *s = content.c_str();
+    std::string line;
 
     while (*s != 0)
     {
@@ -32,21 +68,35 @@ static void process( const std::string &content, std::ostream &out )
             if (!is_string && *s == '/' && *(s+1) == '/')
             {
                 s += 2;
-                while (*s != 0 && *s != '\n') ++s;
+                std::string value;
+                while (*s != 0 && *s != '\n') value += *s++;
+                if (value.find("AUTO-REMOVE") != std::string::npos)
+                    line.clear();
             }
             else
             if (*s == '"')
             {
                 is_string = !is_string;
-                out << *s++;
+                line += *s++;
             }
             else
             if (*s == '\r')
                 ++s;
             else
-                out << *s++;
+            if (*s == '\n')
+            {
+                if (line.find("<webster.hh>") != std::string::npos)
+                    out << "#include \"webster.hh\"\n";
+                else
+                    out << line << '\n';
+                line.clear();
+                ++s;
+            }
+            else
+                line += *s++;
         }
     }
+    if (!line.empty()) out << line;
 }
 
 static std::string read_file( const std::string &path )
@@ -72,6 +122,7 @@ int main( int argc, char **argv )
     std::ofstream output(argv[1], std::ios_base::ate);
     if (!output.good()) return 1;
     std::cerr << "Writing to " << argv[1] << std::endl;
+    output << LICENSE << "\n// Auto-generated file\n";
 
     for (int i = 2; i < argc; ++i)
     {
