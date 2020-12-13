@@ -17,12 +17,10 @@
 
 #include <webster.hh>
 
-
 #include "http.hh"    // AUTO-REMOVE
 #include "http1.hh"   // AUTO-REMOVE
 #include "stream.hh"  // AUTO-REMOVE
 #include "network.hh" // AUTO-REMOVE
-
 
 namespace webster {
 

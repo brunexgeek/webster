@@ -23,14 +23,22 @@ endif()
 
 if (UNIX)
     set(ENABLE_PROFILING OFF CACHE BOOL "")
+    set(ENABLE_SANITIZER OFF CACHE BOOL "")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wfatal-errors -fvisibility=hidden -pedantic -Wl,--no-undefined -fPIC -Wall -Wextra -Wconversion -Werror=return-type")
+
     if (ENABLE_PROFILING)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
-        set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} -g -O3")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3")
     else()
-        set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE} -s -O3")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s -O3")
     endif()
+
     set(CMAKE_CXX_FLAGS_DEBUG     "${CMAKE_C_FLAGS_DEBUG} -g -O0")
+
+    if (ENABLE_SANITIZER)
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fsanitize=address")
+    endif()
 endif()
 
 add_library(libwebster STATIC

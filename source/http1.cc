@@ -39,8 +39,6 @@
 
 const int WBMF_CHUNKED  = 1;
 
-#define HTTP_LINE_LENGTH 4096
-
 #define WB_IS_VALID_METHOD(x)  ( (x) >= WBM_GET && (x) <= WBM_PATCH )
 
 namespace webster {
@@ -180,35 +178,36 @@ MessageImpl::MessageImpl( DataStream &stream, MessageImpl *link, int flags ) : f
 {
     state_ = WBS_IDLE;
     body_.expected = body_.chunks = body_.flags = 0;
-    line_ = new(std::nothrow) char[HTTP_LINE_LENGTH];
+    buffer_ = new(std::nothrow) char[stream.get_parameters().buffer_size];
 }
 
 MessageImpl::~MessageImpl()
 {
-    delete[] line_;
+    delete[] buffer_;
 }
 
 int MessageImpl::receive_header()
 {
 	if (state_ != WBS_IDLE || IS_OUTBOUND(flags_))
 		return WBERR_INVALID_STATE;
-	if (line_ == nullptr)
+	if (buffer_ == nullptr)
 		return WBERR_MEMORY_EXHAUSTED;
 
 	// Note: To ensure a hard timeout and prevent 'slow read' attacks, the complete header
 	//       must be received before the read timeout expires.
 
 	int timeout = stream_.get_parameters().read_timeout;
+	int size = stream_.get_parameters().buffer_size;
 	bool first = true;
 	auto start = tick();
 	do
 	{
-		int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
+		int result = stream_.read_line(buffer_, size);
 		if (result != WBERR_OK) return result;
 
-		if (*line_ != 0)
+		if (*buffer_ != 0)
 		{
-			result = (first) ? parse_first_line(line_) : parse_header_field(line_);
+			result = (first) ? parse_first_line(buffer_) : parse_header_field(buffer_);
 			if (result != WBERR_OK) return result;
 		}
 		else
@@ -226,18 +225,19 @@ int MessageImpl::receive_header()
 
 int MessageImpl::chunk_size()
 {
+	int size = stream_.get_parameters().buffer_size;
 	char *ptr = nullptr;
 	// discard the previous chunk terminator
 	if (body_.chunks > 0)
 	{
-		int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
+		int result = stream_.read_line(buffer_, size);
 		if (result != WBERR_OK) return result;
-		if (*line_ != 0) return WBERR_INVALID_CHUNK;
+		if (*buffer_ != 0) return WBERR_INVALID_CHUNK;
 	}
 	// read the next chunk size
-	int result = stream_.read_line(line_, HTTP_LINE_LENGTH);
+	int result = stream_.read_line(buffer_, size);
 	if (result != WBERR_OK) return result;
-	auto count = strtol(line_, &ptr, 16);
+	auto count = strtol(buffer_, &ptr, 16);
 	if (*ptr != 0) return WBERR_INVALID_CHUNK;
 	++body_.chunks;
 	body_.expected = (int) count;
@@ -302,9 +302,10 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 	buffer.clear();
 
 	int count = 0;
+	int size = stream_.get_parameters().buffer_size;
 	while (true)
 	{
-		result = read(line_, HTTP_LINE_LENGTH);
+		result = read(buffer_, size);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -315,7 +316,7 @@ int MessageImpl::read_all( std::vector<uint8_t> &buffer )
 		if (result > 0)
 		{
 			buffer.resize(buffer.size() + result);
-			std::copy(line_, line_ + result, buffer.data() + count);
+			std::copy(buffer_, buffer_ + result, buffer.data() + count);
 			count += result;
 		}
 	}
@@ -328,10 +329,11 @@ int MessageImpl::read_all( std::string &buffer )
 	if (result != WBERR_OK) return result;
 	buffer.clear();
 
+	int size = stream_.get_parameters().buffer_size;
 	while (true)
 	{
-		*line_ = 0;
-		result = read(line_, HTTP_LINE_LENGTH);
+		*buffer_ = 0;
+		result = read(buffer_, size);
 		if (result < 0)
 		{
 			if (result == WBERR_COMPLETE) break;
@@ -340,7 +342,7 @@ int MessageImpl::read_all( std::string &buffer )
 		}
 		else
 		if (result > 0)
-			buffer += line_;
+			buffer += buffer_;
 	}
 	return WBERR_OK;
 }
@@ -369,7 +371,8 @@ int MessageImpl::discard()
 	// TODO: implement a better way to discard bytes instead of copying to some buffer
 
 	// discard body data
-	while ((result = read((uint8_t*)line_, HTTP_LINE_LENGTH)) >= 0);
+	int size = stream_.get_parameters().buffer_size;
+	while ((result = read((uint8_t*)buffer_, size)) >= 0);
 	if (result == WBERR_COMPLETE) return WBERR_OK;
 	return result;
 }

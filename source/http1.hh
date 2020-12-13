@@ -73,7 +73,7 @@ class MessageImpl : public Message
             int flags;
         } body_;
         DataStream &stream_;
-        char *line_;
+        char *buffer_;
         MessageImpl *link_;
 
         int receive_header();

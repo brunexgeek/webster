@@ -290,26 +290,26 @@ void Target::clear()
 static void fix_parameters( Parameters &params )
 {
 	if (params.max_clients <= 0)
-		params.max_clients = WBL_DEF_CONNECTIONS;
+		params.max_clients = 1;
 	else
 	if (params.max_clients > WBL_MAX_CONNECTIONS)
 		params.max_clients = WBL_MAX_CONNECTIONS;
 
-	if (params.buffer_size == 0)
-		params.buffer_size = WBL_DEF_BUFFER_SIZE;
+	if (params.buffer_size < WBL_MIN_BUFFER_SIZE)
+		params.buffer_size = WBL_MIN_BUFFER_SIZE;
 	else
 	if (params.buffer_size > WBL_MAX_BUFFER_SIZE)
 		params.buffer_size = WBL_MAX_BUFFER_SIZE;
-	params.buffer_size = (uint32_t) (params.buffer_size + 3) & (uint32_t) (~3);
+	params.buffer_size = (params.buffer_size + 3) & (uint32_t) (~3);
 
-	if (params.read_timeout < 0)
-		params.read_timeout = WBL_DEF_TIMEOUT;
+	if (params.read_timeout <= 0)
+		params.read_timeout = 1;
 	else
 	if (params.read_timeout > WBL_MAX_TIMEOUT)
 		params.read_timeout = WBL_MAX_TIMEOUT;
 
-	if (params.write_timeout < 0)
-		params.write_timeout = WBL_DEF_TIMEOUT;
+	if (params.write_timeout <= 0)
+		params.write_timeout = 1;
 	else
 	if (params.write_timeout > WBL_MAX_TIMEOUT)
 		params.write_timeout = WBL_MAX_TIMEOUT;
