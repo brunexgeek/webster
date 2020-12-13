@@ -112,7 +112,9 @@ struct EchoListener : public webster::HttpListener
 		{
 			response << "<tr><td>" << item.first << "</td><td>" << item.second << "</td></tr>";
 		}
-		response << "</body></table></html>";
+		std::string data;
+		request.read_all(data);
+		response << "</table></body>" << "<b>Body (" << data.length() << " bytes):</b>" << data << "</html>";
 		return WBERR_OK;
 	}
 };
@@ -140,7 +142,9 @@ int main(int argc, char* argv[])
 
 	printf(PROGRAM_TITLE "\n");
 
-	HttpServer server;
+	Parameters params;
+	//params.buffer_size = 88;
+	HttpServer server(params);
 	if (server.start("http://localhost:7000") == WBERR_OK)
 	{
 		EchoListener listener;

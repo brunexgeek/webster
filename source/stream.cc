@@ -16,17 +16,16 @@
  */
 
 #include <cstring>
-#include <iostream>
 
 #include "stream.hh"  // AUTO-REMOVE
 #include "network.hh" // AUTO-REMOVE
 
 namespace webster {
 
-DataStream::DataStream( Client &client, StreamType type ) : pending_(0),
-	client_(client), type_(type)
+DataStream::DataStream( Client &client, StreamType type ) : client_(client),
+	type_(type), count_(0)
 {
-	data_ = current_ = start_ = new(std::nothrow) uint8_t[client_.get_parameters().buffer_size];
+	data_ = new(std::nothrow) uint8_t[client_.get_parameters().buffer_size];
 }
 
 DataStream::~DataStream()
@@ -49,7 +48,7 @@ int DataStream::write( const uint8_t *buffer, int size )
 	int result = WBERR_OK;
 
 	// send all data that doesn't fits the internal buffer with some room
-	int fit = params.buffer_size - (int)(current_ - data_);
+	int fit = params.buffer_size - count_;
 	if (size >= fit)
 	{
 		flush();
@@ -64,8 +63,8 @@ int DataStream::write( const uint8_t *buffer, int size )
 	// copy the remaining data to the internal buffer
 	if (size > 0)
 	{
-		memcpy(current_, buffer, (size_t) size);
-		current_ += size;
+		memcpy(data_ + count_, buffer, (size_t) size);
+		count_ += size;
 	}
 
 	return result;
@@ -92,13 +91,14 @@ int DataStream::read( uint8_t *buffer, int size )
 		return WBERR_READ_ONLY;
 
 	// check whether there's any buffered data
-	if (start_ < current_)
+	if (count_ > 0)
 	{
-		int fit = std::min((int) (current_ - start_), size);
-		memcpy(buffer, start_, fit);
-		start_ += fit;
-		if (start_ == current_)
-			start_ = current_ = data_;
+		int fit = std::min(count_, size);
+		memcpy(buffer, data_, fit);
+		count_ -= fit;
+		// move the remaining data to the start of the internal buffer
+		if (count_ > 0)
+			memmove(data_, data_ + fit, count_);
 		return fit;
 	}
 
@@ -113,58 +113,59 @@ int DataStream::read_line( char *buffer, int size )
 {
 	if (type_ != StreamType::INBOUND)
 		return WBERR_READ_ONLY;
-	if (buffer == nullptr || size < 2)
+	if (buffer == nullptr || size < 1)
 		return WBERR_INVALID_ARGUMENT;
 
-	char *p = buffer;
-	uint8_t c, v = 0;
 	auto &params = client_.get_parameters();
-
-	// TODO: limit the line length
 
 	do
 	{
-		// fill the internal buffer
-		if (start_ == current_)
+		// looks for the line delimiter
+		if (count_ > 0)
 		{
-			start_ = data_;
-			int read = 0;
-			int result = params.network->receive(client_.get_channel(), data_, params.buffer_size, &read, params.read_timeout);
+			data_[count_] = 0;
+			const uint8_t *p = (const uint8_t*) strstr( (const char*) data_, "\r\n");
+			if (p != nullptr)
+			{
+				int len = (int) (p - data_);
+				if (len > size - 1) return WBERR_TOO_LONG;
+				// copy the line
+				memcpy(buffer, data_, len);
+				buffer[len] = 0;
+				count_ -= len + 2;
+				// move the remaining data to the start of the internal buffer
+				memmove(data_, p + 2, count_);
+				data_[count_] = 0;
+				return WBERR_OK;
+			}
+		}
+		// fill the internal buffer
+		if (count_ < params.buffer_size)
+		{
+			int bytes = (int) (params.buffer_size - count_) - 1;
+			if (bytes == 0) return WBERR_TOO_LONG;
+
+			int result = params.network->receive(client_.get_channel(), data_ + count_, bytes, &bytes, params.read_timeout);
 			if (result != WBERR_OK)
 			{
 				*buffer = 0;
 				return result;
 			}
-			current_ = data_ + read;
+
+			count_ += bytes;
 		}
-
-		c = *start_++;
-		if (c == '\r') continue;
-		if (c == '\n') break;
-		*p = (char) (v = c);
-		++p;
-	} while (p < buffer + size - 1);
-	*p = 0;
-
-	if (c != '\n') return WBERR_TOO_LONG;
-
-	return WBERR_OK;
-}
-
-int DataStream::pending() const
-{
-	return pending_;
+	} while (true);
 }
 
 int DataStream::flush()
 {
 	// send all remaining body data
-	if (type_ == StreamType::OUTBOUND && current_ > data_)
+	if (type_ == StreamType::OUTBOUND && count_ > 0)
 	{
 		auto &params = client_.get_parameters();
-		int size = (int) (current_ - data_);
-		params.network->send(client_.get_channel(), data_, size, params.write_timeout);
-		current_ = data_;
+		int result = params.network->send(client_.get_channel(), data_, count_, params.write_timeout);
+		if (result != WBERR_OK) return result;
+		count_ = 0;
 	}
 	return WBERR_OK;
 }

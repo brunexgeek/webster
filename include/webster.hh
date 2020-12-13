@@ -283,7 +283,7 @@ struct Parameters
      * Size (in bytes) of the message internal output buffer. The default value
      * is WBL_DEF_BUFFER_SIZE.
      */
-    uint32_t buffer_size;
+    int buffer_size;
 
     /**
      * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
