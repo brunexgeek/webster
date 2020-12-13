@@ -84,32 +84,47 @@ set_target_properties(generate_tool PROPERTIES
     OUTPUT_NAME "generate_tool"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 
-set(WEBSTER_CC "${CMAKE_BINARY_DIR}/webster.cc")
-set(FILE_LIST
+set(BASIC_HEADERS
     "${CMAKE_CURRENT_LIST_DIR}/source/stream.hh"
     "${CMAKE_CURRENT_LIST_DIR}/source/http.hh"
     "${CMAKE_CURRENT_LIST_DIR}/source/http1.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/source/socket.hh"
-    "${CMAKE_CURRENT_LIST_DIR}/source/network.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/source/network.hh")
+set(BASIC_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/source/stream.cc"
     "${CMAKE_CURRENT_LIST_DIR}/source/http.cc"
     "${CMAKE_CURRENT_LIST_DIR}/source/http1.cc"
-    "${CMAKE_CURRENT_LIST_DIR}/source/socket.cc"
     "${CMAKE_CURRENT_LIST_DIR}/source/network.cc")
+set(FULL_HEADERS
+    ${BASIC_HEADERS}
+    "${CMAKE_CURRENT_LIST_DIR}/source/socket.hh")
+set(FULL_SOURCES
+    ${BASIC_SOURCES}
+    "${CMAKE_CURRENT_LIST_DIR}/source/socket.cc")
 
+set(WEBSTER_CC "${CMAKE_BINARY_DIR}/webster.cc")
+set(WEBSTER_NOSOCKET_CC "${CMAKE_BINARY_DIR}/webster-no-socket.cc")
 add_custom_target(generate
-    COMMAND "./generate_tool" ${WEBSTER_CC} ${FILE_LIST}
+    COMMAND "./generate_tool" ${WEBSTER_CC} ${FULL_HEADERS} ${FULL_SOURCES}
+    COMMAND "./generate_tool" -DWEBSTER_NO_DEFAULT_NETWORK ${WEBSTER_NOSOCKET_CC} ${BASIC_HEADERS} ${BASIC_SOURCES}
     DEPENDS libwebster generate_tool)
 
 file(APPEND ${WEBSTER_CC} "")
+file(APPEND ${WEBSTER_NOSOCKET_CC} "")
 
 add_library(libwebster_generated STATIC ${WEBSTER_CC})
-target_compile_definitions(libwebster_generated PRIVATE BUILDING_WEBSTER=1 WEBSTER_AMALGAMATION=1)
+target_compile_definitions(libwebster_generated PRIVATE BUILDING_WEBSTER=1)
 target_include_directories(libwebster_generated PUBLIC "include")
 add_dependencies(libwebster_generated generate)
 set_target_properties(libwebster_generated PROPERTIES
     OUTPUT_NAME "webster_generated"
-    VERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
-    SOVERSION "${WEBSTER_MAJOR_VERSION}.${WEBSTER_MINOR_VERSION}.${WEBSTER_PATCH_VERSION}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    PREFIX "lib" )
+
+add_library(libwebster_generated_no_socket STATIC ${WEBSTER_NOSOCKET_CC})
+target_compile_definitions(libwebster_generated_no_socket PRIVATE BUILDING_WEBSTER=1)
+target_include_directories(libwebster_generated_no_socket PUBLIC "include")
+add_dependencies(libwebster_generated_no_socket generate)
+set_target_properties(libwebster_generated_no_socket PROPERTIES
+    OUTPUT_NAME "libwebster_generated_no_socket"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     PREFIX "lib" )

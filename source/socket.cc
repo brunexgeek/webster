@@ -1,3 +1,5 @@
+#ifndef WEBSTER_NO_DEFAULT_NETWORK
+
 #include "socket.hh"  // AUTO-REMOVE
 
 #ifdef WB_WINDOWS
@@ -406,3 +408,5 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 }
 
 } // namespace webster
+
+#endif // !WEBSTER_NO_DEFAULT_NETWORK

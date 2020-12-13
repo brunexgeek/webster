@@ -19,6 +19,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <list>
 
 static const char *LICENSE =
 "/*\n"
@@ -119,15 +120,35 @@ int main( int argc, char **argv )
 {
     if (argc < 3) return 1;
 
-    std::ofstream output(argv[1], std::ios_base::ate);
-    if (!output.good()) return 1;
-    std::cerr << "Writing to " << argv[1] << std::endl;
-    output << LICENSE << "\n// Auto-generated file\n";
-
-    for (int i = 2; i < argc; ++i)
+    std::list<std::string> defs;
+    std::list<std::string> files;
+    std::string path;
+    for (int i = 1; i < argc; ++i)
     {
-        process(read_file(argv[i]), output);
+        if (argv[i][0] == '-' && argv[i][1] == 'D')
+            defs.push_back(argv[i] + 2);
+        else
+        {
+            if (path.empty())
+                path = argv[i];
+            else
+                files.push_back(argv[i]);
+        }
     }
+
+    //std::cerr << "Path: " << path << std::endl;
+    //for (std::string &value : defs) std::cerr << "Definition: " << value << std::endl;
+    //for (std::string &value : files) std::cerr << "File: " << value << std::endl;
+
+    std::ofstream output(path, std::ios_base::ate);
+    if (!output.good()) return 1;
+    std::cerr << "Writing to " << path << std::endl;
+
+    output << LICENSE << "\n// Auto-generated file\n";
+    for (std::string &def : defs)
+        output << "#define " << def << '\n';
+    for (std::string &path : files)
+        process(read_file(path), output);
 
     return 0;
 }

@@ -23,7 +23,9 @@
 
 namespace webster {
 
+#ifndef WEBSTER_NO_DEFAULT_NETWORK
 extern std::shared_ptr<SocketNetwork> DEFAULT_NETWORK;
+#endif
 
 uint64_t tick()
 {
@@ -420,7 +422,7 @@ int Client::connect( const Target &target )
 	if (channel_) return WBERR_ALREADY_CONNECTED;
 	if (type_ == WBCT_REMOTE) return WBERR_NOT_IMPLEMENTED; // TODO: use better code
 	#ifdef WEBSTER_NO_DEFAULT_NETWORK
-	if (!params->network) return WBERR_INVALID_ARGUMENT;
+	if (!params_.network) return WBERR_INVALID_ARGUMENT;
 	#endif
 
 	// try to connect with the remote host
