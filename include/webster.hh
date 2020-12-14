@@ -31,11 +31,13 @@
 #include <string>
 #include <type_traits>
 
+/// Operation completed with success.
 const int WBERR_OK                   = 0;
 const int WBERR_INVALID_ARGUMENT     = -1;
 const int WBERR_MEMORY_EXHAUSTED     = -2;
 const int WBERR_INVALID_ADDRESS      = -3;
 const int WBERR_SOCKET               = -4;
+/// The communication was completed with success and the connection will be closed.
 const int WBERR_COMPLETE             = -6;
 const int WBERR_TOO_LONG             = -7;
 const int WBERR_TIMEOUT              = -11;
@@ -312,7 +314,9 @@ enum Protocol
 
 enum ClientType
 {
+    /// Client used to connect to a remote host.
     WBCT_LOCAL,
+    /// Client trying to connect the server.
     WBCT_REMOTE,
 };
 
@@ -509,7 +513,17 @@ class HttpListener
         HttpListener( HttpListener && ) = default;
         HttpListener( std::function<int(Message&,Message&)> );
         HttpListener( int (&func)(Message&,Message&) );
-        virtual int operator()(Message&, Message&);
+        /**
+         * Perform an HTTP comunication between client and server.
+         *
+         * For local clients, the listener must generate a request and process the response.
+         * For remote clients, the listener must process the request and generate a response.
+         *
+         * @param request Request messages.
+         * @param response Response messages.
+         * @return WBERR_OK or WBERR_COMPLETE in case of success. An error code otherwhise.
+         */
+        virtual int operator()(Message &request, Message &response);
     protected:
         std::function<int(Message&,Message&)> func_;
 };
@@ -521,13 +535,68 @@ class HttpClient
     public:
         HttpClient( ClientType type = WBCT_LOCAL, Client *client = nullptr );
         ~HttpClient();
+        /**
+         * Connect to a remote host.
+         *
+         * @param url URL to the remote host.
+         * @param params Network parameters.
+         * @return WBERR_OK in case of success. An error code otherwhise.
+         */
         int open( const char *url, const Parameters &params = Parameters() );
+        /**
+         * Connect to a remote host.
+         *
+         * @param url URL to the remote host.
+         * @param params Network parameters.
+         * @return WBERR_OK in case of success. An error code otherwhise.
+         */
         int open( const Target &url, const Parameters &params = Parameters() );
+        /**
+         * Close the connection with the HTTP server.
+         *
+         * @return WBERR_OK in case of success. An error code otherwhise.
+         */
         int close();
+        /**
+         * Perform an HTTP comunication between client and server.
+         *
+         * If this is a local client, the listener must generate a request and process the response.
+         * If this is a remote client, the listener must process the request and generate a response.
+         *
+         * The path to the resource is obtained from the connection URL.
+         *
+         * @param listener Listener to process the messages.
+         * @return WBERR_OK or WBERR_COMPLETE in case of success. An error code otherwhise.
+         */
         int communicate( HttpListener &listener );
+        /**
+         * Perform an HTTP comunication between client and server.
+         *
+         * If this is a local client, the listener must generate a request and process the response.
+         * If this is a remote client, the listener must process the request and generate a response.
+         *
+         * @param path Path to the resource.
+         * @param listener Listener to process the messages.
+         * @return WBERR_OK or WBERR_COMPLETE in case of success. An error code otherwhise.
+         */
         int communicate( const std::string &path, HttpListener &listener );
+        /**
+         * Returns the protocol implemented by the client.
+         *
+         * @return Protocol code.
+         */
         Protocol get_protocol() const;
+        /**
+         * Returns the pointer to the internal client object.
+         *
+         * @return Pointer to client object. If the client is not connected, returns nullptr.
+         */
         Client *get_client();
+        /**
+         * Returns the client type;
+         *
+         * @returns WBCT_LOCAL for local client or WBCT_REMOTE for remote client.
+         */
         ClientType get_type() const;
 
     protected:

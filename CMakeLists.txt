@@ -125,6 +125,6 @@ target_compile_definitions(libwebster_generated_no_socket PRIVATE BUILDING_WEBST
 target_include_directories(libwebster_generated_no_socket PUBLIC "include")
 add_dependencies(libwebster_generated_no_socket generate)
 set_target_properties(libwebster_generated_no_socket PROPERTIES
-    OUTPUT_NAME "libwebster_generated_no_socket"
+    OUTPUT_NAME "webster_generated_no_socket"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     PREFIX "lib" )
