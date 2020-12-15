@@ -150,7 +150,7 @@ SocketNetwork::SocketNetwork()
 int SocketNetwork::set_non_blocking( Channel *channel )
 {
 	SocketChannel *chann = (SocketChannel*) channel;
-#ifdef _WIN32
+#ifdef WB_WINDOWS
 	u_long flags = 1;
 	int result = ioctlsocket(chann->socket, FIONBIO, &flags);
 #else
