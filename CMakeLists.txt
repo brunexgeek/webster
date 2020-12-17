@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8)
 
 set(WEBSTER_MAJOR_VERSION 2)
 set(WEBSTER_MINOR_VERSION 0)
-set(WEBSTER_PATCH_VERSION 0)
+set(WEBSTER_PATCH_VERSION 1)
 
 set(LIBRARY_TYPE "SHARED" CACHE STRING "Specify the type of binary to be generated")
 set_property(CACHE LIBRARY_TYPE PROPERTY STRINGS "STATIC" "SHARED")
