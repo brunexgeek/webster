@@ -304,6 +304,7 @@ struct Parameters
 
     Parameters();
     Parameters( const Parameters &that );
+    Parameters &operator=( const Parameters &that );
 };
 
 enum Protocol

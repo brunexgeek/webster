@@ -341,6 +341,17 @@ Parameters::Parameters( const Parameters &that )
 	fix_parameters(*this);
 }
 
+Parameters &Parameters::operator=( const Parameters &that )
+{
+    network = that.network;
+    max_clients = that.max_clients;
+    buffer_size = that.buffer_size;
+    read_timeout = that.read_timeout;
+    write_timeout = that.write_timeout;
+    connect_timeout = that.connect_timeout;
+	return *this;
+}
+
 Server::Server() : channel_(nullptr)
 {
 }
