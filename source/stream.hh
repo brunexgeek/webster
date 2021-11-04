@@ -59,6 +59,7 @@ class DataStream
 		uint8_t *data_;
 		StreamType type_;
 		int count_; // amount of data in the buffer
+		int bufsize_;
 };
 
 } // namespace 'webster'
