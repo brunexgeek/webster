@@ -110,12 +110,15 @@ struct SocketChannel : public Channel
 	struct pollfd poll;
 };
 
-struct addrdel
+struct addrinfo_container
 {
-	void operator()( addrinfo *ptr ) { freeaddrinfo(ptr); };
+	struct addrinfo *ptr;
+
+	addrinfo_container( struct addrinfo *ptr ) : ptr(ptr) {}
+	~addrinfo_container() { if (ptr) freeaddrinfo(ptr); };
 };
 
-static std::shared_ptr<addrinfo[]> resolve( const char *host )
+static struct addrinfo* resolve( const char *host )
 {
 	if (host == nullptr || *host == 0) host = "127.0.0.1";
 
@@ -128,7 +131,7 @@ static std::shared_ptr<addrinfo[]> resolve( const char *host )
 	int result = getaddrinfo(host, nullptr, &aiHints, &aiInfo);
 	if (result != 0) return nullptr;
     // copy address information
-    return std::shared_ptr<addrinfo[]>(aiInfo, addrdel());
+    return aiInfo;
 }
 
 SocketNetwork::SocketNetwork()
@@ -230,9 +233,9 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	auto addrs = resolve(host);
+	addrinfo_container addrs(resolve(host));
 	addrinfo *addr = nullptr;
-	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
+	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
 
 	sockaddr_in address;
@@ -388,9 +391,9 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	auto addrs = resolve(host);
+	addrinfo_container addrs(resolve(host));
 	addrinfo *addr = nullptr;
-	for (addr = addrs.get(); addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
+	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
 
 	sockaddr_in address;

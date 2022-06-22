@@ -15,8 +15,8 @@
  *   limitations under the License.
  */
 
-#include <webster.hh>
 
+#include <webster.hh> // AUTO-REMOVE
 #include "http.hh"    // AUTO-REMOVE
 #include "http1.hh"   // AUTO-REMOVE
 #include "stream.hh"  // AUTO-REMOVE
