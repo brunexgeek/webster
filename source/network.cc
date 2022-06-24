@@ -110,6 +110,20 @@ std::string Target::encode( const std::string &input )
 	return out;
 }
 
+int Target::parse_url( const char *url )
+{
+	int result = Target::parse(url, *this);
+	if (result != WBERR_OK) clear();
+	return result;
+}
+
+int Target::parse_url( const std::string &url )
+{
+	int result = Target::parse(url, *this);
+	if (result != WBERR_OK) clear();
+	return result;
+}
+
 int Target::parse( const char *url, Target &target )
 {
     if (url == nullptr || url[0] == 0) return WBERR_INVALID_TARGET;
