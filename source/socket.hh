@@ -1,5 +1,5 @@
 /*
- *   Copyright 2020 Bruno Ribeiro
+ *   Copyright 2016-2022 Bruno Ribeiro
  *   <https://github.com/brunexgeek/webster>
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+
 #if !defined(WEBSTER_NO_DEFAULT_NETWORK) && !defined(WEBSTER_SOCKET_HH)
 #define WEBSTER_SOCKET_HH
 
