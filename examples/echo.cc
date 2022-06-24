@@ -1,5 +1,5 @@
 /*
- *   Copyright 2020 Bruno Ribeiro
+ *   Copyright 2022 Bruno Ribeiro
  *   <https://github.com/brunexgeek/webster>
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -140,7 +140,8 @@ int main(int argc, char* argv[])
 
 	#endif
 
-	printf(PROGRAM_TITLE "\n");
+	std::cerr << PROGRAM_TITLE << std::endl;
+	std::cerr << "Using Webster " << WEBSTER_VERSION << std::endl;
 
 	Parameters params;
 	//params.buffer_size = 88;

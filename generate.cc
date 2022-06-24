@@ -23,7 +23,7 @@
 
 static const char *LICENSE =
 "/*\n"
-" *   Copyright 2020 Bruno Ribeiro\n"
+" *   Copyright 2022 Bruno Ribeiro\n"
 " *   <https://github.com/brunexgeek/webster>\n"
 " *\n"
 " *   Licensed under the Apache License, Version 2.0 (the \"License\");\n"

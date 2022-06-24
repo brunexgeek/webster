@@ -18,6 +18,11 @@
 #ifndef WEBSTER_API_HH
 #define WEBSTER_API_HH
 
+#define WEBSTER_VERSION       "3.0.0"
+#define WEBSTER_VERSION_MAJOR 3
+#define WEBSTER_VERSION_MINOR 0
+#define WEBSTER_VERSION_PATCH 0
+
 #if defined(_MSC_VER) || defined(WIN32) || defined(_WIN32)
 #define WEBSTER_PRIVATE
 #define WB_WINDOWS 1

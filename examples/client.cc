@@ -1,5 +1,5 @@
 /*
- *   Copyright 2020 Bruno Ribeiro
+ *   Copyright 2022 Bruno Ribeiro
  *   <https://github.com/brunexgeek/webster>
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,8 @@
 #include <webster.hh>
 #include <iostream>
 #include <cstring>
+
+#define PROGRAM_TITLE     "Sample HTTP Client"
 
 using namespace webster;
 
@@ -66,6 +68,9 @@ int main( int argc, char **argv )
     (void) argc;
     (void) argv;
 
+    std::cerr << PROGRAM_TITLE << std::endl;
+	std::cerr << "Using Webster " << WEBSTER_VERSION << std::endl;
+
     const char *url = "http://duckduckgo.com:80/";
     if (argc > 1) url = argv[1];
 
@@ -78,7 +83,7 @@ int main( int argc, char **argv )
         client.close();
     }
     else
-        std::cout << "Failed with " << result << "!\n";
+        std::cerr << "Failed with " << result << "!\n";
 
     return 0;
 }
