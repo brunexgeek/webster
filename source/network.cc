@@ -38,6 +38,11 @@ Target::Target()
 	clear();
 }
 
+Target::Target(Target &&that)
+{
+	swap(that);
+}
+
 static std::string string_cut(
     const char *text,
     size_t offset,

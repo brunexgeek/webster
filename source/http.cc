@@ -198,6 +198,11 @@ Header::Header()
 	clear();
 }
 
+Header::Header(Header &&that)
+{
+	swap(that);
+}
+
 void Header::swap( Header &that )
 {
 	std::swap(status, that.status);
@@ -264,6 +269,11 @@ HttpListener::HttpListener( std::function<int(Message&,Message&)> func ) : func_
 HttpListener::HttpListener( int (&func)(Message&,Message&) )
 {
 	func_ = std::function<int(Message&,Message&)>(func);
+}
+
+HttpListener::HttpListener(HttpListener &&func) : func_(func.func_)
+{
+	func.func_ = nullptr;
 }
 
 int HttpListener::operator()( Message &request, Message &response )

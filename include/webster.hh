@@ -194,7 +194,7 @@ struct Target
 
     Target();
     Target( const Target & ) = default;
-    Target( Target && ) = default;
+    Target( Target && ); // MSVC want it to be explicit
     Target &operator=( const Target & ) = default;
     int parse_url( const char *url );
     int parse_url( const std::string &url );
@@ -402,7 +402,7 @@ struct Header
 
     Header();
     Header( const Header & ) = default;
-    Header( Header && ) = default;
+    Header( Header && ); // MSVC want it to be explicit;
     Header &operator=( const Header & ) = default;
     void swap( Header &that );
     void clear();
@@ -518,7 +518,7 @@ class HttpListener
     public:
         HttpListener() = default;
         HttpListener( const HttpListener & ) = default;
-        HttpListener( HttpListener && ) = default;
+        HttpListener( HttpListener && ); // MSVC want it to be explicit
         HttpListener( std::function<int(Message&,Message&)> );
         HttpListener( int (&func)(Message&,Message&) );
         /**
