@@ -352,7 +352,10 @@ int MessageImpl::ready()
 	if (state_ != WBS_IDLE)
 		return WBERR_OK;
 	if (link_ != nullptr)
-		link_->finish();
+	{
+		int result = link_->finish();
+		if (result != WBERR_OK) return result;
+	}
 	if (IS_INBOUND(flags_))
 		return receive_header();
 	else
