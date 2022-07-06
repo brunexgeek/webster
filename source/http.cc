@@ -262,7 +262,7 @@ const char *HeaderFields::get_name( FieldID id )
 	return HTTP_HEADER_FIELDS[(int)id];
 }
 
-HttpListener::HttpListener( std::function<int(Message&,Message&)> func ) : func_(func)
+HttpListener::HttpListener( std::function<int(Message&,Message&)> func ) : func_(func.func_)
 {
 }
 
