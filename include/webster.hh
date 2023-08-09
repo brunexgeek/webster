@@ -72,6 +72,7 @@ const int WBERR_INVALID_PROTOCOL     = -37;
 const int WBERR_UPGRADED             = -38;
 const int WBERR_READ_ONLY            = -39;
 const int WBERR_WRITE_ONLY           = -40;
+const int WBERR_CPP_EXCEPTION        = -41;
 
 /**
  * HTTP header field identifier.

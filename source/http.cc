@@ -364,10 +364,18 @@ int HttpClient::communicate_local( const std::string &path, HttpListener &listen
 	http_v1::MessageImpl response(is, &request, WBMF_INBOUND | WBMF_RESPONSE);
 	response.header.target = request.header.target;
 
-	result = listener(request, response);
+    try {
+	    result = listener(request, response);
+    } catch (...)
+    {
+        result = WBERR_CPP_EXCEPTION;
+    }
+    int tmp = request.finish();
+    if (tmp == WBERR_OK)
+        tmp = response.finish();
+
+    if (tmp < WBERR_OK && result == WBERR_OK) return tmp;
 	if (result < WBERR_OK) return result;
-	result = response.finish();
-    if (result != WBERR_OK) return result;
 
     bool closing = response.header.fields.get(WBFI_CONNECTION) == "close";
     return (closing) ? WBERR_COMPLETE : WBERR_OK;
@@ -387,10 +395,19 @@ int HttpClient::communicate_remote( HttpListener &listener )
     http_v1::MessageImpl response(os, &request, WBMF_OUTBOUND | WBMF_RESPONSE);
     response.header.target = request.header.target;
 
-    result = listener(request, response);
-    if (result < WBERR_OK) return result;
-    result = response.finish();
-    if (result != WBERR_OK) return result;
+    try {
+	    result = listener(request, response);
+    } catch (...)
+    {
+        result = WBERR_CPP_EXCEPTION;
+    }
+    int tmp = request.finish();
+    if (tmp == WBERR_OK)
+        tmp = response.finish();
+
+    if (tmp < WBERR_OK && result == WBERR_OK) return tmp;
+	if (result < WBERR_OK) return result;
+
     return (closing) ? WBERR_COMPLETE : WBERR_OK;
 }
 
