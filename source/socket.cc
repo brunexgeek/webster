@@ -265,8 +265,9 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	result = ::connect(chann->socket, (const struct sockaddr*) &address, sizeof(const struct sockaddr_in));
 	if (result < 0)
 	{
-		result = translate_error();
-		if (result != WBERR_IN_PROGRESS) return result;
+		int code = get_error();
+		if (code != EINPROGRESS && code != EWOULDBLOCK)
+			return translate_error(code);
 	}
 
 	chann->poll.events = POLLOUT;
