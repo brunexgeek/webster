@@ -217,7 +217,7 @@ int MessageImpl::receive_header()
 		}
 		first = false;
 
-	} while ( (int) (tick() - start) < timeout);
+	} while ( (int) (tick() - start) < timeout); // TODO break this if the server is stopped
 
 	state_ = WBS_BODY;
 	return WBERR_OK;
