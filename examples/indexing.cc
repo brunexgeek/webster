@@ -391,6 +391,7 @@ static int main_serverHandler(
     Message &response  )
 {
 	request.finish();
+	bool must_close = request.header.fields.get(WBFI_CONNECTION, "") == "close";
 
 	Target target = request.header.target;
 	// build the local file name
@@ -441,17 +442,19 @@ static int main_serverHandler(
 
 	response.finish();
 	if (fileName != NULL) free(fileName);
+	if (result == WBERR_OK && must_close)
+		return WBERR_COMPLETE;
 	return result;
 }
 
 #include <sys/time.h>
 
-static void process( int id, HttpClient *remote, HttpListener &listener )
+static void process( int id, ctpl::thread_pool *pool, HttpClient *remote, HttpListener &listener )
 {
 	(void) id;
 	int result;
 	std::cerr << "Connection estabilished #" << id << std::endl;
-	while ((result = remote->communicate(listener)) == WBERR_OK);
+	while ((result = remote->communicate(listener)) == WBERR_OK && pool->n_idle() > 0);
 	std::cerr << "Connection closed #" << id << std::endl;
 	remote->close();
 	delete remote;
@@ -469,9 +472,13 @@ int main(int argc, char* argv[])
 	struct sigaction act;
 	sigemptyset(&act.sa_mask);
 	sigaddset(&act.sa_mask, SIGINT);
+	sigaddset(&act.sa_mask, SIGHUP);
+	sigaddset(&act.sa_mask, SIGTERM);
 	act.sa_flags = 0;
     act.sa_handler = main_signalHandler;
     sigaction(SIGINT, &act, NULL);
+    sigaction(SIGHUP, &act, NULL);
+    sigaction(SIGTERM, &act, NULL);
 
 	#endif
 
@@ -503,7 +510,7 @@ int main(int argc, char* argv[])
 			HttpClient *remote = nullptr;
 			int result = server.accept(&remote);
 			if (result == WBERR_OK)
-				pool.push(process, remote, listener);
+				pool.push(process, &pool, remote, listener);
 			else
 			if (result != WBERR_TIMEOUT) break;
 		}
