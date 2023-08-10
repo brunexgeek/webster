@@ -79,7 +79,9 @@ if (UNIX)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
 endif()
 
-add_executable(generate_tool "generate.cc")
+configure_file("source/generate.cc.in" "${CMAKE_BINARY_DIR}/_cmake/generate.cc")
+
+add_executable(generate_tool "${CMAKE_BINARY_DIR}/_cmake/generate.cc")
 set_target_properties(generate_tool PROPERTIES
     OUTPUT_NAME "generate_tool"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}" )
