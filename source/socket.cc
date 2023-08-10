@@ -45,7 +45,32 @@ std::shared_ptr<SocketNetwork> DEFAULT_NETWORK = std::make_shared<SocketNetwork>
 inline int get_error()
 {
 #ifdef WB_WINDOWS
-	return WSAGetLastError();
+	int error = WSAGetLastError();
+	switch (error)
+	{
+		case WSAEADDRINUSE:
+			return EADDRINUSE;
+		case WSAENOTSOCK:
+			return ENOTSOCK;
+		case WSAECONNRESET:
+			return ECONNRESET;
+		case WSAENOTCONN:
+			return ENOTCONN;
+		case WSAECONNREFUSED:
+			return ECONNREFUSED;
+		case WSAETIMEDOUT:
+			return ETIMEDOUT;
+		case WSAEWOULDBLOCK:
+			return EWOULDBLOCK;
+		case WSAENOBUFS:
+			return ENOBUFS;
+		case WSAENETUNREACH:
+			return ENETUNREACH;
+		case WSAEINPROGRESS:
+			return EINPROGRESS;
+		default:
+			return error;
+	}
 #else
 	return errno;
 #endif
