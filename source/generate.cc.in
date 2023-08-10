@@ -1,5 +1,5 @@
 /*
- *   Copyright 2016-2022 Bruno Ribeiro
+ *   Copyright 2016-2023 Bruno Ribeiro
  *   <https://github.com/brunexgeek/webster>
  *
  *   Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,10 @@
 
 static const char *LICENSE =
 "/*\n"
-" *   Copyright 2022 Bruno Ribeiro\n"
+" *   Copyright 2016-2023 Bruno Costa\n"
 " *   <https://github.com/brunexgeek/webster>\n"
+" *\n"
+" *   Webster @WEBSTER_MAJOR_VERSION@.@WEBSTER_MINOR_VERSION@.@WEBSTER_PATCH_VERSION@\n"
 " *\n"
 " *   Licensed under the Apache License, Version 2.0 (the \"License\");\n"
 " *   you may not use this file except in compliance with the License.\n"
