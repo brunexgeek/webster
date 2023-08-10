@@ -335,7 +335,7 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int 
 
 	#ifdef WB_WINDOWS
 	int flags = 0;
-	int sent = 0
+	int sent = 0;
 	int pending = size;
 	int bytes = 0;
 	#else
