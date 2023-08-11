@@ -133,6 +133,8 @@ int Target::parse( const char *url, Target &target )
 {
     if (url == nullptr || url[0] == 0) return WBERR_INVALID_TARGET;
 
+	target.clear();
+
     // handle asterisk form
     if (url[0] == '*' && url[1] == 0)
         target.type = WBRT_ASTERISK;
@@ -165,7 +167,7 @@ int Target::parse( const char *url, Target &target )
 		tolower(url[1]) == 't' &&
 		tolower(url[2]) == 't' &&
 		tolower(url[3]) == 'p' &&
-		(tolower(url[4]) == 's' || url[4] == ':'))
+		((tolower(url[4]) == 's' && url[5] == ':') || url[4] == ':'))
 	{
         target.type = WBRT_ABSOLUTE;
 
@@ -278,6 +280,9 @@ int Target::parse( const char *url, Target &target )
             target.port = 80;
         }
     }
+
+	if (!target.query.empty())
+		target.query = Target::decode(target.query);
 
     return WBERR_OK;
 }
