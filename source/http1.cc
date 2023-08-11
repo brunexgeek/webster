@@ -401,16 +401,16 @@ int MessageImpl::write_resource_line()
 			stream_.write(target.path);
 			if (!target.query.empty())
 			{
-				stream_.write('&');
-				stream_.write(target.query);
+				stream_.write('?');
+				stream_.write(Target::encode(target.query));
 			}
 			break;
 		case WBRT_ORIGIN:
 			stream_.write(target.path);
 			if (!target.query.empty())
 			{
-				stream_.write('&');
-				stream_.write(target.query);
+				stream_.write('?');
+				stream_.write(Target::encode(target.query));
 			}
 			break;
 		case WBRT_ASTERISK:
