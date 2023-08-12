@@ -35,6 +35,7 @@
 #include <functional>
 #include <string>
 #include <type_traits>
+#include <atomic>
 
 /// Operation completed with success.
 const int WBERR_OK                   = 0;
@@ -73,6 +74,7 @@ const int WBERR_UPGRADED             = -38;
 const int WBERR_READ_ONLY            = -39;
 const int WBERR_WRITE_ONLY           = -40;
 const int WBERR_CPP_EXCEPTION        = -41;
+const int WBERR_ABORTED              = -42;
 
 /**
  * HTTP header field identifier.
@@ -345,6 +347,7 @@ class Network
          */
         virtual int accept( Channel *channel, Channel **client, int timeout ) = 0;
         virtual int listen( Channel *channel, const char *host, int port, int maxClients ) = 0;
+        virtual int interrupt() = 0;
 };
 
 struct Parameters
@@ -361,28 +364,28 @@ struct Parameters
      * Maximum number of remote clients in the server queue. The default value is
      * WBL_DEF_CONNECTIONS.
      */
-    int max_clients;
+    int max_clients = WBL_DEF_CONNECTIONS;
 
     /**
      * Size (in bytes) of the message internal output buffer. The default value
      * is WBL_DEF_BUFFER_SIZE.
      */
-    int buffer_size;
+    int buffer_size = WBL_DEF_BUFFER_SIZE;
 
     /**
      * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
-    int read_timeout;
+    int read_timeout = WBL_DEF_TIMEOUT;
 
     /**
      * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
-    int write_timeout;
+    int write_timeout = WBL_DEF_TIMEOUT;
 
     /**
      * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
      */
-    int connect_timeout;
+    int connect_timeout = WBL_DEF_TIMEOUT / 2;
 
     Parameters();
     Parameters( const Parameters &that );
@@ -604,7 +607,8 @@ class HttpServer;
 class HttpClient
 {
     public:
-        HttpClient( ClientType type = WBCT_LOCAL, Client *client = nullptr );
+        HttpClient();
+        HttpClient( Client *client );
         ~HttpClient();
         /**
          * Connect to a remote host.
@@ -628,6 +632,7 @@ class HttpClient
          * @return WBERR_OK in case of success. An error code otherwhise.
          */
         int close();
+        int abort();
         /**
          * Perform an HTTP comunication between client and server.
          *
@@ -689,6 +694,7 @@ class HttpServer
         int start( const std::string &target );
         int stop();
         int accept( HttpClient **remote );
+        int abort();
         const Parameters &get_parameters() const;
         const Target &get_target() const;
     protected:

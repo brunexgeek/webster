@@ -283,7 +283,12 @@ int HttpListener::operator()( Message &request, Message &response )
 	return func_(request, response);
 }
 
-HttpClient::HttpClient( ClientType type, Client *client ) : client_(client), proto_(WBCP_HTTP_1), type_(type)
+HttpClient::HttpClient() : client_(nullptr), proto_(WBCP_HTTP_1), type_(WBCT_LOCAL)
+{
+}
+
+HttpClient::HttpClient( Client *client )
+    : client_(client), proto_(WBCP_HTTP_1), type_(WBCT_REMOTE)
 {
 }
 
@@ -467,6 +472,12 @@ int HttpServer::stop()
     return server_->stop();
 }
 
+int HttpServer::abort()
+{
+    server_->get_parameters().network->interrupt();
+    return WBERR_OK;
+}
+
 int HttpServer::accept( HttpClient **remote )
 {
     if (server_ == nullptr) return WBERR_MEMORY_EXHAUSTED;
@@ -475,7 +486,7 @@ int HttpServer::accept( HttpClient **remote )
     int result = server_->accept(&temp);
     if (result != WBERR_OK) return result;
 
-    *remote = new(std::nothrow) HttpClient(WBCT_REMOTE, temp);
+    *remote = new(std::nothrow) HttpClient(temp);
     if (*remote == nullptr)
     {
         delete temp;

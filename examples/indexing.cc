@@ -134,6 +134,8 @@ using namespace webster;
 
 static int serverState = SERVER_RUNNING;
 
+static std::shared_ptr<HttpServer> httpServer;
+
 static char *rootDirectory;
 
 #if defined(_WIN32) || defined(WIN32)
@@ -143,6 +145,7 @@ static BOOL WINAPI main_signalHandler(
 {
 	(void) dwCtrlType;
 	serverState = SERVER_STOPPING;
+	httpServer->abort();
 	return TRUE;
 }
 
@@ -154,6 +157,7 @@ static void main_signalHandler(
 	(void) handle;
 	if (serverState == SERVER_STOPPING) exit(1);
 	serverState = SERVER_STOPPING;
+	httpServer->abort();
 }
 
 #endif
@@ -390,7 +394,9 @@ static int main_serverHandler(
     Message &request,
     Message &response  )
 {
-	request.finish();
+	int result = request.finish();
+	if (result != WBERR_OK) return result;
+
 	bool must_close = request.header.fields.get(WBFI_CONNECTION, "") == "close";
 
 	Target target = request.header.target;
@@ -404,7 +410,7 @@ static int main_serverHandler(
 		fileName = realpath(temp.c_str(), nullptr);
 	}
 
-	int result = WBERR_OK;
+	result = WBERR_OK;
 	struct stat info;
 	if (fileName == NULL || stat(fileName, &info) != 0) result = WBERR_INVALID_ARGUMENT;
 	if (result == WBERR_OK && info.st_mode & S_IFREG)
@@ -502,24 +508,25 @@ int main(int argc, char* argv[])
 	params.read_timeout = 20000;
 
 	HttpListener listener(main_serverHandler);
-	HttpServer server(params);
-	if (server.start("0.0.0.0:7000") == WBERR_OK)
+	httpServer = std::make_shared<HttpServer>(params);
+	if (httpServer->start("0.0.0.0:7000") == WBERR_OK)
 	{
 		while (serverState == SERVER_RUNNING)
 		{
 			HttpClient *remote = nullptr;
-			int result = server.accept(&remote);
+			int result = httpServer->accept(&remote);
 			if (result == WBERR_OK)
 				pool.push(process, &pool, remote, listener);
 			else
 			if (result != WBERR_TIMEOUT) break;
 		}
 	}
-	server.stop();
+	httpServer->stop();
 	pool.stop();
 
 	std::cerr << "Server terminated!" << std::endl;
 	free(rootDirectory);
+	httpServer = nullptr;
 
     return 0;
 }
