@@ -28,6 +28,7 @@ static int main_clientHandler(
     Message &response )
 {
     std::cout << "--- Request to " << request.header.target.path << std::endl;
+
     request.header.fields["Content-Length"] = "0";
     request.finish();
 
@@ -71,7 +72,7 @@ int main( int argc, char **argv )
     std::cerr << PROGRAM_TITLE << std::endl;
 	std::cerr << "Using Webster " << WEBSTER_VERSION << std::endl;
 
-    const char *url = "http://duckduckgo.com:80/";
+    const char *url = "http://http.badssl.com/";
     if (argc > 1) url = argv[1];
 
     HttpClient client;

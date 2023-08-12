@@ -95,7 +95,7 @@ struct EchoListener : public webster::HttpListener
 
 		response.header.status = 200;
 		response.header.fields["Content-Type"] = "text/html";
-		response << "<html><head><title>" << PROGRAM_TITLE << "</title></head><body>";
+		response << "<html><head><title>" << PROGRAM_TITLE << "</title><meta charset='utf-8'/></head><body>";
 
 		response << "<p>Received <strong>" << HTTP_METHODS[request.header.method] <<
 			"</strong> request to <tt style='color: blue'>" << request.header.target.path <<
@@ -106,6 +106,24 @@ struct EchoListener : public webster::HttpListener
 		}
 		response << "</p>";
 
+		// query parameters
+		if (!request.header.target.query.empty())
+		{
+			QueryFields qf;
+			qf.deserialize(request.header.target.query);
+
+			response << "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>" <<
+				"<table><tr><th>Query field</th><th>Value</th></tr>";
+			for (auto &item : qf)
+			{
+				response << "<tr><td>" << item.first << "</td><td>" << item.second << "</td></tr>";
+			}
+			std::string data;
+			request.read_all(data);
+			response << "</table></body>" << "<b>Body (" << data.length() << " bytes):</b>" << data << "</html>";
+		}
+
+		// header fields
 		response << "<style type='text/css'>td, th {border: 1px solid #666; padding: .2em} </style>" <<
 			"<table><tr><th>Header field</th><th>Value</th></tr>";
 		for (auto &item : request.header.fields)

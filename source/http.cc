@@ -21,6 +21,7 @@
 #include "http1.hh"   // AUTO-REMOVE
 #include "stream.hh"  // AUTO-REMOVE
 #include "network.hh" // AUTO-REMOVE
+#include <sstream>
 
 namespace webster {
 
@@ -496,6 +497,55 @@ const Target &HttpServer::get_target() const
     static const Target target;
     if (server_ == nullptr) return target;
     return server_->get_target();
+}
+
+std::string QueryFields::serialize() const
+{
+    if (size() == 0) return "";
+
+    std::stringstream stream;
+    size_t count = 0;
+    for (const auto &item : *this)
+    {
+        if (count++ > 0) stream << '&';
+        stream << item.first << '=' << item.second;
+    }
+
+    return stream.str();
+}
+
+int QueryFields::deserialize(const std::string &query)
+{
+    if (query.empty()) return WBERR_OK;
+
+    const char *ptr = query.c_str();
+    while (*ptr != 0)
+    {
+        std::string name;
+        std::string value;
+        while (*ptr != '=' && *ptr != '&' && *ptr != 0) name += *ptr++;
+        if (name.empty()) return WBERR_INVALID_ARGUMENT;
+
+        if (*ptr == '=')
+        {
+            ++ptr;
+            while (*ptr != '&' && *ptr != 0) value += *ptr++;
+        }
+        emplace(name, value);
+
+        if (*ptr == 0)
+            break;
+        else
+        if (*ptr == '&')
+        {
+            ++ptr;
+            continue;
+        }
+
+        return WBERR_INVALID_ARGUMENT;
+    }
+
+    return WBERR_OK;
 }
 
 } // namespace webster

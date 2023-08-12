@@ -258,6 +258,29 @@ struct Target
     void clear();
 };
 
+struct less
+{
+    typedef std::string first_argument_type;
+    typedef std::string second_argument_type;
+    typedef bool result_type;
+
+    bool operator() (const std::string& x, const std::string& y) const
+    {
+        return strcmpi(x.c_str(), y.c_str()) < 0;
+    }
+};
+
+struct QueryFields : public std::map<std::string, std::string, webster::less>
+{
+    using std::map<std::string, std::string, webster::less>::emplace;
+    std::string serialize() const;
+    int deserialize(const std::string &query);
+    template<typename N, typename T, typename std::enable_if<std::is_arithmetic<T>::value, int>::type = 0>
+    inline std::pair<std::map<std::string, std::string, webster::less>::iterator, bool> emplace(const N &name, T &&value) {
+        return emplace(name, std::to_string(value));
+    }
+};
+
 class Channel {};
 
 /**
@@ -395,18 +418,6 @@ enum Method
     WBM_OPTIONS = 7,
     WBM_TRACE   = 8,
     WBM_PATCH   = 9,
-};
-
-struct less
-{
-    typedef std::string first_argument_type;
-    typedef std::string second_argument_type;
-    typedef bool result_type;
-
-    bool operator() (const std::string& x, const std::string& y) const
-    {
-        return strcmpi(x.c_str(), y.c_str()) < 0;
-    }
 };
 
 class HeaderFields : public std::map<std::string, std::string, webster::less>
