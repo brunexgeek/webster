@@ -338,8 +338,6 @@ class Network
         /**
          * Accept client connections.
          *
-         * This function will return if interrupted by signals.
-         *
          * @param channel Pointer to the channel.
          * @param channel Pointer to the new channel.
          * @param timeout Aproximated number of milliseconds the function will block
@@ -373,17 +371,21 @@ struct Parameters
     int buffer_size = WBL_DEF_BUFFER_SIZE;
 
     /**
-     * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     * Read timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``). The default value
+     * is WBL_DEF_TIMEOUT.
      */
     int read_timeout = WBL_DEF_TIMEOUT;
 
     /**
-     * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     * Write timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``). The default value
+     * is WBL_DEF_TIMEOUT.
      */
     int write_timeout = WBL_DEF_TIMEOUT;
 
     /**
-     * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``).
+     * Connection timeout in milliseconds (between 1 and ``WBL_MAX_TIMEOUT``). This timeout
+     * is used both by clients (connect) and servers (accept). The default value is half
+     * of WBL_DEF_TIMEOUT.
      */
     int connect_timeout = WBL_DEF_TIMEOUT / 2;
 

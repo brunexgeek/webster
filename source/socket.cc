@@ -130,26 +130,31 @@ struct SocketChannel : public Channel
 
 struct addrinfo_container
 {
-	struct addrinfo *ptr;
+	struct addrinfo *ptr = nullptr;
 
 	addrinfo_container( struct addrinfo *ptr ) : ptr(ptr) {}
+	addrinfo_container( const addrinfo_container & ) = delete;
+	addrinfo_container( addrinfo_container && ) = default;
 	~addrinfo_container() { if (ptr) freeaddrinfo(ptr); };
 };
 
 inline int poll( SocketChannel *chann, int &timeout, std::atomic<bool> &interrupted )
 {
-	if (timeout < 0) timeout = 0;
+	static constexpr const int DEFAULT_WAIT_TIME = 100;
+
+	if (timeout < 0) timeout = 1;
 	chann->poll.revents = 0;
-#ifdef WB_WINDOWS
-	auto start = tick();
-	int result = WSAPoll(&chann->poll, 1, timeout);
-	timeout -= (int) (tick() - start);
-#else
+	int wait = std::min(timeout, DEFAULT_WAIT_TIME);
 	int result;
+
 	do
 	{
 		auto start = tick();
-		result = ::poll(&chann->poll, 1, 100);
+		#ifdef WB_WINDOWS
+		result = WSAPoll(&chann->poll, 1, wait);
+		#else
+		result = ::poll(&chann->poll, 1, wait);
+		#endif
 		int elapsed = (int) (tick() - start);
 		timeout -= elapsed;
 		if (timeout < 0) timeout = 0;
@@ -157,20 +162,18 @@ inline int poll( SocketChannel *chann, int &timeout, std::atomic<bool> &interrup
 		if (interrupted)
 			return WBERR_ABORTED;
 		else
-		if (result == 0)
-			continue;
-		else
 		if (result > 0)
 			return WBERR_OK;
 		else
-		if (get_error() != EINTR)
+		if (result < 0 && get_error() != EINTR)
 			return WBERR_SOCKET;
+		// 'result == 0' means timeout, so we keep going
 	} while (timeout > 0);
-#endif
+
 	return WBERR_TIMEOUT;
 }
 
-static struct addrinfo* resolve( const char *host )
+static addrinfo_container resolve( const char *host )
 {
 	if (host == nullptr || *host == 0) host = "127.0.0.1";
 
@@ -183,7 +186,7 @@ static struct addrinfo* resolve( const char *host )
 	int result = getaddrinfo(host, nullptr, &aiHints, &aiInfo);
 	if (result != 0) return nullptr;
     // copy address information
-    return aiInfo;
+    return addrinfo_container(aiInfo);
 }
 
 SocketNetwork::SocketNetwork()
@@ -285,7 +288,7 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	addrinfo_container addrs(resolve(host));
+	addrinfo_container addrs = resolve(host);
 	addrinfo *addr = nullptr;
 	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
@@ -442,7 +445,7 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	addrinfo_container addrs(resolve(host));
+	addrinfo_container addrs = resolve(host);
 	addrinfo *addr = nullptr;
 	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;

@@ -109,14 +109,14 @@ int DataStream::read( uint8_t *buffer, int size )
 	int timeout = params.read_timeout;
 	while (timeout > 0)
 	{
-		int start = webster::tick();
+		auto start = webster::tick();
 		int result = params.network->receive(client_.get_channel(), buffer, size, &read, params.read_timeout);
 		if (result == WBERR_OK)
 			return read;
 		else
 		if (result != WBERR_SIGNAL)
 			return result;
-		timeout -= webster::tick() - start;
+		timeout -= (int) (webster::tick() - start);
 	}
 	return WBERR_TIMEOUT;
 }
@@ -133,7 +133,7 @@ int DataStream::read_line( char *buffer, int size )
 
 	do
 	{
-		int start = webster::tick();
+		auto start = webster::tick();
 		// looks for the line delimiter
 		if (count_ > 0)
 		{
@@ -172,7 +172,7 @@ int DataStream::read_line( char *buffer, int size )
 			count_ += bytes;
 		}
 
-		timeout -= webster::tick() - start;
+		timeout -= (int) (webster::tick() - start);
 	} while (timeout > 0);
 	return WBERR_TIMEOUT;
 }
