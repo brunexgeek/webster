@@ -269,7 +269,7 @@ int SocketNetwork::close( Channel *channel )
 	::shutdown(chann->socket, SHUT_RDWR);
 	::close(chann->socket);
 	#endif
-	delete channel;
+	delete chann;
 
 	return WBERR_OK;
 }
