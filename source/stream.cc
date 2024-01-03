@@ -22,8 +22,8 @@
 
 namespace webster {
 
-DataStream::DataStream( Client &client, StreamType type ) : client_(client),
-	type_(type), count_(0), bufsize_(0)
+DataStream::DataStream( Client &client, StreamType type )
+	: client_(client), type_(type), count_(0), bufsize_(0)
 {
 	bufsize_ = client_.get_parameters().buffer_size;
 	data_ = new(std::nothrow) uint8_t[bufsize_];
@@ -106,9 +106,19 @@ int DataStream::read( uint8_t *buffer, int size )
 
 	auto &params = client_.get_parameters();
 	int read = 0;
-	int result = params.network->receive(client_.get_channel(), buffer, size, &read, params.read_timeout);
-	if (result == WBERR_OK) return read;
-	return result;
+	int timeout = params.read_timeout;
+	while (timeout > 0)
+	{
+		auto start = webster::tick();
+		int result = params.network->receive(client_.get_channel(), buffer, size, &read, params.read_timeout);
+		if (result == WBERR_OK)
+			return read;
+		else
+		if (result != WBERR_SIGNAL)
+			return result;
+		timeout -= (int) (webster::tick() - start);
+	}
+	return WBERR_TIMEOUT;
 }
 
 int DataStream::read_line( char *buffer, int size )
@@ -119,9 +129,11 @@ int DataStream::read_line( char *buffer, int size )
 		return WBERR_INVALID_ARGUMENT;
 
 	auto &params = client_.get_parameters();
+	int timeout = params.read_timeout;
 
 	do
 	{
+		auto start = webster::tick();
 		// looks for the line delimiter
 		if (count_ > 0)
 		{
@@ -147,7 +159,10 @@ int DataStream::read_line( char *buffer, int size )
 			int bytes = (int) (bufsize_ - count_) - 1;
 			if (bytes == 0) return WBERR_TOO_LONG;
 
-			int result = params.network->receive(client_.get_channel(), data_ + count_, bytes, &bytes, params.read_timeout);
+			int result = params.network->receive(client_.get_channel(), data_ + count_, bytes, &bytes, timeout);
+			if (result == WBERR_SIGNAL)
+				bytes = 0;
+			else
 			if (result != WBERR_OK)
 			{
 				*buffer = 0;
@@ -156,7 +171,10 @@ int DataStream::read_line( char *buffer, int size )
 
 			count_ += bytes;
 		}
-	} while (true);
+
+		timeout -= (int) (webster::tick() - start);
+	} while (timeout > 0);
+	return WBERR_TIMEOUT;
 }
 
 int DataStream::flush()

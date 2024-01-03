@@ -339,10 +339,15 @@ static void fix_parameters( Parameters &params )
 	else
 	if (params.write_timeout > WBL_MAX_TIMEOUT)
 		params.write_timeout = WBL_MAX_TIMEOUT;
+
+	if (params.connect_timeout <= 0)
+		params.connect_timeout = 1;
+	else
+	if (params.connect_timeout > WBL_MAX_TIMEOUT)
+		params.connect_timeout = WBL_MAX_TIMEOUT;
 }
 
-Parameters::Parameters() : max_clients(WBL_DEF_CONNECTIONS), buffer_size(WBL_DEF_BUFFER_SIZE),
-	read_timeout(WBL_DEF_TIMEOUT), write_timeout(WBL_DEF_TIMEOUT), connect_timeout(WBL_DEF_TIMEOUT * 2)
+Parameters::Parameters()
 {
     #ifndef WEBSTER_NO_DEFAULT_NETWORK
 	network = DEFAULT_NETWORK;
@@ -412,9 +417,8 @@ int Server::stop()
 int Server::accept( Client **remote )
 {
 	if (remote == nullptr) return WBERR_INVALID_ARGUMENT;
-
 	Channel *channel = nullptr;
-	int result = params_.network->accept(channel_, &channel, params_.read_timeout);
+	int result = params_.network->accept(channel_, &channel, params_.connect_timeout);
 	if (result != WBERR_OK) return result;
 
 	*remote = new (std::nothrow) Client(params_, WBCT_REMOTE);

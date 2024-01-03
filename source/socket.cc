@@ -116,31 +116,7 @@ inline int translate_error( int code = 0 )
 	}
 }
 
-inline int poll( struct pollfd &pfd, int &timeout, bool ignore_signal = true )
-{
-	if (timeout < 0) timeout = 0;
-	pfd.revents = 0;
-#ifdef WB_WINDOWS
-	auto start = tick();
-	int result = WSAPoll(&pfd, 1, timeout);
-	timeout -= (int) (tick() - start);
-#else
-	int result;
-	do
-	{
-		auto start = tick();
-		result = ::poll(&pfd, 1, timeout);
-		int elapsed = (int) (tick() - start);
-		timeout -= elapsed;
-		if (result >= 0 || !ignore_signal || get_error() != EINTR) break;
-	} while (timeout > 0);
-#endif
-	if (timeout < 0) timeout = 0;
-	if (result == 0) return WBERR_TIMEOUT;
-	if (get_error() == EINTR) return WBERR_SIGNAL;
-	if (result < 0) return WBERR_SOCKET;
-	return WBERR_OK;
-}
+
 
 struct SocketChannel : public Channel
 {
@@ -154,13 +130,50 @@ struct SocketChannel : public Channel
 
 struct addrinfo_container
 {
-	struct addrinfo *ptr;
+	struct addrinfo *ptr = nullptr;
 
 	addrinfo_container( struct addrinfo *ptr ) : ptr(ptr) {}
+	addrinfo_container( const addrinfo_container & ) = delete;
+	addrinfo_container( addrinfo_container && ) = default;
 	~addrinfo_container() { if (ptr) freeaddrinfo(ptr); };
 };
 
-static struct addrinfo* resolve( const char *host )
+inline int poll( SocketChannel *chann, int &timeout, std::atomic<bool> &interrupted )
+{
+	static constexpr const int DEFAULT_WAIT_TIME = 100;
+
+	if (timeout < 0) timeout = 1;
+	chann->poll.revents = 0;
+	int wait = std::min(timeout, DEFAULT_WAIT_TIME);
+	int result;
+
+	do
+	{
+		auto start = tick();
+		#ifdef WB_WINDOWS
+		result = WSAPoll(&chann->poll, 1, wait);
+		#else
+		result = ::poll(&chann->poll, 1, wait);
+		#endif
+		int elapsed = (int) (tick() - start);
+		timeout -= elapsed;
+		if (timeout < 0) timeout = 0;
+
+		if (interrupted)
+			return WBERR_ABORTED;
+		else
+		if (result > 0)
+			return WBERR_OK;
+		else
+		if (result < 0 && get_error() != EINTR)
+			return WBERR_SOCKET;
+		// 'result == 0' means timeout, so we keep going
+	} while (timeout > 0);
+
+	return WBERR_TIMEOUT;
+}
+
+static addrinfo_container resolve( const char *host )
 {
 	if (host == nullptr || *host == 0) host = "127.0.0.1";
 
@@ -173,7 +186,7 @@ static struct addrinfo* resolve( const char *host )
 	int result = getaddrinfo(host, nullptr, &aiHints, &aiInfo);
 	if (result != 0) return nullptr;
     // copy address information
-    return aiInfo;
+    return addrinfo_container(aiInfo);
 }
 
 SocketNetwork::SocketNetwork()
@@ -256,7 +269,7 @@ int SocketNetwork::close( Channel *channel )
 	::shutdown(chann->socket, SHUT_RDWR);
 	::close(chann->socket);
 	#endif
-	delete channel;
+	delete chann;
 
 	return WBERR_OK;
 }
@@ -275,7 +288,7 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	addrinfo_container addrs(resolve(host));
+	addrinfo_container addrs = resolve(host);
 	addrinfo *addr = nullptr;
 	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
@@ -296,7 +309,7 @@ int SocketNetwork::connect( Channel *channel, int scheme, const char *host, int 
 	}
 
 	chann->poll.events = POLLOUT;
-	result = webster::poll(chann->poll, timeout);
+	result = webster::poll(chann, timeout, interrupted_);
 	if (result != WBERR_OK) return result;
 	return WBERR_OK;
 }
@@ -309,9 +322,8 @@ int SocketNetwork::receive( Channel *channel, uint8_t *buffer, int size, int *re
 	*received = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
-
 	chann->poll.events = POLLIN;
-	int result = webster::poll(chann->poll, timeout);
+	int result = webster::poll(chann, timeout, interrupted_);
 	if (result != WBERR_OK) return result;
 
 	auto bytes = ::recv(chann->socket, (char *) buffer, size, 0);
@@ -355,7 +367,7 @@ int SocketNetwork::send( Channel *channel, const uint8_t *buffer, int size, int 
 			{
 				if (timeout == 0) return WBERR_TIMEOUT;
 				chann->poll.events = POLLOUT;
-				int result = webster::poll(chann->poll, timeout);
+				int result = webster::poll(chann, timeout, interrupted_);
 				if (result != WBERR_OK) return result;
 				continue;
 			}
@@ -387,10 +399,9 @@ int SocketNetwork::accept( Channel *channel, Channel **client, int timeout )
 	if (timeout < 0) timeout = 0;
 
 	SocketChannel *chann = (SocketChannel*) channel;
-
 	// wait for connections
 	chann->poll.events = POLLIN;
-	int result = webster::poll(chann->poll, timeout, false);
+	int result = webster::poll(chann, timeout, interrupted_);
 	if (result != WBERR_OK) return result;
 
 	*client = new(std::nothrow) SocketChannel();
@@ -434,7 +445,7 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 
 	SocketChannel *chann = (SocketChannel*) channel;
 
-	addrinfo_container addrs(resolve(host));
+	addrinfo_container addrs = resolve(host);
 	addrinfo *addr = nullptr;
 	for (addr = addrs.ptr; addr != nullptr && addr->ai_family != AF_INET; addr = addr->ai_next);
 	if (addr == nullptr) return WBERR_INVALID_ADDRESS;
@@ -450,6 +461,12 @@ int SocketNetwork::listen( Channel *channel, const char *host, int port, int max
 	if ( ::listen(chann->socket, maxClients) != 0 )
 		return translate_error();
 
+	return WBERR_OK;
+}
+
+int SocketNetwork::interrupt()
+{
+	interrupted_ = true;
 	return WBERR_OK;
 }
 

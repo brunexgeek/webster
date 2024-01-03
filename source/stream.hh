@@ -19,6 +19,7 @@
 #define WEBSTER_STREAM_HH
 
 #include <webster.hh>
+#include <atomic>
 
 namespace webster {
 

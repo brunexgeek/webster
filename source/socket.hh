@@ -34,7 +34,10 @@ class SocketNetwork : public Network
         int send( Channel *channel, const uint8_t *buffer, int size, int timeout );
         int accept( Channel *channel, Channel **client, int timeout );
         int listen( Channel *channel, const char *host, int port, int maxClients );
+        int interrupt();
     protected:
+        std::atomic<bool> interrupted_;
+
         int set_non_blocking( Channel *channel );
         int set_reusable( Channel *channel );
 };
